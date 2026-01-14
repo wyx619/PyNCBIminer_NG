@@ -1,0 +1,22 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv/
+mafft/
+trimal/
+filtered_seqs/
+runtime_hooks/
+faba/
+filtered_seqs/
+*.md
+*.spec
+*.txt
+*.py
+*.bat
+

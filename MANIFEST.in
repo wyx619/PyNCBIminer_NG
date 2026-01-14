@@ -1,0 +1,3 @@
+include README.md
+include blast_parameters/*.txt
+recursive-include initial_queries *
