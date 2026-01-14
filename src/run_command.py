@@ -31,6 +31,11 @@ def run_command(command, shell=True):
             stdin=subprocess.DEVNULL
         )
         stdout, stderr = process.communicate()
+        
+        # 打印错误信息以便调试
+        if stderr:
+            print(f"Error: {stderr.decode('utf-8', errors='ignore')}")
+        
         return subprocess.CompletedProcess(
             args=command,
             returncode=process.returncode,

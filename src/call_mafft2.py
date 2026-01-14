@@ -3,6 +3,28 @@ from pathlib import Path
 from Bio import SeqIO
 from datetime import datetime
 from run_command import run_command
+import os
+import shutil
+
+
+def get_mafft_path():
+    """Get path to mafft executable"""
+    # Try to find mafft in common locations
+    mafft_dir = Path.cwd() / "mafft"
+    
+    if mafft_dir.exists():
+        # Recursively search for mafft executable
+        for root, dirs, files in os.walk(mafft_dir):
+            for file in files:
+                if file.lower() in ["mafft.exe", "mafft.bat", "mafft"]:
+                    return str(Path(root) / file)
+    
+    # Check if it's in PATH
+    if shutil.which("mafft"):
+        return "mafft"
+    
+    # If not found, return "mafft" and let's error show
+    return "mafft"
 
 
 def mafft_add(in_path, in_file, out_path, cmd_str):
@@ -119,6 +141,9 @@ def mafft(in_path, out_path='', add_choice='', add_path='', algorithm='auto',
         return []
 
     # STEP 2: get parameters and call mafft
+    mafft_exe = get_mafft_path()
+    print(f"Using MAFFT: {mafft_exe}")
+    
     # for in_file in file_handles:
     #     basename = os.path.basename(in_file)
     #     out_file = os.path.join(out_path, basename)
@@ -145,16 +170,16 @@ def mafft(in_path, out_path='', add_choice='', add_path='', algorithm='auto',
             t0 = datetime.now()
             in_file = str(Path(in_path) / file)
             out_file = str(Path(out_path) / ("msa_" + file))
-            command = f"mafft --auto --thread {thread} {'--reorder' * reorder} {additional_params} {in_file} > {out_file}"
+            command = f"{mafft_exe} --auto --thread {thread} {'--reorder' * reorder} {additional_params} {in_file} > {out_file}"
             # print(command)
             print("Aligning %s..." % in_file)
             run_command(command)
             t1 = datetime.now()
             print("Running time: %s seconds" % (t1 - t0))
     else:
-        command1 = f"mafft --localpair --maxiterate 1000 --thread {thread} {'--reorder' * reorder} {additional_params}"
-        command2 = f"mafft --thread {thread} {'--reorder' * reorder} {additional_params}"
-        command3 = f"mafft --thread {thread} {'--reorder' * reorder} {additional_params}"
+        command1 = f"{mafft_exe} --localpair --maxiterate 1000 --thread {thread} {'--reorder' * reorder} {additional_params}"
+        command2 = f"{mafft_exe} --thread {thread} {'--reorder' * reorder} {additional_params}"
+        command3 = f"{mafft_exe} --thread {thread} {'--reorder' * reorder} {additional_params}"
         cmd_str = [command1, command2, command3]
 
         for file in file_list:

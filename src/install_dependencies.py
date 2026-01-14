@@ -42,12 +42,12 @@ def install_mafft():
 def install_trimal():
     """
     download trimal to the same directory as pyncbiminer and extract the zip file
-    https://gh-proxy.org/https://github.com/inab/trimal/releases/download/v1.5.1/trimAl_Windows_x86-64.zip
+    https://gh-proxy.org/https://github.com/inab/trimal/releases/download/v1.5.0/trimAl_Windows_x86-64.zip
     path to trimal after extraction: ./trimal/trimAl/bin
     :return:
     """
     # todo: this url needs to be updated or dynamically maintained.
-    trimal_url = r"https://gh-proxy.org/https://github.com/inab/trimal/releases/download/v1.5.1/trimAl_Windows_x86-64.zip"
+    trimal_url = r"https://gh-proxy.org/https://github.com/inab/trimal/releases/download/v1.5.0/trimAl_Windows_x86-64.zip"
     root_path = Path.cwd()
     trimal_dir = root_path / r"./trimal"
     if not trimal_dir.exists():

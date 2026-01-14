@@ -1,9 +1,32 @@
 
+# -*- coding: utf-8 -*-
 from pathlib import Path
 from Bio import SeqIO, SeqRecord
 from format_wizard import check_outpath_validity, get_file_handles, create_folder
 from datetime import datetime
 from run_command import run_command
+import os
+import shutil
+
+
+def get_trimal_path():
+    """Get path to trimal executable"""
+    # Try to find trimal in common locations
+    trimal_dir = Path.cwd() / "trimal"
+    
+    if trimal_dir.exists():
+        # Recursively search for trimal executable
+        for root, dirs, files in os.walk(trimal_dir):
+            for file in files:
+                if file.lower() in ["trimal.exe", "trimal"]:
+                    return str(Path(root) / file)
+    
+    # Check if it's in PATH
+    if shutil.which("trimal"):
+        return "trimal"
+    
+    # If not found, return "trimal" and let's error show
+    return "trimal"
 
 
 def trimal(in_path, out_path='', 
@@ -51,8 +74,15 @@ def trimal(in_path, out_path='',
         print("Trimming %s..." % in_file)
         t0 = datetime.now()
         basename = Path(in_file).name
-        out_file = Path(out_path) / basename
-        command = [f"trimal -in {in_file} -out {out_file}"]
+        out_file = Path(out_path) / f"trim_{basename}"
+        out_file = out_file.resolve()
+        print(f"Input file: {in_file}")
+        print(f"Output file: {out_file}")
+        
+        trimal_exe = get_trimal_path()
+        print(f"Using trimal: {trimal_exe}")
+        
+        command = [f"{trimal_exe} -in {in_file} -out {out_file}"]
         
         if htmlout:
             html_folder = Path(out_path) / 'htmlout'
@@ -73,7 +103,19 @@ def trimal(in_path, out_path='',
             
         command.append(additional_params)
         command = " ".join(command)
-        run_command(command)
+        result = run_command(command)
+        
+        # Check if trimal command succeeded
+        if result.returncode != 0:
+            print(f"trimal command failed with return code {result.returncode}")
+            if result.stderr:
+                print(f"Error output: {result.stderr.decode('utf-8', errors='ignore')}")
+            continue
+        
+        # Check if output file was created
+        if not out_file.exists():
+            print(f"Output file not created: {out_file}")
+            continue
         
         # STEP 3: if bp_length is False:
         if not bp_length:
