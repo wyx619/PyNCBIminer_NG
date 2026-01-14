@@ -339,7 +339,8 @@ class Miner_filter:
         df = df.groupby("organism") \
                .apply(
                    lambda x: x.sort_values(by=["seq","voucher"], ascending=[True, False]) \
-                              .drop_duplicates(subset=["seq","voucher"], keep='first')
+                              .drop_duplicates(subset=["seq","voucher"], keep='first'),
+                   include_groups=False
                )
                
         accession_numbers = list(df["accession"])
@@ -622,7 +623,7 @@ class Miner_filter:
                         break
         
         if "date" in creteria:
-            df["date_f"] = pd.to_datetime(df["date"],dayfirst=True)
+            df["date_f"] = pd.to_datetime(df["date"],dayfirst=True,format='%d/%m/%Y',errors='coerce')
                    
         
         ## STEP 2: for each sequence, get rank of non_gap_length, sum_hits_score
@@ -937,18 +938,23 @@ class Miner_filter:
         ## STEP 2: perform multiple sequence alignment
         file_waiting_list = []
         for file in [f.name for f in Path(in_path).iterdir()]:
-            file_abs_path = f"{in_path}/{file}"
-            create_folder(f"{out_path}/../tmp_file")
-            file_tmp_path = f"{out_path}/../tmp_file/{file.replace('.fasta','')}"
+            file_abs_path = in_path / file
+            tmp_folder_path = out_path.parent / "tmp_file"
+            create_folder(tmp_folder_path)
+            file_tmp_path = tmp_folder_path / file.replace('.fasta','')
             create_folder(file_tmp_path)
             file_out_path = str(out_path / f"{Path(file).stem}_MSA.fasta")
             
             ## substep 1: if the fasta file contains more than [add_threshold] seqs, exec command using --auto
             if file_size_dict[file] > add_threshold:
                 aligner = Aligner(file_abs_path, file_tmp_path)
-                aligner.alofi()
-                shutil.copyfile(file_tmp_path / file,
-                                file_out_path)
+                result = aligner.alofi()
+                # 检查alofi方法是否成功执行
+                if result is not None:
+                    # Aligner.alofi方法会将结果保存为输入文件名的同名文件，放在输出路径中
+                    aligned_file = file_tmp_path / Path(file).name
+                    if aligned_file.exists():
+                        shutil.copyfile(str(aligned_file), file_out_path)
             
             ## substep 2: if file contains no more than [add_threshold] seqs, store these for further --add
             else:
@@ -961,30 +967,35 @@ class Miner_filter:
         
         ## substep 4: for each file in waiting list, find the most related taxonomic group to --add to MSA
         for file in file_waiting_list:
-            file_abs_path = f"{in_path}/{file}"
+            file_abs_path = str(in_path / file)
             file_out_path = str(out_path / f"{Path(file).stem}_MSA.fasta")
             this_taxonomy = file.split("_")[0]
             upper_unit = self.__get_upper_taxonomic_unit(this_taxonomy, taxonomy_genus_and_above)
+            reference = None
+            file_ref_path = None
             for ref_file in file_size_dict:
                 # if the genus of the candidate file is the same as this_taxonomy
                 if (self.__get_upper_taxonomic_unit(ref_file.split("_")[0], taxonomy_genus_and_above) == upper_unit
                     and ref_file != file):
                     reference = ref_file
-                    file_ref_path = f"{out_path}/{ref_file.replace('.fasta','_MSA.fasta')}"
+                    file_ref_path = str(out_path / f"{Path(ref_file).stem}_MSA.fasta")
                     break
             
             try:
+                if not reference or not file_ref_path:
+                    raise Exception("No reference found")
                 command = f"mafft --add {file_abs_path} {file_ref_path} > {file_out_path}"
             except Exception:
-                warning_msg = "In file {file}: there may be error in extension check" \
+                warning_msg = f"In file {file}: there may be error in extension check" \
                               "because no other genus from the same family can be used as reference."
                 self.__logger.collect_warning(warning_msg)
                 reference = list(file_size_dict.keys())[0]
-                file_ref_path = f"{out_path}/{reference.replace('.fasta','_MSA.fasta')}"
+                file_ref_path = str(out_path / f"{Path(reference).stem}_MSA.fasta")
                 command = f"mafft --add {file_abs_path} {file_ref_path} > {file_out_path}"
             
             run_command(command)
-            file_name = out_path / command.split(">")[-1].strip()
+            # 直接使用file_out_path而不是从命令中解析
+            file_name = file_out_path
             record_iter = SeqIO.parse(file_name, "fasta")
             
             count = 0

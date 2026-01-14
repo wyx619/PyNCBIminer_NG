@@ -5,7 +5,6 @@
 # @Software:PyCharm
 
 from run_command import run_command
-import markov_clustering as mc
 import networkx as nx
 import pandas as pd
 import numpy as np
@@ -16,6 +15,9 @@ from scipy.sparse import csr_matrix
 from Bio import SeqIO
 from tools import print_line, get_query_accession
 from seq_check_download import seq_check_download_main
+
+# 导入markov_clustering模块
+import markov_clustering as mc
 
 #确保 sys.stdout 存在（PyInstaller 打包时可能为 None）
 import os
