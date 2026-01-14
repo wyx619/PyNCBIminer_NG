@@ -14,9 +14,8 @@ filtered_seqs/
 runtime_hooks/
 faba/
 filtered_seqs/
-*.md
-*.spec
-*.txt
-*.py
-*.bat
+/*.spec
+/*.txt
+/*.py
+/*.bat
 
