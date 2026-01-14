@@ -4,7 +4,7 @@ from Bio.Seq import Seq
 import numpy as np
 import os
 import shutil
-
+from run_command import run_command
 from sequence_indexer import Sequence_indexer
 
 class nt_Calculator:
@@ -323,7 +323,7 @@ class nt_Calculator:
                     command = f"mafft --retree 1 {in_path} > {out_filename}"
                 else:
                     command = f"mafft --auto {in_path} > {out_filename}"
-                os.system(command)
+                run_command(command)
                 records = list(SeqIO.parse(out_filename, "fasta"))
             except Exception:
                 records = in_path
@@ -484,7 +484,7 @@ class nt_Calculator:
         SeqIO.write(record_iter, out_path, "fasta")
         
         ## substep 3: write into msa file
-        os.system(f"mafft --auto --reorder {out_path} > {record_path}")
+        run_command(f"mafft --auto --reorder {out_path} > {record_path}")
         
         return remove_ends
     

@@ -148,14 +148,14 @@ def iterated_blast_main(wd, organisms, count,
             query_path = Path(wd) / Path("parameters") / Path("ref_msa") / Path("msa_queries_1.fasta")
             if not os.path.exists(Path(query_path)) or os.path.getsize(Path(query_path)) == 0:
                 print("Aligning initial queries...")
-                # os.system(
-                #     "mafft --auto %s > %s" % (Path(wd) / Path("parameters") / Path("ref_seq") / Path("queries_1.fasta"),
-                #                               Path(wd) / Path("parameters") / Path("ref_msa") / Path(
-                #                                   "msa_queries_1.fasta")))
+                run_command(
+                    "mafft --auto %s > %s" % (Path(wd) / Path("parameters") / Path("ref_seq") / Path("queries_1.fasta"),
+                                              Path(wd) / Path("parameters") / Path("ref_msa") / Path(
+                                                  "msa_queries_1.fasta")))
 
                 # using L-INS-i (Very slow; recommended for <200 sequences with one conserved domain and long gaps)
 
-                os.system(
+                run_command(
                     "mafft --localpair --maxiterate 1000 %s > %s" %
                     (Path(wd) / Path("parameters") / Path("ref_seq") / Path("queries_1.fasta"), query_path))
             if os.path.getsize(query_path) == 0:
@@ -213,7 +213,7 @@ def iterated_blast_main(wd, organisms, count,
                            alignments=alignments, expect=expect, gapcosts=gapcosts, word_size=word_size,
                            nucl_reward=nucl_reward, nucl_penalty=nucl_penalty)
         # join and extend hits
-        file_list = os.listdir(tmp_wd)
+        #file_list = os.listdir(tmp_wd)
         # todo: do not extend in each round of BLAST.
         # tmp_results = hits_join_extend_main(wd=tmp_wd, max_len=max_length)
         tmp_results = hits_parse_join_select_main(wd=tmp_wd, max_len=max_length)
@@ -319,7 +319,7 @@ def iterated_blast_main(wd, organisms, count,
             print("Selected %d new queries." % new_queries.shape[0])
 
         if not os.path.exists(Path(wd) / Path("parameters") / Path("ref_seq") / Path("queries_%d.fasta" % blast_round)):
-            os.system("copy %s %s" % (Path(tmp_wd) / Path("new_queries.fasta"),
+            run_command("copy %s %s" % (Path(tmp_wd) / Path("new_queries.fasta"),
                                       Path(wd) / Path("parameters") / Path("ref_seq") / Path(
                                           "queries_%d.fasta" % blast_round)))
 

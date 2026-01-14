@@ -1,16 +1,13 @@
 import os
 from Bio import SeqIO
 from Bio.Seq import Seq
-import numpy as np
-from operator import add
-from functools import reduce
 import pandas as pd
 import shutil
 import re
 import traceback
 import time
 
-from functional import check_inpath_validity, check_outpath_validity, get_file_handles, create_folder, get_checked_path, get_fasta
+from functional import create_folder
 from message_logger import MessageLogger
 from nt_calculator import nt_Calculator
 from aligner import Aligner
@@ -112,7 +109,7 @@ class Miner_filter:
                         shutil.rmtree(path)
                     else:
                         os.remove(path)
-                except:
+                except Exception:
                     pass
                 
     def tnrs_name_correction(self):
@@ -605,7 +602,7 @@ class Miner_filter:
         creteria = {"date":newest, "journal":publish_required,"specimen_voucher":voucher_info_required}
         creteria = dict(sorted(creteria.items(), key=lambda item: item[1])) # sort by dict.values()
         for key, value in creteria.items():
-            if value == False:
+            if not value:
                 del creteria[key]
         creteria = list(creteria.keys())
         
@@ -644,7 +641,7 @@ class Miner_filter:
         for organism in name_list:
             df_organism = df.loc[df["taxon_name"]==organism]
             
-            if self.__count_consensus_value == False:
+            if not not self.__count_consensus_value:
                 smallest_sum_of_rank = min(df_organism["Sum_of_rank"])
                 df_organism = df_organism.loc[df_organism["Sum_of_rank"]==smallest_sum_of_rank]
             
@@ -783,7 +780,7 @@ class Miner_filter:
                 try:
                     record.description.encode("gbk")    
                     keeping_records.append(record)
-                except:
+                except Exception:
                     f_err = open(name_error_log, "a")
                     msg = f"{accession}: 'gbk' can't encode description of {accession}"
                     f_err.write(msg)
@@ -977,7 +974,7 @@ class Miner_filter:
             
             try:
                 command = f"mafft --add {file_abs_path} {file_ref_path} > {file_out_path}"
-            except:
+            except Exception:
                 warning_msg = "In file {file}: there may be error in extension check" \
                               "because no other genus from the same family can be used as reference."
                 self.__logger.collect_warning(warning_msg)
@@ -1070,10 +1067,10 @@ class Miner_filter:
                     s_new_end = s_end
                 if any([new_start, new_end]):
                     record_ids.append(accession_number)
-                    if new_start == None:
+                    if new_start is None:
                         new_start = 1
                         s_new_start = r_start
-                    if new_end == None:
+                    if new_end is None:
                         new_end = r_end-r_start+1
                         s_new_end = r_end
                         
@@ -1132,7 +1129,7 @@ if __name__ == "__main__":
         try:
             my_filter = Miner_filter(path, path)
             my_filter.combine_species()
-        except:
+        except Exception:
             with open((f"{path}/BUG_log.txt"),"w") as f:
                 f.write(str(traceback.format_exc()))
     
@@ -1143,7 +1140,7 @@ if __name__ == "__main__":
                                      subsp=True, var=True, f=True,  # for species combination
                                      sp=True, cf=True, aff=True, x=True, length_threshold=20, ignore_gap=True)
             return my_filter
-        except:
+        except Exception:
             with open((f"{path}/BUG_log.txt"),"w") as f:
                 f.write(str(traceback.format_exc()))
             return None
@@ -1156,7 +1153,7 @@ if __name__ == "__main__":
                                      subsp=True, var=True, f=True,  # for species combination
                                      sp=True, cf=True, aff=True, x=True, length_threshold=20, ignore_gap=True)
             return my_filter
-        except:
+        except Exception:
             with open((f"{path}/BUG_log.txt"),"w") as f:
                 f.write(str(traceback.format_exc()))
             return None

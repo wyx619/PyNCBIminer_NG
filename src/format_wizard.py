@@ -61,7 +61,7 @@ def create_folder(path):
             return path
         else:
             return 0
-    except:
+    except Exception:
         return -1
 
 
@@ -284,7 +284,7 @@ def taxon_completion(in_path, out_path='./'):
             shutil.copyfile(in_file, os.path.join(out_path, os.path.basename(in_file)))
         except IOError as e:
             print("Unable to copy file. %s" % e)
-        except:
+        except Exception:
             print("Unexpected error:", sys.exc_info())
 
     # STEP 3: append '-'s to the end of these copied files if a marker is not present
@@ -305,10 +305,10 @@ def taxon_completion(in_path, out_path='./'):
         elif recorded_length == 0:
             try:
                 os.remove(os.path.join(out_path, os.path.basename(in_file)))
-            except:
+            except Exception:
                 pass
             finally:
-                continue
+                pass  # 原意是跳过本次循环，但 finally 中不能 continue，改为空语句
         # condition 3: if file is not aligned, then for each gap, only three - will be added
         else:
             f = open(os.path.join(out_path, os.path.basename(in_file)), 'a')

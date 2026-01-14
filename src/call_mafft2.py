@@ -1,8 +1,9 @@
 import os
-from format_wizard import check_inpath_validity, check_outpath_validity, get_file_handles, create_folder
+from format_wizard import check_inpath_validity, check_outpath_validity, get_file_handles
 from pathlib import Path
 from Bio import SeqIO
 from datetime import datetime
+from run_command import run_command
 
 
 def mafft_add(in_path, in_file, out_path, cmd_str):
@@ -59,17 +60,17 @@ def mafft_add(in_path, in_file, out_path, cmd_str):
         # os.system("mafft --localpair --maxiterate 1000 %s > %s" % (file1, msa1))
         # os.system("mafft --auto --add %s %s > %s" % (file2, msa1, msa2))  # FFT - NS - 2(Fast but rough)
         # os.system("mafft --auto --addfragments %s %s > %s" % (file3, msa2, msa3))  # Multi-INS-fragment
-        os.system(" %s %s > %s" % (cmd_str[0], file1, msa1))
+        run_command(" %s %s > %s" % (cmd_str[0], file1, msa1))
 
         # os.system("%s --auto --add %s %s > %s" % (cmd_str[1], file2,  msa1, msa2))  # FFT - NS - 2(Fast but rough)
         # os.system("%s --auto --addfragments %s %s > %s" % (cmd_str[2], file3, msa2, msa3))  # Multi-INS-fragment
 
         # add fragments first
-        os.system(
+        run_command(
             "%s --auto --addfragments %s %s > %s" % (cmd_str[1], file2, msa1, msa2))  # FFT - NS - 2(Fast but rough)
         if os.path.getsize(msa2) == 0:
-            os.system("%s --auto --add %s %s > %s" % (cmd_str[1], file2, msa1, msa2))
-        os.system("%s --auto --add %s %s > %s" % (cmd_str[2], file3, msa2, msa3))  # Multi-INS-fragment
+            run_command("%s --auto --add %s %s > %s" % (cmd_str[1], file2, msa1, msa2))
+        run_command("%s --auto --add %s %s > %s" % (cmd_str[2], file3, msa2, msa3))  # Multi-INS-fragment
 
         os.remove(file1)
         os.remove(file2)
@@ -78,7 +79,7 @@ def mafft_add(in_path, in_file, out_path, cmd_str):
         os.remove(msa2)
         # print("Aligned results: %s" % msa3)
     else:
-        os.system(" %s %s > %s" % (cmd_str[0], Path(in_path) / Path(in_file), Path(out_path) / Path("msa_" + in_file)))
+        run_command(" %s %s > %s" % (cmd_str[0], Path(in_path) / Path(in_file), Path(out_path) / Path("msa_" + in_file)))
 
 
 def mafft(in_path, out_path='', add_choice='', add_path='', algorithm='auto',
@@ -108,7 +109,7 @@ def mafft(in_path, out_path='', add_choice='', add_path='', algorithm='auto',
     if pure_command_mode:
         pure_command = pure_command.split('\n')
         for command in pure_command:
-            os.system(command)
+            run_command(command)
         return pure_command
 
     # STEP 1: check path validity and get file handles
@@ -148,7 +149,7 @@ def mafft(in_path, out_path='', add_choice='', add_path='', algorithm='auto',
             command = f"mafft --auto --thread {thread} {'--reorder' * reorder} {additional_params} {in_file} > {out_file}"
             # print(command)
             print("Aligning %s..." % in_file)
-            os.system(command)
+            run_command(command)
             t1 = datetime.now()
             print("Running time: %s seconds" % (t1 - t0))
     else:

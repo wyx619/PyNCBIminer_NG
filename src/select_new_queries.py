@@ -6,7 +6,7 @@
 
 import os
 import sys
-
+from run_command import run_command
 # 确保 sys.stdout 存在（PyInstaller 打包时可能为 None）
 if sys.stdout is None:
     sys.stdout = open(os.devnull, 'w')
@@ -257,7 +257,7 @@ def cluster_sequences_main(wd, fasta_file=r"hits_clustered_filtered.fasta"):
             return seq_clustered
         mafft_cmd = "mafft --localpair --maxiterate 1000 %s > %s" % (
             Path(wd) / Path(fasta_file), Path(wd) / Path("msa_" + fasta_file))
-        os.system(mafft_cmd)
+        run_command(mafft_cmd)
 
     if os.path.getsize(Path(wd) / Path("msa_" + fasta_file)) > 0:
         seq_distance = p_distance(wd, "msa_" + fasta_file)
@@ -283,7 +283,7 @@ def cluster_sequences(wd, fasta_file=r"hits_clustered_filtered.fasta"):
             return seq_clustered
         mafft_cmd = "mafft --localpair --maxiterate 1000 %s > %s" % (
             Path(wd) / Path(fasta_file), Path(wd) / Path("msa_" + fasta_file))
-        os.system(mafft_cmd)
+        run_command(mafft_cmd)
     else:
         return None
 
@@ -465,7 +465,7 @@ def select_new_queries_main(wd, tmp_wd, key_annotations, exclude_sources, entrez
         print("Selected %d new queries." % new_quereis_num)
 
     if not os.path.exists(Path(wd) / Path("parameters") / Path("ref_seq") / Path("queries_%d.fasta" % blast_round)):
-        os.system("copy %s %s" % (Path(tmp_wd) / Path("new_queries.fasta"),
+        run_command("copy %s %s" % (Path(tmp_wd) / Path("new_queries.fasta"),
                                   Path(wd) / Path("parameters") / Path("ref_seq") / Path(
                                       "queries_%d.fasta" % blast_round)))
 

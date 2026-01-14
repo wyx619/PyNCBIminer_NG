@@ -163,7 +163,7 @@ class MessageLogger:
         """
         try:
             log_file = open(self.__log_file, mode)
-        except:
+        except Exception:
             log_file = open(self.__log_file, "w")
         log_file.write(message + "\n")
         log_file.close()

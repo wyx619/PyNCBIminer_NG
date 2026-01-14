@@ -1,7 +1,8 @@
 import os
 from Bio import SeqIO, SeqRecord
-from format_wizard import check_inpath_validity, check_outpath_validity, get_file_handles, create_folder
+from format_wizard import check_outpath_validity, get_file_handles, create_folder
 from datetime import datetime
+from run_command import run_command
 
 
 def trimal(in_path, out_path='', 
@@ -33,7 +34,7 @@ def trimal(in_path, out_path='',
     if pure_command_mode:
         pure_command = pure_command.split('\n')
         for command in pure_command:
-            os.system(command)
+            run_command(command)
         return pure_command
 
     # STEP 1: check path validity and get file handles
@@ -71,7 +72,7 @@ def trimal(in_path, out_path='',
             
         command.append(additional_params)
         command = " ".join(command)
-        os.system(command)
+        run_command(command)
         
         # STEP 3: if bp_length is False:
         if not bp_length:
