@@ -4,17 +4,20 @@
 # @File:blast_results_extend.py
 # @Software:PyCharm
 
-import os
 from pathlib import Path
 import pandas as pd
 from math import floor
 from Bio import SeqIO
 from tools import get_query_accession
+from run_command import run_command
+
 
 
 def add_all_queries2(wd):
     print("Aligning all reference sequences to calculate the missing length on the left and right side...")
-    queries_file_list = os.listdir(Path(wd) / Path("parameters") / Path("ref_seq"))
+    ref_seq_path = Path(wd) / "parameters" / "ref_seq"
+    # 2. 使用 Path 对象的 .iterdir() 方法，并将结果转换为列表   
+    queries_file_list = list(ref_seq_path.iterdir())
     # todo: think about only 1 round of blast
     if len(queries_file_list) == 0:
         print("Could not find query sequences in the parameters folder.")
@@ -26,10 +29,9 @@ def add_all_queries2(wd):
     #         fw.write((">%d|"+record.description+"\n") % int(Path(queries_file).stem.split("_")[-1]))
     #         fw.write(str(record.seq)+"\n")
     #     fw.close()
-    if not os.path.exists(
-            Path(wd) / Path("parameters") / Path("ref_msa") / Path("msa_queries_1.fasta")) or os.path.getsize(
-        Path(wd) / Path("parameters") / Path("ref_msa") / Path("msa_queries_1.fasta")) == 0:
-        os.system(
+    msa_path = Path(wd) / Path("parameters") / Path("ref_msa") / Path("msa_queries_1.fasta")
+    if not msa_path.exists() or msa_path.stat().st_size == 0:
+        run_command(
             r"mafft --localpair --maxiterate 1000 %s > %s" %
             (Path(wd) / Path("parameters") / Path("ref_seq") / Path("queries_1.fasta"),
              Path(wd) / Path("parameters") / Path("ref_msa") / Path("msa_queries_1.fasta")))
@@ -37,7 +39,7 @@ def add_all_queries2(wd):
     if len(queries_file_list) > 1:
         ref_msa_file = "msa_queries_1_to_%d.fasta" % len(queries_file_list)
         ref_msa_path = Path(wd) / Path("parameters") / Path("ref_msa") / Path(ref_msa_file)
-        if not os.path.exists(ref_msa_path) or os.path.getsize(ref_msa_path) == 0:
+        if not ref_msa_path.exists() or ref_msa_path.stat().st_size == 0:
 
             for n in range(2, len(queries_file_list) + 1):
                 if n == 2:
@@ -52,7 +54,7 @@ def add_all_queries2(wd):
                                      "msa_queries_1_to_%d.fasta" % (n - 1)),
                                  Path(wd) / Path("parameters") / Path("ref_msa") / Path(
                                      "msa_queries_1_to_%d.fasta" % n))
-                os.system(mafft_cmd)
+                run_command(mafft_cmd)
 
 
     else:

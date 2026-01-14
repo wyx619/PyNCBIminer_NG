@@ -1,4 +1,5 @@
-import os
+
+from pathlib import Path
 from Bio import SeqIO, SeqRecord
 from format_wizard import check_outpath_validity, get_file_handles, create_folder
 from datetime import datetime
@@ -49,14 +50,14 @@ def trimal(in_path, out_path='',
     for in_file in file_handles:
         print("Trimming %s..." % in_file)
         t0 = datetime.now()
-        basename = os.path.basename(in_file)
-        out_file = os.path.join(out_path, basename)
+        basename = Path(in_file).name
+        out_file = Path(out_path) / basename
         command = [f"trimal -in {in_file} -out {out_file}"]
         
         if htmlout:
-            html_folder = os.path.join(out_path, 'htmlout')
+            html_folder = Path(out_path) / 'htmlout'
             create_folder(html_folder)
-            html_out_file = os.path.join(html_folder, os.path.splitext(basename)[0]+'.html')
+            html_out_file = html_folder / (Path(basename).stem + '.html')
             command.append(f"-htmlout {html_out_file}")
             
         if implement_methods:

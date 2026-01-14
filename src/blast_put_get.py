@@ -4,7 +4,6 @@
 # @File:blast_put_get.py
 # @Software:PyCharm
 
-import os
 import re
 import time
 import pandas as pd
@@ -118,7 +117,7 @@ def put_blast(wd, queries_path=None,
     Format the "Put" command, send search requests to NCBI, get RID and RTOE
     RTOE is probably 'Request Time of Execution' and RID would be 'Request Identifier'
     """
-    if os.path.exists(Path(wd) / Path(table)):
+    if (Path(wd) / Path(table)).exists():
         sum_table = pd.read_table(Path(wd) / Path(table), sep='\t', engine='python')
         sum_table.loc[sum_table["RID"].isna(), "RID"] = ""
     else:

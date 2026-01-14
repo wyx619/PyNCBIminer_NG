@@ -11,7 +11,6 @@ from Bio import Entrez
 from pathlib import Path
 from datetime import datetime
 from Bio import SeqIO
-import os
 import pandas as pd
 from tools import get_query_accession
 from run_command import run_command
@@ -27,7 +26,7 @@ def my_efetch(accession, strand, seq_start, seq_stop):
 
 
 def filter_duplicate_key(wd, file):
-    if os.path.getsize(Path(wd) / Path(file)) > 0:
+    if (Path(wd) / Path(file)).stat().st_size > 0:
         run_command("copy %s %s" % (str(Path(wd) / Path(file)), str(Path(wd) / Path("tmp_" + file))))
     key_list = []
     with open(Path(wd) / Path(file), "w") as fw:
@@ -190,8 +189,8 @@ def seq_check_download(wd, acc_file, out_file, key_annotations, exclude_sources,
             if check_annotation(feature_list, key_annotations, exclude_sources):
                 write_fas_file(record, seq_start, seq_stop, strand, wd, file=out_file)
             else:
-                if not os.path.exists(Path(wd) / Path("erroneous_" + Path(out_file).stem + "_seq_info.txt")):
-                    with open(Path(wd) / Path("erroneous_" + Path(out_file).stem + "_seq_info.txt"), "w") as fw:
+                if not (Path(wd) / f"erroneous_{Path(out_file).stem}_seq_info.txt").exists():
+                    with (Path(wd) / f"erroneous_{Path(out_file).stem}_seq_info.txt").open("w") as fw:
                         fw.write(
                             "accession\tstart\tend\tstrand\tlength\tdate\tdescription\tsource\torganism\ttaxonomy\t")
                         fw.write("title\tauthors\tjournal\torganelle\tmol_type\tdb_xref\t")
@@ -223,7 +222,7 @@ def seq_check_download_main(wd, acc_file, out_file, key_annotations, exclude_sou
     df = pd.read_table(Path(wd) / Path(acc_file), sep="\t", engine="python")
     # drop duplicate
     df.index = df["subject_acc.ver"]
-    file_list = os.listdir(wd)
+    file_list = list(Path(wd).iterdir())
 
     # def get_accession(record):
     #     accession = record.description.split(" ")[0].split("|")[0].split(":")[0]

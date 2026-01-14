@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 import time
 from message_logger import MessageLogger
 
@@ -15,7 +15,7 @@ def check_inpath_validity(path):
         return False
     if path.endswith('.lnk'):
         return False  # do nothing with shortcut files
-    if not os.path.exists(path):  # invalid input: no such path
+    if not Path(path).exists():  # invalid input: no such path
         return False
     return True
 
@@ -33,9 +33,10 @@ def check_outpath_validity(path):
         return False
     if path.endswith('.lnk'):
         return False  # do nothing with shortcut files
-    if not os.path.exists(path):  # invalid input: no such path
+    path_obj = Path(path)
+    if not path_obj.exists():  # invalid input: no such path
         return False
-    if not os.path.isdir(path):
+    if not path_obj.is_dir():
         return False  # must be an existing folder
     return True
 
@@ -51,8 +52,9 @@ def create_folder(path):
     0 - if not
     -1 if illegal characters are in the path"""
     try:
-        if not os.path.exists(path):
-            os.mkdir(path)
+        path_obj = Path(path)
+        if not path_obj.exists():
+            path_obj.mkdir()
             return path
         else:
             return 0
@@ -87,20 +89,21 @@ def get_file_handles(in_path):
             continue
         
         # substep 1 : if an element is a file, add the file to result
-        if os.path.isfile(file_path):
+        file_path_obj = Path(file_path)
+        if file_path_obj.is_file():
             file_handles.append(file_path)
 
         # substep 2 : if an element is a folder, get files directly in the folder
         else:  # is a folder
-            file_handles += [os.path.join(file_path, file) for file in os.listdir(file_path)
-                             if (os.path.isfile(os.path.join(file_path, file))
+            file_handles += [str(file_path_obj / file) for file in file_path_obj.iterdir()
+                             if ((file_path_obj / file).is_file()
                                  and not file.endswith('.lnk'))]  # exclude shortcut
 
     # STEP 3: replace reverse slash, remove duplicates and sort
     file_handles = list(map(lambda x: x.replace('\\', '/'), file_handles))
     for handle in file_handles:
-        abs_handles.setdefault(os.path.abspath(handle), [])
-        abs_handles[os.path.abspath(handle)].append(handle)
+        abs_handles.setdefault(str(Path(handle).absolute()), [])
+        abs_handles[str(Path(handle).absolute())].append(handle)
     file_handles = []
     for handle_list in abs_handles.values():
         min_len = min(list(map(lambda x: len(x), handle_list)))
@@ -141,16 +144,16 @@ def overwriting_potential(in_path, out_path):
         in_path = [in_path]
     
     # get absolutely path for each path in in_path
-    in_path = list(map(lambda path: os.path.abspath(path), in_path))
+    in_path = list(map(lambda path: str(Path(path).absolute()), in_path))
     
     # replace files in in_path with parent folder for each file in in_path
     # and keep folders in_path
-    in_path = [path for path in in_path if os.path.isdir(path)] + \
-        [os.path.dirname(path) for path in in_path if os.path.isfile(path)]
+    in_path = [path for path in in_path if Path(path).is_dir()] + \
+        [str(Path(path).parent) for path in in_path if Path(path).is_file()]
     
     # check if overwriting is possible
     overwriting_potential = False
-    out_path = os.path.abspath(out_path)
+    out_path = str(Path(out_path).absolute())
     if out_path in in_path:
         overwriting_potential = True
     

@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 
 class MessageLogger:
     """ Class MessageLogger - to store, print, pop up and write messages including error, warning and notice
@@ -31,8 +31,8 @@ class MessageLogger:
         - log_rewrite - not yet used
         """
         # initialize by input parameters
-        if os.path.isdir(log_file):
-            self.__log_file = os.path.join(log_file, "log_file.txt")
+        if Path(log_file).is_dir():
+            self.__log_file = str(Path(log_file) / "log_file.txt")
         else:
             self.__log_file = log_file
             

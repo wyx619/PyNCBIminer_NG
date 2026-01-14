@@ -1,4 +1,3 @@
-import os
 from format_wizard import check_inpath_validity, check_outpath_validity, get_file_handles
 from pathlib import Path
 from Bio import SeqIO
@@ -57,26 +56,26 @@ def mafft_add(in_path, in_file, out_path, cmd_str):
         msa2 = Path(out_path) / Path("msa2_" + in_file)
         msa3 = Path(out_path) / Path("msa_" + in_file)
 
-        # os.system("mafft --localpair --maxiterate 1000 %s > %s" % (file1, msa1))
-        # os.system("mafft --auto --add %s %s > %s" % (file2, msa1, msa2))  # FFT - NS - 2(Fast but rough)
-        # os.system("mafft --auto --addfragments %s %s > %s" % (file3, msa2, msa3))  # Multi-INS-fragment
+        # run_command("mafft --localpair --maxiterate 1000 %s > %s" % (file1, msa1))
+        # run_command("mafft --auto --add %s %s > %s" % (file2, msa1, msa2))  # FFT - NS - 2(Fast but rough)
+        # run_command("mafft --auto --addfragments %s %s > %s" % (file3, msa2, msa3))  # Multi-INS-fragment
         run_command(" %s %s > %s" % (cmd_str[0], file1, msa1))
 
-        # os.system("%s --auto --add %s %s > %s" % (cmd_str[1], file2,  msa1, msa2))  # FFT - NS - 2(Fast but rough)
-        # os.system("%s --auto --addfragments %s %s > %s" % (cmd_str[2], file3, msa2, msa3))  # Multi-INS-fragment
+        # run_command("%s --auto --add %s %s > %s" % (cmd_str[1], file2,  msa1, msa2))  # FFT - NS - 2(Fast but rough)
+        # run_command("%s --auto --addfragments %s %s > %s" % (cmd_str[2], file3, msa2, msa3))  # Multi-INS-fragment
 
         # add fragments first
         run_command(
             "%s --auto --addfragments %s %s > %s" % (cmd_str[1], file2, msa1, msa2))  # FFT - NS - 2(Fast but rough)
-        if os.path.getsize(msa2) == 0:
+        if msa2.stat().st_size == 0:
             run_command("%s --auto --add %s %s > %s" % (cmd_str[1], file2, msa1, msa2))
         run_command("%s --auto --add %s %s > %s" % (cmd_str[2], file3, msa2, msa3))  # Multi-INS-fragment
 
-        os.remove(file1)
-        os.remove(file2)
-        os.remove(file3)
-        os.remove(msa1)
-        os.remove(msa2)
+        file1.unlink()
+        file2.unlink()
+        file3.unlink()
+        msa1.unlink()
+        msa2.unlink()
         # print("Aligned results: %s" % msa3)
     else:
         run_command(" %s %s > %s" % (cmd_str[0], Path(in_path) / Path(in_file), Path(out_path) / Path("msa_" + in_file)))
@@ -127,15 +126,15 @@ def mafft(in_path, out_path='', add_choice='', add_path='', algorithm='auto',
     #         command = f"mafft --{algorithm} --{add_choice} {add_path} --thread {thread} {'--reorder' * reorder} {additional_params} {in_file} > {out_file}"
     #     else:
     #         command1 = f"mafft --{algorithm} --thread {thread} {'--reorder' * reorder} {additional_params} {in_file} > {out_file}"
-    #     os.system(command)
+    #     run_command(command)
 
     # multiple files in a directory
-    if os.path.isdir(in_path):
-        file_list = os.listdir(in_path)
+    if Path(in_path).is_dir():
+        file_list = [f.name for f in Path(in_path).iterdir()]
     # one file
     else:
-        file_list = [os.path.basename(in_path)]
-        in_path = os.path.dirname(in_path)
+        file_list = [Path(in_path).name]
+        in_path = str(Path(in_path).parent)
     file_list = [x for x in file_list if Path(x).suffix in [".fasta", ".fas", ".fa"]]
     if len(file_list) == 0:
         print("Could not find any fasta file in the input.")
@@ -144,8 +143,8 @@ def mafft(in_path, out_path='', add_choice='', add_path='', algorithm='auto',
     if algorithm == "auto":
         for file in file_list:
             t0 = datetime.now()
-            in_file = os.path.join(in_path, file)
-            out_file = os.path.join(out_path, "msa_" + file)
+            in_file = str(Path(in_path) / file)
+            out_file = str(Path(out_path) / ("msa_" + file))
             command = f"mafft --auto --thread {thread} {'--reorder' * reorder} {additional_params} {in_file} > {out_file}"
             # print(command)
             print("Aligning %s..." % in_file)

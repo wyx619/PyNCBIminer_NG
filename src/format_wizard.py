@@ -1,6 +1,6 @@
-import os
 import shutil
 import sys
+from pathlib import Path
 import pandas as pd
 from Bio import SeqIO, SeqRecord
 
@@ -20,7 +20,7 @@ def check_inpath_validity(path):
         return False  # do nothing with shortcut files
     # if path.endswith('.result'):  # any folder or file endswith .result will not be loaded
     #     return False
-    if not os.path.exists(path):  # invalid input: no such path
+    if not Path(path).exists():  # invalid input: no such path
         return False
     return True
 
@@ -38,9 +38,10 @@ def check_outpath_validity(path):
         return False
     if path.endswith('.lnk'):
         return False  # do nothing with shortcut files
-    if not os.path.exists(path):  # invalid input: no such path
+    path_obj = Path(path)
+    if not path_obj.exists():  # invalid input: no such path
         return False
-    if not os.path.isdir(path):
+    if not path_obj.is_dir():
         return False  # must be an existing folder
     return True
 
@@ -56,8 +57,9 @@ def create_folder(path):
     0 - if not
     -1 if illegal characters are in the path"""
     try:
-        if not os.path.exists(path):
-            os.mkdir(path)
+        path_obj = Path(path)
+        if not path_obj.exists():
+            path_obj.mkdir()
             return path
         else:
             return 0
@@ -85,19 +87,20 @@ def get_file_handles(in_path):
         if not check_inpath_validity(file_path):
             continue
         # substep 1 : if an element is a file, add the file to result
-        if os.path.isfile(file_path):
+        file_path_obj = Path(file_path)
+        if file_path_obj.is_file():
             file_handles.append(file_path)
         # substep 2 : if an element is a folder, get files directly in the folder
         else:  # is a folder
-            file_handles += [os.path.join(file_path, file) for file in os.listdir(file_path)
-                             if (os.path.isfile(os.path.join(file_path, file))
-                                 and not file.endswith('.lnk'))]  # exclude shortcut
+            file_handles += [str(file) for file in file_path_obj.iterdir()
+                             if (file.is_file()
+                                 and not file.name.endswith('.lnk'))]  # exclude shortcut
 
     # STEP 3: replace reverse slash, remove duplicates and sort
     file_handles = list(map(lambda x: x.replace('\\', '/'), file_handles))
     for handle in file_handles:
-        abs_handles.setdefault(os.path.abspath(handle), [])
-        abs_handles[os.path.abspath(handle)].append(handle)
+        abs_handles.setdefault(str(Path(handle).absolute()), [])
+        abs_handles[str(Path(handle).absolute())].append(handle)
     file_handles = []
     for handle_list in abs_handles.values():
         min_len = min(list(map(lambda x: len(x), handle_list)))
@@ -142,20 +145,18 @@ def filter_by_length(in_path, out_path='./'):
                 longest_records[taxon_name] = record
 
         # STEP 3: write a csv file to store the detailed information of kept records
-        temp_output_folder = os.path.join(out_path, 'filtered.result')
+        temp_output_folder = Path(out_path) / 'filtered.result'
         create_folder(temp_output_folder)
         cols = ['taxon name', 'description']
         logs = []  # kept records, used to create a dataframe and write to csv
         for key, value in longest_records.items():  # key:taxon_name, value:record itself
             logs.append([key, value.description])
         df = pd.DataFrame(logs, columns=cols)
-        df.to_csv(os.path.join(temp_output_folder,
-                               os.path.splitext(os.path.basename(in_file))[0]
-                               + '_kept_records.csv'),
+        df.to_csv(temp_output_folder / (Path(in_file).stem + '_kept_records.csv'),
                   index=False)
 
         # STEP 4: write a fasta file to store only name and sequence of kept records  
-        out_file = os.path.join(temp_output_folder, os.path.basename(in_file))
+        out_file = temp_output_folder / Path(in_file).name
         for taxon_name in longest_records.keys():  # avoid unwanted output
             longest_records[taxon_name].name = ''
             longest_records[taxon_name].id = taxon_name.strip()
@@ -183,7 +184,7 @@ def fas2phy(in_path, out_path='./'):
     file_handles = get_file_handles(in_path)
     if not check_outpath_validity(out_path):
         return []  # write nothing if output folder is invalid
-    out_path = os.path.join(out_path, 'phylip.result')
+    out_path = Path(out_path) / 'phylip.result'
     create_folder(out_path)
     written_results = []  # to store the pair [species_number, sequence_length]
 
@@ -213,8 +214,8 @@ def fas2phy(in_path, out_path='./'):
         if not aligned:  # fasta is not aligned, cannot transform to phylip, so skip
             continue
         illegal_characters = ["\t", "\n", " ", ":", ",", ")", "(", ";", "]", "[", "'"]
-        filename = os.path.splitext(os.path.basename(in_file))[0] + '.phy'
-        fptr = open(os.path.join(out_path, filename), 'w')
+        filename = Path(in_file).stem + '.phy'
+        fptr = open(out_path / filename, 'w')
         fptr.write(f' {species_number}  {sequence_length}' + '\n')  # header
         record_iter = SeqIO.parse(in_file, 'fasta')
         name_room = len_longest_name + 1  # room for each taxon's name and following spaces
@@ -253,7 +254,7 @@ def taxon_completion(in_path, out_path='./'):
     file_handles = get_file_handles(in_path)
     if not check_outpath_validity(out_path):
         return {}  # write nothing if output folder is invalid
-    out_path = os.path.join(out_path, 'completion.result')
+    out_path = Path(out_path) / 'completion.result'
     create_folder(out_path)
     present_records = {}  # to store the missing taxon for each gene
     missing_records = {}  # the '-'-completed taxa
@@ -262,7 +263,7 @@ def taxon_completion(in_path, out_path='./'):
     # STEP 1: create a list of all taxa(descriptions) in input files
     total_taxa = []
     for in_file in file_handles:
-        file_basename = os.path.splitext(os.path.basename(in_file))[0]
+        file_basename = Path(in_file).stem
         record_iter = SeqIO.parse(in_file, 'fasta')
         recorded_length = list(set([len(record.seq) for record in record_iter]))
         if len(recorded_length) == 1:  # aligned or same-length sequences:
@@ -281,7 +282,7 @@ def taxon_completion(in_path, out_path='./'):
     # STEP 2: copy source files to out_path
     for in_file in file_handles:
         try:
-            shutil.copyfile(in_file, os.path.join(out_path, os.path.basename(in_file)))
+            shutil.copyfile(in_file, out_path / Path(in_file).name)
         except IOError as e:
             print("Unable to copy file. %s" % e)
         except Exception:
@@ -289,7 +290,7 @@ def taxon_completion(in_path, out_path='./'):
 
     # STEP 3: append '-'s to the end of these copied files if a marker is not present
     for in_file in file_handles:
-        file_basename = os.path.splitext(os.path.basename(in_file))[0]
+        file_basename = Path(in_file).stem
         recorded_taxa = present_records[file_basename]
         missing_records.setdefault(file_basename,
                                    [taxon for taxon in total_taxa if taxon not in recorded_taxa])
@@ -297,27 +298,27 @@ def taxon_completion(in_path, out_path='./'):
         recorded_length = sequence_lengths[file_basename]
         # condition 1: if file is aligned, then add equivalent amount of - to keep them aligned
         if recorded_length > 0:
-            f = open(os.path.join(out_path, os.path.basename(in_file)), 'a')
+            f = open(out_path / Path(in_file).name, 'a')
             for taxon in unrecorded_taxa:
                 f.write(f"\n>{taxon}\n{'-' * recorded_length}")
             f.close()
         # condition 2: this indicates that this file contains nothing, thus ignore it
         elif recorded_length == 0:
             try:
-                os.remove(os.path.join(out_path, os.path.basename(in_file)))
+                (out_path / Path(in_file).name).unlink()
             except Exception:
                 pass
             finally:
                 pass  # 原意是跳过本次循环，但 finally 中不能 continue，改为空语句
         # condition 3: if file is not aligned, then for each gap, only three - will be added
         else:
-            f = open(os.path.join(out_path, os.path.basename(in_file)), 'a')
+            f = open(out_path / Path(in_file).name, 'a')
             for taxon in unrecorded_taxa:
                 f.write(f"\n>{taxon}\n{'-' * 3}")
             f.close()
 
     # STEP 4: write added records to log file
-    f = open(os.path.join(out_path, 'completion.log'), 'w')
+    f = open(out_path / 'completion.log', 'w')
     f.write("Appended taxon for each fasta file are listed below:\n")
     for key, value in missing_records.items():
         value.sort()  # order the result
@@ -344,7 +345,7 @@ def concat(in_path, out_path='./', filename='concat.fasta'):
     file_handles = get_file_handles(in_path)
     if not check_outpath_validity(out_path):
         return {}  # write nothing if output folder is invalid
-    out_path = os.path.join(out_path, 'concat.result')
+    out_path = Path(out_path) / 'concat.result'
     create_folder(out_path)
 
     # STEP 1: check whether there is a 'marker gap' for all taxa and whether same length
@@ -371,7 +372,7 @@ def concat(in_path, out_path='./', filename='concat.fasta'):
     marker_record = {}  # {marker: position} where position: [start, end]
     for in_file in file_handles:
         marker_record.setdefault('total_length', 0)
-        marker_name = os.path.splitext(os.path.basename(in_file))[0]
+        marker_name = Path(in_file).stem
         marker_record.setdefault(marker_name, [])
         record_iter = SeqIO.parse(in_file, 'fasta')
         for record in record_iter:
@@ -386,10 +387,10 @@ def concat(in_path, out_path='./', filename='concat.fasta'):
                 marker_record['total_length'] += length
     del marker_record['total_length']
 
-    SeqIO.write(concat_result.values(), os.path.join(out_path, filename), 'fasta')
+    SeqIO.write(concat_result.values(), out_path / filename, 'fasta')
 
     # STEP 3: prepare log and cfg file to record gene positions
-    cfg_filename = os.path.splitext(filename)[0]
+    cfg_filename = Path(filename).stem
     header = f"""## ALIGNMENT FILE ##
 alignment = {cfg_filename}.phy;
 
@@ -418,7 +419,7 @@ search = greedy;"""
         for i in range(3):
             body += fr"{key}_pos{i + 1} = {i + value[0]}-{value[1]}\3;" + "\n"
     cfg = header + body + tail
-    f = open(os.path.join(out_path, f'{cfg_filename}.cfg'), 'w')
+    f = open(out_path / f'{cfg_filename}.cfg', 'w')
     f.write(cfg)
     f.close()
     return marker_record

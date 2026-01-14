@@ -4,15 +4,7 @@
 # @File:select_new_queries.py
 # @Software:PyCharm
 
-import os
-import sys
 from run_command import run_command
-# 确保 sys.stdout 存在（PyInstaller 打包时可能为 None）
-if sys.stdout is None:
-    sys.stdout = open(os.devnull, 'w')
-if sys.stderr is None:
-    sys.stderr = open(os.devnull, 'w')
-
 import markov_clustering as mc
 import networkx as nx
 import pandas as pd
@@ -25,6 +17,13 @@ from Bio import SeqIO
 from tools import print_line, get_query_accession
 from seq_check_download import seq_check_download_main
 
+#确保 sys.stdout 存在（PyInstaller 打包时可能为 None）
+import os
+import sys
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, 'w')
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, 'w')
 
 def cluster_queries(wd, ref_list=None):
     # todo: do this again if all selected sequences have low quality?
@@ -130,7 +129,7 @@ def filter_seq(wd, max_length, table="hits_clustered.txt", fasta_file="hits_clus
 
     df = pd.read_table(Path(wd) / Path(table), sep='\t', engine='python')
     df.index = df["subject_acc.ver"]
-    file_list = os.listdir(wd)
+    file_list = [f.name for f in Path(wd).iterdir()]
 
     print("Removing errorneous sequences...")
     if ("erroneous_" + fasta_file in file_list) and ("erroneous_" + table not in file_list):
@@ -147,9 +146,9 @@ def filter_seq(wd, max_length, table="hits_clustered.txt", fasta_file="hits_clus
     df["seq_len"] = 0
     index_list = []
     n = 0
-    if not os.path.exists(Path(wd) / Path("hits_clustered.fasta")):
+    if not (Path(wd) / "hits_clustered.fasta").exists():
         return 0
-    if os.path.getsize(Path(wd) / Path("hits_clustered.fasta")) == 0:
+    if (Path(wd) / Path("hits_clustered.fasta")).stat().st_size == 0:
         return 0
     scluster = SeqIO.parse(Path(wd) / Path("hits_clustered.fasta"), "fasta")
     with open(Path(wd) / Path("hits_clustered_filtered.fasta"), "w") as fw:
@@ -246,7 +245,7 @@ def my_mcl(wd, df, table):
 def cluster_sequences_main(wd, fasta_file=r"hits_clustered_filtered.fasta"):
     print("Clustering sequences...")
     # todo: if hits_clustered_filtered.fasta only has two sequence
-    if os.path.getsize(Path(wd) / Path(fasta_file)) > 0:
+    if (Path(wd) / Path(fasta_file)).stat().st_size > 0:
         n_seq = 0
         for record in SeqIO.parse(Path(wd) / Path(fasta_file), "fasta"):
             n_seq += 1
@@ -259,7 +258,7 @@ def cluster_sequences_main(wd, fasta_file=r"hits_clustered_filtered.fasta"):
             Path(wd) / Path(fasta_file), Path(wd) / Path("msa_" + fasta_file))
         run_command(mafft_cmd)
 
-    if os.path.getsize(Path(wd) / Path("msa_" + fasta_file)) > 0:
+    if (Path(wd) / Path("msa_" + fasta_file)).stat().st_size > 0:
         seq_distance = p_distance(wd, "msa_" + fasta_file)
         # todo: what if no return
         seq_distance.to_csv(Path(wd) / Path(Path("msa_" + fasta_file).stem + "_distance.txt"), index=True, sep="\t")
@@ -272,7 +271,7 @@ def cluster_sequences_main(wd, fasta_file=r"hits_clustered_filtered.fasta"):
 def cluster_sequences(wd, fasta_file=r"hits_clustered_filtered.fasta"):
     print("Clustering sequences...")
     # todo: if hits_clustered_filtered.fasta only has two sequence
-    if os.path.getsize(Path(wd) / Path(fasta_file)) > 0:
+    if (Path(wd) / fasta_file).stat().st_size > 0:
         n_seq = 0
         for record in SeqIO.parse(Path(wd) / Path(fasta_file), "fasta"):
             n_seq += 1
@@ -287,7 +286,7 @@ def cluster_sequences(wd, fasta_file=r"hits_clustered_filtered.fasta"):
     else:
         return None
 
-    if os.path.getsize(Path(wd) / Path("msa_" + fasta_file)) > 0:
+    if (Path(wd) / ("msa_" + fasta_file)).stat().st_size > 0:
         seq_distance = p_distance(wd, "msa_" + fasta_file)
         # todo: what if no return
         seq_distance.to_csv(Path(wd) / Path(Path("msa_" + fasta_file).stem + "_distance.txt"), index=True, sep="\t")
@@ -329,7 +328,7 @@ def cluster_sequences(wd, fasta_file=r"hits_clustered_filtered.fasta"):
             return df2
 
 
-def select_new_queries(wd, tmp_wd, blast_round, ref_number):
+def select_new_queries(tmp_wd, blast_round, ref_number):
     seq_clustered = pd.read_table(Path(tmp_wd) / Path(r"sequences_clustered.txt"), sep='\t', engine='python')
     seq_clustered.index = seq_clustered["subject_acc.ver"]
     # file_list = os.listdir(Path(wd) / Path("parameters"))
@@ -388,17 +387,17 @@ def select_new_queries(wd, tmp_wd, blast_round, ref_number):
 
 
 def select_new_queries_main(wd, tmp_wd, key_annotations, exclude_sources, entrez_email, max_length, blast_round, ref_number):
-    file_list = os.listdir(tmp_wd)
+    file_list = [f.name for f in Path(tmp_wd).iterdir()]
     # select new reference sequences from different clusters
     if "hits_clustered.txt" not in file_list:
         print("Selecting new references...")
-        file_list = os.listdir(Path(wd) / Path("parameters"))
+        file_list = [f.name for f in (Path(wd) / "parameters").iterdir()]
         # if os.path.exists(Path(wd) / Path("parameters") / Path("all_new_queries_info.txt")):
         #     all_new_queries = pd.read_table(Path(wd) / Path("parameters") / Path(r"all_new_queries_info.txt"),
         #                                     sep='\t', engine='python')
         #     all_new_queries_list = all_new_queries["subject_acc.ver"]
         #     cluster_queries(wd=tmp_wd, ref_list=all_new_queries_list)
-        if os.path.exists(Path(wd) / Path("parameters") / Path("all_queries_info.txt")):
+        if (Path(wd) / "parameters" / "all_queries_info.txt").exists():
             all_queries = pd.read_table(Path(wd) / Path("parameters") / Path(r"all_queries_info.txt"),
                                         sep='\t', engine='python')
             all_queries_list = all_queries["ID"]
@@ -417,8 +416,8 @@ def select_new_queries_main(wd, tmp_wd, key_annotations, exclude_sources, entrez
                                 out_file=r"hits_clustered.fasta",
                                 key_annotations=key_annotations, exclude_sources=exclude_sources,
                                 entrez_email=entrez_email)
-        if os.path.exists(Path(wd) / Path("parameters") / Path("ref_seq")):
-            ref_file_list = os.listdir(Path(wd) / Path("parameters") / Path("ref_seq"))
+        if (Path(wd) / "parameters" / "ref_seq").exists():
+            ref_file_list = [f.name for f in (Path(wd) / "parameters" / "ref_seq").iterdir()]
             ref_seq_list = []
             for file in ref_file_list:
                 for record in SeqIO.parse(Path(wd) / Path("parameters") / Path("ref_seq") / Path(file), "fasta"):
@@ -464,7 +463,7 @@ def select_new_queries_main(wd, tmp_wd, key_annotations, exclude_sources, entrez
         new_quereis_num = new_queries.shape[0]
         print("Selected %d new queries." % new_quereis_num)
 
-    if not os.path.exists(Path(wd) / Path("parameters") / Path("ref_seq") / Path("queries_%d.fasta" % blast_round)):
+    if not (Path(wd) / "parameters" / "ref_seq" / ("queries_%d.fasta" % blast_round)).exists():
         run_command("copy %s %s" % (Path(tmp_wd) / Path("new_queries.fasta"),
                                   Path(wd) / Path("parameters") / Path("ref_seq") / Path(
                                       "queries_%d.fasta" % blast_round)))

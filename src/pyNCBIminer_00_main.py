@@ -5,7 +5,7 @@
 # @Software:PyCharm
 
 
-import os
+
 import sys
 import ctypes
 from ui_main import Ui_MainWindow
@@ -30,16 +30,16 @@ def get_resource_path(relative_path):
         base_path = sys._MEIPASS
     except AttributeError:
         # 如果不是打包环境，使用脚本所在目录
-        base_path = os.path.dirname(os.path.abspath(__file__))
+        base_path = str(Path(__file__).parent)
     
-    return os.path.join(base_path, relative_path)
+    return str(Path(base_path) / relative_path)
 
 
 def get_writable_path(relative_path):
     """
     获取可写路径，优先使用工作目录，兼容开发环境和打包后的环境
     """
-    return os.path.join(os.getcwd(), relative_path)
+    return str(Path.cwd() / relative_path)
 
 
 class EmittingStr(QObject):
@@ -132,7 +132,7 @@ class MainWindow(QMainWindow):
 
         self.ui.target_region.setEditable(True)
         self.ui.set_target_region.setEnabled(False)
-        target_region_list = os.listdir(Path(get_resource_path("blast_parameters")))
+        target_region_list = [f.name for f in Path(get_resource_path("blast_parameters")).iterdir()]
         target_region_list = [Path(x).stem for x in target_region_list]
         self.ui.target_region.clear()
         self.ui.target_region.addItems([""] + target_region_list)
@@ -225,15 +225,16 @@ class MainWindow(QMainWindow):
         QMessageBox.about(self.ui, "Install trimAl", "Installation started!")
 
     def check_dependencies(self):
+        import os
         """
         Check if MAFFT and TrimAl are installed and update PATH if needed.
         This method uses caching to avoid repeated disk checks.
         """
-        root_path = os.getcwd()
+        root_path = Path.cwd()
         
         if not self.mafft_checked:
             mafft_path = Path(root_path) / Path(r"./mafft/mafft-win")
-            if os.path.exists(Path(root_path) / Path("./mafft/mafft-win/mafft.bat")):
+            if (root_path / "./mafft/mafft-win/mafft.bat").exists():
                 os.environ["PATH"] = os.environ["PATH"] + ";" + str(mafft_path)
                 print('MAFFT found')
             else:
@@ -242,7 +243,7 @@ class MainWindow(QMainWindow):
         
         if not self.trimal_checked:
             trimal_path = Path(root_path) / Path(r"./trimal/trimAl_Windows_x86-64")
-            if os.path.exists(Path(root_path) / Path("./trimal/trimAl_Windows_x86-64/trimal.exe")):
+            if (root_path / "./trimal/trimAl_Windows_x86-64/trimal.exe").exists():
                 os.environ["PATH"] = os.environ["PATH"] + ";" + str(trimal_path)
                 print('TrimAl found')
             else:
@@ -440,7 +441,7 @@ class MainWindow(QMainWindow):
             # 使用默认查询序列（资源目录）
             queries_dir = Path(get_resource_path("initial_queries")) / Path(target_region)
         
-        for file in os.listdir(queries_dir):
+        for file in [f.name for f in Path(queries_dir).iterdir() if f.is_file()]:
             with open(queries_dir / Path(file), "r") as fr:
                 seq = fr.read()
                 self.ui.initial_queries.appendPlainText(seq + "\n")
@@ -542,7 +543,7 @@ class MainWindow(QMainWindow):
         date_to = self.ui.date_to.text().strip()
         #print("Entrez email: %s" % entrez_email)
         if self.ui.marker_summary.isChecked():
-            target_region_list = os.listdir(Path(get_resource_path("blast_parameters")))
+            target_region_list = [f.name for f in Path(get_resource_path("blast_parameters")).iterdir()]
             target_region_list = [Path(x).stem for x in target_region_list]
             target_region_dict = {}
             for target_region in target_region_list:
@@ -680,18 +681,18 @@ class MainWindow(QMainWindow):
                         "Please visit https://ncbi.github.io/blast-cloud/dev/api.html for details about allowed values.")
                     return
 
-        if not os.path.exists(Path(wd)):
-            os.makedirs(Path(wd))
-        if not os.path.exists(Path(wd) / Path("parameters")):
-            os.makedirs(Path(wd) / Path("parameters"))
-        if not os.path.exists(Path(wd) / Path("parameters") / Path("ref_seq")):
-            os.makedirs(Path(wd) / Path("parameters") / Path("ref_seq"))
-        if not os.path.exists(Path(wd) / Path("parameters") / Path("ref_msa")):
-            os.makedirs(Path(wd) / Path("parameters") / Path("ref_msa"))
-        if not os.path.exists(Path(wd) / Path("tmp_files")):
-            os.makedirs(Path(wd) / Path("tmp_files"))
-        if not os.path.exists(Path(wd) / Path("results")):
-            os.makedirs(Path(wd) / Path("results"))
+        if not Path(wd).exists():
+            Path(wd).mkdir(exist_ok=True)
+        if not (Path(wd) / "parameters").exists():
+            (Path(wd) / "parameters").mkdir(exist_ok=True)
+        if not (Path(wd) / "parameters" / "ref_seq").exists():
+            (Path(wd) / "parameters" / "ref_seq").mkdir(exist_ok=True)
+        if not (Path(wd) / "parameters" / "ref_msa").exists():
+            (Path(wd) / "parameters" / "ref_msa").mkdir(exist_ok=True)
+        if not (Path(wd) / "tmp_files").exists():
+            (Path(wd) / "tmp_files").mkdir(exist_ok=True)
+        if not (Path(wd) / "results").exists():
+            (Path(wd) / "results").mkdir(exist_ok=True)
 
         organisms = taxonomy.splitlines()
         organisms = [x for x in organisms if len(x) > 0]
@@ -756,21 +757,21 @@ class MainWindow(QMainWindow):
 
         # check if the working directory exists
         wd = self.ui.wd.text()
-        if not os.path.exists(wd):
+        if not Path(wd).exists():
             print("Working directory does not exists, please submit new BLAST.")
             return
-        if not os.path.exists(Path(wd) / Path("parameters")):
+        if not (Path(wd) / "parameters").exists():
             print("Can't find parameters directory, please submit new BLAST.")
             return
-        if not os.path.exists(Path(wd) / Path("tmp_files")):
+        if not (Path(wd) / "tmp_files").exists():
             print("Can't find tmp_files directory, please submit new BLAST.")
             return
-        if not os.path.exists(Path(wd) / Path("results")):
+        if not (Path(wd) / "results").exists():
             print("Can't find results directory, please submit new BLAST.")
             return
 
         # read BLAST parameters in the blast_parameters.txt file
-        parameters_files = os.listdir(Path(wd) / Path("parameters"))
+        parameters_files = [f.name for f in (Path(wd) / "parameters").iterdir()]
         if "blast_parameters.txt" not in parameters_files:
             # todo: check BLAST parameters
             print("Can't find BLAST parameters, please submit new BLAST.")
@@ -809,7 +810,7 @@ class MainWindow(QMainWindow):
 
         # show parameters in the Sequence Retrieving panel
         # target_region_list = ["ITS", "rbcL", "matK", "trnL-trnF", "psbA-trnH", "ndhF", "rpoB"]
-        target_region_list = os.listdir(Path(get_resource_path("blast_parameters")))
+        target_region_list = [f.name for f in Path(get_resource_path("blast_parameters")).iterdir()]
         target_region_list = [Path(x).stem for x in target_region_list]
         if target_region in target_region_list:
             target_region_list.remove(target_region)
@@ -839,7 +840,7 @@ class MainWindow(QMainWindow):
         exclude_sources = [x for x in exclude_sources if len(x) > 0]
 
         # todo: show warnings when the size of queries file is zero
-        queries_file_list = os.listdir(Path(wd) / Path("parameters") / Path("ref_seq"))
+        queries_file_list = [f.name for f in (Path(wd) / "parameters" / "ref_seq").iterdir()]
         if len(queries_file_list) > 0:
             round_list = []
             for queries_file in queries_file_list:
@@ -1003,8 +1004,8 @@ class MainWindow(QMainWindow):
         
         in_path2 = self.ui.in_path2.text().strip()
         out_path2 = self.ui.out_path2.text().strip()
-        if not os.path.exists(out_path2):
-            os.makedirs(out_path2)
+        if not Path(out_path2).exists():
+            Path(out_path2).mkdir(exist_ok=True)
         # ali_mod = eval(self.ui.ali_mod.currentText().strip())
         # ali_cmd = self.ui.ali_cmd.toPlainText().strip()
         # ali_add_cho = self.ui.ali_add_cho.currentText().strip()
@@ -1063,8 +1064,8 @@ class MainWindow(QMainWindow):
         
         in_path3 = self.ui.in_path3.text().strip()
         out_path3 = self.ui.out_path3.text().strip()
-        if not os.path.exists(out_path3):
-            os.makedirs(out_path3)
+        if not Path(out_path3).exists():
+            Path(out_path3).mkdir(exist_ok=True)
         tri_met = self.ui.tri_met.currentText().strip().split(" ")[0]
         if tri_met == "user":
             tri_met = ""
@@ -1110,8 +1111,8 @@ class MainWindow(QMainWindow):
         
         in_path4 = self.ui.in_path4.text().strip()
         out_path4 = self.ui.out_path4.text().strip()
-        if not os.path.exists(out_path4):
-            os.makedirs(out_path4)
+        if not Path(out_path4).exists():
+            Path(out_path4).mkdir(exist_ok=True)
         self.ui.thread = threading.Thread(target=my_concatenation, args=(in_path4, out_path4))
         print("Running concatenation...")
         self.ui.thread.setDaemon(True)
@@ -1128,13 +1129,13 @@ def main():
     app.setOrganizationName("PyNCBIminer")
     app.setApplicationDisplayName("PyNCBIminer")
     
-    icon_path = get_resource_path(os.path.join("icons", "app_icon.ico"))
-    if os.path.exists(icon_path):
+    icon_path = get_resource_path("icons/app_icon.ico")
+    if Path(icon_path).exists():
         app.setWindowIcon(QIcon(icon_path))
     
     main_window = MainWindow()
     
-    if os.path.exists(icon_path):
+    if Path(icon_path).exists():
         main_window.setWindowIcon(QIcon(icon_path))
     
     main_window.show()

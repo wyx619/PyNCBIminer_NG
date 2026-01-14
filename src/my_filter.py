@@ -4,7 +4,6 @@
 # @File:my_filter.py
 # @Software:PyCharm
 
-import os
 from pathlib import Path
 from miner_filter import Miner_filter
 from datetime import datetime
@@ -14,14 +13,14 @@ from Bio import SeqIO
 
 
 def rename_results(wd):
-    file_list = os.listdir(Path(wd) / Path("results"))
+    file_list = [f.name for f in (Path(wd) / "results").iterdir()]
     if "blast_results_controlled.fasta" in file_list and "blast_results_checked.fasta" in file_list:
-        os.makedirs(Path(wd) / Path("results") / Path("not_controlled"), exist_ok=True)
-        shutil.copy(Path(wd) / Path("results") / Path("blast_results_checked.fasta"),
-                    Path(wd) / Path("results") / Path("not_controlled") / Path("blast_results_checked.fasta"))
-        os.remove(Path(wd) / Path("results") / Path("blast_results_checked.fasta"))
-        os.rename(Path(wd) / Path("results") / Path("blast_results_controlled.fasta"),
-                  Path(wd) / Path("results") / Path("blast_results_checked.fasta"))
+        (Path(wd) / "results" / "not_controlled").mkdir(exist_ok=True)
+        shutil.copy(Path(wd) / "results" / "blast_results_checked.fasta",
+                    Path(wd) / "results" / "not_controlled" / "blast_results_checked.fasta")
+        (Path(wd) / "results" / "blast_results_checked.fasta").unlink()
+        (Path(wd) / "results" / "blast_results_controlled.fasta").rename(
+                  Path(wd) / "results" / "blast_results_checked.fasta")
         print("Copy blast_result_checked.fasta the not_controlled folder. ")
         print("Renamed blast_result_controlled.fasta as blast_results_checked.fasta. ")
 
@@ -61,13 +60,14 @@ def put_filtered_seq_together(wd_list):
     print("Copying filtered sequences into one directory...")
 
     for wd in wd_list:
-        if not os.path.exists(Path(wd).parent / Path("filtered_seqs")):
-            os.mkdir(Path(wd).parent / Path("filtered_seqs"))
+        filtered_seqs_path = Path(wd).parent / "filtered_seqs"
+        if not filtered_seqs_path.exists():
+            filtered_seqs_path.mkdir()
 
         name = Path(wd).name
         try:
-            with open(Path(wd).parent / Path("filtered_seqs")/Path(name+".fasta"), "w") as fw:
-                for record in SeqIO.parse(Path(wd) / Path("results") / Path("blast_results_filtered.fasta"), "fasta"):
+            with open(Path(wd).parent / "filtered_seqs"/(name+".fasta"), "w") as fw:
+                for record in SeqIO.parse(Path(wd) / "results" / "blast_results_filtered.fasta", "fasta"):
                     fw.write(">"+record.description.split("|")[1])
                     fw.write("\n")
                     fw.write(str(record.seq))
@@ -90,14 +90,13 @@ def call_miner_filter(in_path, out_path, action, consensus_value, len_shresh, na
     :return:
     """
     # check in_path
-    dir_list = os.listdir(in_path)
-    dir_list = [x for x in dir_list if os.path.isdir(Path(in_path)/Path(x))]
+    dir_list = [f.name for f in Path(in_path).iterdir() if (Path(in_path)/f.name).is_dir()]
     wd_list = []
     if 'results' in dir_list and "tmp_files" in dir_list:
         wd_list = [in_path]
     else:
         for directory in dir_list:
-            sub_dir_list = os.listdir(Path(in_path)/Path(directory))
+            sub_dir_list = [f.name for f in (Path(in_path)/directory).iterdir()]
             if 'results' in sub_dir_list and "tmp_files" in sub_dir_list:
                 wd_list.append(Path(in_path)/Path(directory))
     if len(wd_list) == 0:

@@ -2,7 +2,7 @@ from itertools import product
 from Bio import SeqIO
 from Bio.Seq import Seq
 import numpy as np
-import os
+from pathlib import Path
 import shutil
 from run_command import run_command
 from sequence_indexer import Sequence_indexer
@@ -173,7 +173,7 @@ class nt_Calculator:
         - avg_PI - average pairwise identity of all sequences in the given group
         """
         if isinstance(records, str):
-            if os.path.isfile(records):
+            if Path(records).is_file():
                 records = SeqIO.parse(records, "fasta")
             
         records = list(records)
@@ -232,7 +232,7 @@ class nt_Calculator:
     def get_consensus_sequence(self, record_iter):
         
         if isinstance(record_iter, str):
-            if os.path.isfile(record_iter):
+            if Path(record_iter).is_file():
                 record_iter = SeqIO.parse(record_iter, "fasta")
                 
         record_iter = list(record_iter)
@@ -317,8 +317,8 @@ class nt_Calculator:
         if method == "alignment":
             ## STEP 1: preparation
             try:
-                basename = os.path.basename(in_path)
-                out_filename = os.path.join(out_path, "distance_matrix_" + basename)
+                basename = Path(in_path).name
+                out_filename = str(Path(out_path) / ("distance_matrix_" + basename))
                 if fast:
                     command = f"mafft --retree 1 {in_path} > {out_filename}"
                 else:
@@ -369,7 +369,7 @@ class nt_Calculator:
         gap_open = 2
         gap_extend = 1
         
-        if os.path.isfile(record_path):
+        if Path(record_path).is_file():
             record_iter = SeqIO.parse(record_path, "fasta")
             records = np.array([list(str(record.seq).upper()) for record in record_iter])
         else:
@@ -470,7 +470,7 @@ class nt_Calculator:
         for record in record_iter:
             if not remove_ends:
                 return []
-            if keep_tmp and os.path.isfile(record_path):
+            if keep_tmp and Path(record_path).is_file():
                 shutil.copy(record_path, record_path.replace(".fasta","_backup.fasta"))
                 shutil.copy(record_path.replace("_msa.fasta",".fasta"), record_path.replace("_msa.fasta","_backup.fasta"))
             for ends in remove_ends:

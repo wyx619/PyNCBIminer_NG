@@ -7,7 +7,6 @@
 import pandas as pd
 import numpy as np
 from pathlib import Path
-import os
 from math import ceil
 from Bio import SeqIO
 
@@ -86,7 +85,7 @@ def iterated_blast_main(wd, organisms, count,
     alignments = ceil(count * 1.05)
     last_new = 9999
     # read previous BLAST results if blast_results.txt exists in results folder
-    if os.path.exists(Path(wd) / Path("results") / Path("blast_results.txt")):
+    if (Path(wd) / Path("results") / Path("blast_results.txt")).exists():
         print("Reading previous BLAST results...")
         blast_results = pd.read_table(Path(wd) / Path("results") / Path("blast_results.txt"), sep='\t', engine='python')
         source_list = blast_results["Source"].value_counts()
@@ -119,7 +118,7 @@ def iterated_blast_main(wd, organisms, count,
         print_line("*")
         print("BLAST round %d" % blast_round)
         if blast_round == 1:
-            if not os.path.exists(Path(wd) / Path("parameters") / Path("ref_seq") / Path("queries_1.fasta")):
+            if not (Path(wd) / Path("parameters") / Path("ref_seq") / Path("queries_1.fasta")).exists():
                 description_list = []
                 seq_list = []
                 m = 0
@@ -191,7 +190,7 @@ def iterated_blast_main(wd, organisms, count,
             sum_table.loc[i, "Sequence"] = str(queries[key].seq.upper())
             sum_table.loc[i, "Sequence_length"] = len(sum_table.loc[i, "Sequence"])
             sum_table.loc[i, "blast_round"] = blast_round
-        if not os.path.exists(Path(wd) / Path("parameters") / Path("all_queries_info.txt")):
+        if not (Path(wd) / Path("parameters") / Path("all_queries_info.txt")).exists():
             sum_table.to_csv(Path(wd) / Path("parameters") / Path("all_queries_info.txt"), index=False, sep="\t")
             print("Queries information is saved in all_queries_info.txt.")
         else:
@@ -205,8 +204,7 @@ def iterated_blast_main(wd, organisms, count,
 
         folder = "BLAST_%d" % blast_round
         tmp_wd = Path(wd) / Path("tmp_files") / Path(folder)
-        if not os.path.exists(tmp_wd):
-            os.makedirs(tmp_wd)
+        tmp_wd.mkdir(parents=True, exist_ok=True)
 
         # put BLAST request and get BLAST results
         blast_put_get_main(wd=tmp_wd, queries_path=query_path, entrez_query=entrez_query,

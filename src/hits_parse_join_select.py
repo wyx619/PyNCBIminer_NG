@@ -4,7 +4,6 @@
 # @File:hits_parse_join_select.py
 # @Software:PyCharm
 
-import os
 import re
 import pandas as pd
 import numpy as np
@@ -13,7 +12,7 @@ from datetime import datetime
 
 
 def parse_xml_by_re(wd, in_file):
-    fr = open(Path(wd) / Path(in_file), "r")
+    fr = open(Path(wd) / in_file, "r")
     xml = fr.read()
     fr.close()
     find_query = re.compile('<BlastOutput_query-ID>(.*?)</BlastOutput_query-ID>')
@@ -32,7 +31,7 @@ def parse_xml_by_re(wd, in_file):
     find_bit_score = re.compile('<Hsp_bit-score>(.*?)</Hsp_bit-score>')
 
     out_file_name = in_file.split("_")[0] + "_HitTable.txt"
-    fw = open(Path(wd) / Path(out_file_name), "w")
+    fw = open(Path(wd) / out_file_name, "w")
     fw.write(
         "query_acc.ver\tsubject_acc.ver\thit_id\thit_def\t%_identity\talignment_length\tgap_opens\tq_start\tq_end\ts_start\ts_end\tevalue\tbit_score\n")
     query = re.findall(find_query, xml)[0]
@@ -72,7 +71,7 @@ def parse_xml_by_re(wd, in_file):
             for columns in columns0:
                 fw.write(query + "\t" + columns + "\t" + columns1 + "\n")
     fw.close()
-    os.remove(Path(wd) / Path(in_file))
+    (Path(wd) / in_file).unlink()
     print("Results saved in %s" % out_file_name)
 
 
@@ -228,7 +227,7 @@ def select_hits(df):
 
 def hits_parse_join_select_main(wd, max_len):
     # parse xml files
-    file_list = os.listdir(wd)
+    file_list = [f.name for f in Path(wd).iterdir()]
     for file in file_list:
         if file.split("_")[-1] == "XML.txt":
             try:
@@ -240,12 +239,12 @@ def hits_parse_join_select_main(wd, max_len):
             except Exception as result:
                 print(result)
     # join hits with the same accession in each query
-    file_list = os.listdir(wd)
+    file_list = [f.name for f in Path(wd).iterdir()]
     hit_tables = [x.split("_")[0] for x in file_list if x.split("_")[-1] == "HitTable.txt"]
     joined_hit_tables = [x.split("_")[0] for x in file_list if x.split("_")[-1] == "joined.txt"]
     not_joined_hit_tables = set(hit_tables) - set(joined_hit_tables)
     if "blast_summary.txt" in file_list:
-        sum_table = pd.read_table(Path(wd) / Path("blast_summary.txt"), sep='\t', engine='python')
+        sum_table = pd.read_table(Path(wd) / "blast_summary.txt", sep='\t', engine='python')
     else:
         print("Cound not find blast_summary.txt")
         return
@@ -254,32 +253,32 @@ def hits_parse_join_select_main(wd, max_len):
         try:
             print("Joining %s..." % file, end="")
             time0 = datetime.now()
-            hit_table = pd.read_table(Path(wd) / Path(file), sep='\t', engine='python')
+            hit_table = pd.read_table(Path(wd) / file, sep='\t', engine='python')
             query_ref_len = sum_table[sum_table["RID"] == file.split("_")[0]].iloc[0]["Sequence_length"]
             hit_table_merged = join_hits(hit_table, max_len, query_ref_len)
-            hit_table_merged.to_csv(Path(wd) / Path(file.split("_")[0] + "_joined.txt"), index=False, sep="\t")
+            hit_table_merged.to_csv(Path(wd) / (file.split("_")[0] + "_joined.txt"), index=False, sep="\t")
             time1 = datetime.now()
             print("Running time: %s Seconds" % (time1 - time0))
         except Exception as result:
             print(result)
     # select the highest bit-score hits from multiple queries
-    file_list = os.listdir(wd)
+    file_list = [f.name for f in Path(wd).iterdir()]
     if "hits_selected.txt" not in file_list:
         time0 = datetime.now()
         print("Reading joined HitTables...", end="")
         hit_tables = []
         for file in file_list:
             if file.split("_")[-1] == "joined.txt":
-                hit_table = pd.read_table(Path(wd) / Path(file), sep='\t', engine='python')
+                hit_table = pd.read_table(Path(wd) / file, sep='\t', engine='python')
                 hit_tables.append(hit_table)
         hit_tables = pd.concat(hit_tables)  # hit_tables.shape
         print("Selecting hits...", end="")
         hits_selected = select_hits(hit_tables)
-        hits_selected.to_csv(Path(wd) / Path("hits_selected.txt"), index=False, sep="\t")
+        hits_selected.to_csv(Path(wd) / "hits_selected.txt", index=False, sep="\t")
         time1 = datetime.now()
         print("Results saved in hits_selected.txt")
         print("Running time: %s Seconds" % (time1 - time0))
 
     else:
-        hits_selected = pd.read_table(Path(wd) / Path("hits_selected.txt"), sep='\t', engine='python')
+        hits_selected = pd.read_table(Path(wd) / "hits_selected.txt", sep='\t', engine='python')
     return hits_selected

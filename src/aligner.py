@@ -1,11 +1,12 @@
-import os
 import shutil
+from pathlib import Path
 import numpy as np
 from Bio import SeqIO, SeqRecord, Seq
 from scipy.cluster.hierarchy import linkage, fcluster
 from scipy.spatial.distance import pdist
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics import silhouette_score
+from run_command import run_command
 
 import sys
 sys.path.append(".")
@@ -31,8 +32,8 @@ class Aligner:
         - step_length_PIT - the value (step length) each time pairwise identity will decrease by.
         """
         # logger
-        self.log_path = os.path.join(out_path, "log")
-        self.timer = Timer(os.path.join(self.log_path, "DEBUG_log.txt"))
+        self.log_path = Path(out_path) / "log"
+        self.timer = Timer(self.log_path / "DEBUG_log.txt")
         self.DEBUG_MODE = DEBUG_MODE
         
         # calculator
@@ -41,7 +42,7 @@ class Aligner:
         # file handles
         self.in_file = in_file
         self.out_path = out_path
-        self.temp_folder = os.path.join(self.out_path, "temp")
+        self.temp_folder = Path(self.out_path) / "temp"
         self.temp_long_seqs_filename = "long_sequence_group.fasta"
         self.temp_aligned_filename = "aligned_long_sequence_group.fasta"
         self.temp_unaligned_short_filename = "unaligned_short.fasta"
@@ -215,27 +216,27 @@ class Aligner:
 
         # substep 2: write into disk (temp) for multiple sequence alignment
         SeqIO.write(long_sequence_group,
-                    os.path.join(self.temp_folder, self.temp_long_seqs_filename),
+                    self.temp_folder / self.temp_long_seqs_filename,
                     "fasta")
 
         # substep 3: perform multiple sequence alignment using --reorder
-        mafft_in = os.path.join(self.temp_folder, self.temp_long_seqs_filename)
-        mafft_out = os.path.join(self.temp_folder, self.temp_aligned_filename)
+        mafft_in = self.temp_folder / self.temp_long_seqs_filename
+        mafft_out = self.temp_folder / self.temp_aligned_filename
         
         if len(list(SeqIO.parse(mafft_in, "fasta"))) == 1:
             shutil.copyfile(mafft_in, mafft_out)
         else:
             command = f"mafft --retree 2 --thread -1 --reorder {mafft_in} > {mafft_out}"
-            os.system(command)
+            run_command(command)
 
     def set_in_path(self, in_file):
         self.in_file = in_file
         
     def set_out_path(self, out_path):
         self.out_path = out_path
-        self.temp_folder = os.path.join(self.out_path, "temp")
+        self.temp_folder = Path(self.out_path) / "temp"
         create_folder(self.temp_folder)
-        self.log_path = os.path.join(out_path, "log.txt")
+        self.log_path = Path(out_path) / "log.txt"
 
     def alofi(self):
         """ seperate long_sequence_group from sequences to be aligned using repeated clustering and MSA
@@ -249,7 +250,7 @@ class Aligner:
         """
         ## Exception situation: only one sequence in the input fasta file: just copy the file as is the alignment
         records = list(SeqIO.parse(self.in_file, "fasta"))
-        out_path_for_exception = os.path.join(self.out_path, os.path.basename(self.in_file))
+        out_path_for_exception = Path(self.out_path) / Path(self.in_file).name
         if len(records) == 1:
             shutil.copyfile(self.in_file, out_path_for_exception)
             return 1
@@ -329,18 +330,18 @@ class Aligner:
             self.timer.record("STEP 7: align long sequence group")
         
         ## STEP 8: calculate consensus sequence and append to msa of long group 
-        long_msa_records = list(SeqIO.parse(os.path.join(self.temp_folder,self.temp_aligned_filename), "fasta"))
+        long_msa_records = list(SeqIO.parse(self.temp_folder / self.temp_aligned_filename, "fasta"))
         consensus_long = self.nt_calculator.get_consensus_sequence(long_msa_records)
         consensus_record = SeqRecord.SeqRecord(Seq.Seq(str(consensus_long)), description="consensus", id="", name="")
         long_msa_records = long_msa_records + [consensus_record]
-        SeqIO.write(long_msa_records, os.path.join(self.temp_folder,"aligned_long_sequence_group_modified.fasta"), "fasta")
+        SeqIO.write(long_msa_records, self.temp_folder / "aligned_long_sequence_group_modified.fasta", "fasta")
         
         if self.DEBUG_MODE:
             self.timer.record("STEP 8: calculate consensus sequence of long sequence alignment")
         
         ## STEP 9: construct distance matrix on long sequence alignment
         distance_matrix = self.nt_calculator.\
-            calculate_distance_matrix(in_path = os.path.join(self.temp_folder,"aligned_long_sequence_group_modified.fasta"),
+            calculate_distance_matrix(in_path = self.temp_folder / "aligned_long_sequence_group_modified.fasta",
                                       out_path = self.temp_folder,
                                       method="distance_calculation_only")
         
@@ -357,7 +358,7 @@ class Aligner:
         ## STEP 11: keep sequences together with the consensus sequence (last) as the long_consensus_group
         consensus_group_idx = cluster_result_consensus[-1] ## TODO : bug was here raised once [IndexError: list index out of range]
         consensus_group_records = []
-        record_iter = SeqIO.parse(os.path.join(self.temp_folder, self.temp_long_seqs_filename),"fasta")
+        record_iter = SeqIO.parse(self.temp_folder / self.temp_long_seqs_filename,"fasta")
                 
         count = 0
         for record in record_iter:
@@ -365,17 +366,17 @@ class Aligner:
                 consensus_group_records.append(record)
             count += 1
         
-        SeqIO.write(consensus_group_records, os.path.join(self.temp_folder,"long_consensus_group.fasta"), "fasta")
+        SeqIO.write(consensus_group_records, self.temp_folder / "long_consensus_group.fasta", "fasta")
         
         if self.DEBUG_MODE:
             self.timer.record("STEP 11: decide long consensus group")
         
         ## STEP 12: align the long consensus group
-        mafft_in = os.path.join(self.temp_folder,"long_consensus_group.fasta")
-        mafft_out = os.path.join(self.temp_folder, "aligned_long_consensus_group.fasta")
+        mafft_in = self.temp_folder / "long_consensus_group.fasta"
+        mafft_out = self.temp_folder / "aligned_long_consensus_group.fasta"
         if len(list(SeqIO.parse(mafft_in, "fasta"))) > 1:
             command = f"mafft --maxiterate 100 --thread -1 --reorder {mafft_in} > {mafft_out}"
-            os.system(command)
+            run_command(command)
         else:
             shutil.copyfile(mafft_in, mafft_out)
                 
@@ -400,36 +401,36 @@ class Aligner:
             else:
                 unaligned_other.append(record)
         
-        mafft_add_other = os.path.join(self.temp_folder, self.temp_unaligned_other_filename)
-        mafft_add_short = os.path.join(self.temp_folder, self.temp_unaligned_short_filename)
+        mafft_add_other = self.temp_folder / self.temp_unaligned_other_filename
+        mafft_add_short = self.temp_folder / self.temp_unaligned_short_filename
         
         if len(unaligned_short) != 0:
             SeqIO.write(unaligned_short,
-                        os.path.join(self.temp_folder, self.temp_unaligned_short_filename),
+                        self.temp_folder / self.temp_unaligned_short_filename,
                         "fasta")
         if len(unaligned_other) != 0: 
             SeqIO.write(unaligned_other,
-                        os.path.join(self.temp_folder, self.temp_unaligned_other_filename),
+                        self.temp_folder / self.temp_unaligned_other_filename,
                         "fasta")
 
         # substep 2: do MSA, adding fragments to aligned_long_sequence_group.fasta
-        mafft_in = os.path.join(self.temp_folder, "aligned_long_consensus_group.fasta")
-        mafft_tmp = os.path.join(self.temp_folder, "partial_added.fasta")
-        mafft_out = os.path.join(self.out_path, os.path.basename(self.in_file))
+        mafft_in = self.temp_folder / "aligned_long_consensus_group.fasta"
+        mafft_tmp = self.temp_folder / "partial_added.fasta"
+        mafft_out = Path(self.out_path) / Path(self.in_file).name
         
-        if os.path.isfile(mafft_add_other):
+        if mafft_add_other.is_file():
             command = f"mafft --maxiterate 100 --thread -1 --reorder --add {mafft_add_other} {mafft_in} > {mafft_tmp}"
-            os.system(command)
+            run_command(command)
 
-        if os.path.isfile(mafft_add_short):
-            if os.path.isfile(mafft_tmp):
+        if mafft_add_short.is_file():
+            if mafft_tmp.is_file():
                 command = f"mafft --maxiterate 100 --thread -1 --reorder --addfragments {mafft_add_short} {mafft_tmp} > {mafft_out}"
             else:
                 command = f"mafft --maxiterate 100 --thread -1 --reorder --addfragments {mafft_add_short} {mafft_in} > {mafft_out}"
-            os.system(command)
+            run_command(command)
 
-        if not os.path.isfile(mafft_out):
-            if os.path.isfile(mafft_tmp):
+        if not mafft_out.is_file():
+            if mafft_tmp.is_file():
                 shutil.copyfile(mafft_tmp, mafft_out)
             else:
                 shutil.copyfile(mafft_in,  mafft_out)

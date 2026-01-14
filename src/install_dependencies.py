@@ -4,7 +4,6 @@
 # @File:install_dependencies.py
 # @Software:PyCharm
 
-import os
 from pathlib import Path
 import zipfile
 from urllib.request import urlretrieve
@@ -27,11 +26,11 @@ def install_mafft():
     """
     # todo: this url needs to be updated or dynamically maintained.
     mafft_url = r"https://mafft.cbrc.jp/alignment/software/mafft-7.526-win64-signed.zip"
-    root_path = os.getcwd()
-    mafft_dir = Path(root_path) / Path(r"./mafft")
-    if not os.path.exists(mafft_dir):
-        os.makedirs(mafft_dir)
-    file_path = Path(mafft_dir) / Path(r"mafft-7.526-win64-signed.zip")
+    root_path = Path.cwd()
+    mafft_dir = root_path / r"./mafft"
+    if not mafft_dir.exists():
+        mafft_dir.mkdir(exist_ok=True)
+    file_path = mafft_dir / r"mafft-7.526-win64-signed.zip"
     print("Downloading MAFFT...")
     file_path, _ = urlretrieve(mafft_url, file_path, schedule)
     print("Extracting files...")
@@ -49,11 +48,11 @@ def install_trimal():
     """
     # todo: this url needs to be updated or dynamically maintained.
     trimal_url = r"https://gh-proxy.org/https://github.com/inab/trimal/releases/download/v1.5.1/trimAl_Windows_x86-64.zip"
-    root_path = os.getcwd()
-    trimal_dir = Path(root_path) / Path(r"./trimal")
-    if not os.path.exists(trimal_dir):
-        os.makedirs(trimal_dir)
-    file_path = Path(trimal_dir) / Path(r"trimAl_Windows_x86-64.zip")
+    root_path = Path.cwd()
+    trimal_dir = root_path / r"./trimal"
+    if not trimal_dir.exists():
+        trimal_dir.mkdir(exist_ok=True)
+    file_path = trimal_dir / r"trimAl_Windows_x86-64.zip"
     print("Downloading trimAl...")
     file_path, _ = urlretrieve(trimal_url, file_path, schedule)
 
