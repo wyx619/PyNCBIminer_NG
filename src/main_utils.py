@@ -97,7 +97,7 @@ class BackendController(QObject):
         if d_from and not d_to:
             d_to = QDate.currentDate().toString("yyyy/MM/dd")
         elif not d_from and d_to:
-            InfoBar.warning(title="Warning", content="Please select 'Date From' or clear 'Date To'", parent=retrieval_interface.window(), position=InfoBarPosition.TOP)
+            InfoBar.warning(title="Warning", content="Please select 'Date From' or clear 'Date To'", parent=retrieval_interface.window(), position=InfoBarPosition.TOP, duration=3000)
             return
         
         qualifier = retrieval_interface.entrez_qualifier.toPlainText().strip()
