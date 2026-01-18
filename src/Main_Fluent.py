@@ -156,8 +156,7 @@ class RetrievalInterface(SingleDirectionScrollArea):
         self.date_from.dateChanged.connect(self.on_date_from_changed)
         self.btn_clear_from = PushButton(self.entrez_card)
         self.btn_clear_from.setIcon(FIF.BROOM)
-        self.btn_clear_from.setFixedSize(32, 32)
-        self.btn_clear_from.setStyleSheet("QPushButton { padding: 0px; margin: 0px; }")
+
         self.btn_clear_from.clicked.connect(self.clear_date_from)
         row3.addWidget(BodyLabel("Date From:"))
         row3.addWidget(self.date_from)
@@ -170,8 +169,7 @@ class RetrievalInterface(SingleDirectionScrollArea):
         self.date_to.dateChanged.connect(self.on_date_to_changed)
         self.btn_clear_to = PushButton(self.entrez_card)
         self.btn_clear_to.setIcon(FIF.BROOM)
-        self.btn_clear_to.setFixedSize(32, 32)
-        self.btn_clear_to.setStyleSheet("QPushButton { padding: 0px; margin: 0px; }")
+
         self.btn_clear_to.clicked.connect(self.clear_date_to)
         row3.addWidget(BodyLabel("Date To:"))
         row3.addWidget(self.date_to)
@@ -730,7 +728,9 @@ class MainWindow(FluentWindow):
         self.setWindowTitle("PyNCBIminer")
         self.setWindowIcon(QIcon(get_resource_path("icons/app_icon.ico")))
         self.navigationInterface.setExpandWidth(250)
-
+        
+        # Set minimum window width
+        self.setMinimumWidth(1000)
         
         # Set window size and center on screen
         self.resize(1100, 750)
