@@ -4,7 +4,7 @@ from Bio.Seq import Seq
 import pandas as pd
 import shutil
 import re
-import traceback
+
 import time
 
 from functional import create_folder
@@ -27,7 +27,6 @@ class Miner_filter:
         <func> combine_species: combine specific records to corresponding species (subsp., var., f.)
         <func> remove_exceptional_records: remove specific records (sp., cf., aff., x, and short ones)
         <func> reduce_dataset: select best marker for each taxon.
-        <func> tnrs_name_correction: to correct names of organisms based on tnrs (or rTNRS)
         <func> get_consensus_dict: "get method" to get taxa consensus dict
         
     Private:
@@ -112,39 +111,6 @@ class Miner_filter:
                 except Exception:
                     pass
                 
-    def tnrs_name_correction(self):
-        import os
-        """ Main author: Yuxuan Wang, Yang Yi
-            to correct names of organisms based on tnrs (or rTNRS), original file will be back up as seq_info_ori.txt
-            dependencies required: folder 'TNRS_dep' should be placed in the same path with this script (miner_filter.py)
-        """
-        if "R_HOME" not in os.environ:
-            os.environ["R_HOME"] = "./TNRS_dep"
-        import rpy2.robjects as ro
-        from rpy2.robjects.packages import importr
-        from rpy2.robjects import pandas2ri
-        from rpy2.robjects.conversion import localconverter
-        
-        pandas2ri.activate()
-        tnrs = importr("TNRS")
-        blast_info_path = self.__in_path / "results" / "blast_results_checked_seq_info.txt"
-        df = pd.read_table(blast_info_path)
-        df_main_info = df[['accession', 'organism']]
-        result = tnrs.TNRS(df_main_info, sources="wcvp", classification="wfo", mode="resolve", matches="best", skip_internet_check=True)
-        with localconverter(ro.default_converter + pandas2ri.converter):
-            pdf = ro.conversion.rpy2py(result)
-        pdf_selected = pdf.iloc[:, [1,32,33,34,37,40]]
-        pdf_selected.to_csv(self.__tmp_path / 'temp_TNRS.txt', index=False, sep='	')
-        dfc = pd.merge(df, pdf_selected, left_on='organism', right_on='Name_submitted', how='left')
-        dfc.rename(columns={'organism': 'organism_ori', 'Accepted_name': 'organism'}, inplace=True)
-        
-        out_path = self.__out_path / "results" / "blast_results_checked_seq_info.txt"
-        if out_path.is_file():
-            shutil.move(out_path, 
-                        out_path.replace("blast_results_checked_seq_info.txt","blast_results_checked_seq_info_ori.txt"))
-        dfc.to_csv(out_path, index=False, sep='\t')
-
-        
     def remove_exceptional_records(self, in_path=None, out_path=None,
                                    sp=True, cf=True, aff=True, x=True, 
                                    length_threshold=0, ignore_gap=True):
@@ -225,7 +191,6 @@ class Miner_filter:
         df_records_info.dropna(subset=["organism"], inplace=True)
         df_records_info.to_csv(df_path, index=False, sep="\t")
         
-    
     def combine_species(self, subsp=True, var=True, f=True):
         """ combine specific records(subsp, var, f) into their species 
                 method: by renaming the column ['organism'] in table blast_results_checked_seq_info.txt
@@ -268,7 +233,6 @@ class Miner_filter:
         df_records_info.to_csv(csv_out_path, sep="\t", index=False)
 
     def reduce_dataset(self,
-                       name_correction=False,  # for name correction using tnrs (rtnrs)
                        consensus_value=True,
                        subsp=True, var=True, f=True,  # for species combination
                        sp=True, cf=True, aff=True, x=True, length_threshold=0, ignore_gap=True,  # for exception removal
@@ -284,9 +248,6 @@ class Miner_filter:
         - length_threshold - sequences shorter than this value will be removed
         - ignore_gap - if True, gaps will be ignored when counting lengths of sequences
         """
-        if name_correction:
-            self.tnrs_name_correction()
-        print("Filtering... turn to tmp_files/consensus_calculation for approximate progress")
         
         df = pd.read_csv(self.__in_path / "results" / self.__get_info_csv(), sep="\t")        
         for row_index, row in df.iterrows():
@@ -348,9 +309,8 @@ class Miner_filter:
         ## STEP 3: save records according to list accession_numbers
         records = [record for record in record_iter if record.description.split("|")[0].split(":")[0] in accession_numbers]
         SeqIO.write(records, self.__in_path / "results" / curr_step,"fasta")
-        
-        
-    def control_extension(self, length_ratio=0.6, max_subset_size=200, gappyness_threshold=0.5):
+       
+    def control_extension(self, gappyness_threshold=0.5):
         """ control the extension of all seqs, trim if necessary
         ----------
         Parameters
@@ -397,8 +357,7 @@ class Miner_filter:
             if files[i] in existing_files:
                 matching_filename = files[i]
                 return matching_filename
-    
-    
+     
     ## ===========================================================================================================
     ## ================================== for <func> reduce_dataset ==============================================    
     def __get_info_csv(self):
@@ -424,30 +383,7 @@ class Miner_filter:
             sequence = str(sequence).replace(wobble, "")
         seq_length = len(sequence)
         return seq_length
-    
-    @staticmethod
-    def __check_record_coverage(record, check_start, check_end, missing_ratio=0.2):
-        """ check if base of given segment contains no more than [missing_ratio] gaps
-        ----------
-        Parameters
-        - record - the record (Bio.SeqRecord.SeqRecord) to check if double ends are covered
-        - check_start - the start (5') position of the segment
-        - check_end - the end (3') position of the segment
-        - missing_ratio - the maximum ratio of gaps in the segment, 
-            record exceeding it will be marked 0, else 1 (means double ends are covered)
-            Default: 0.2
-        -------
-        Returns
-        - coverage - whether the record meets the standard to be considered "covering double ends"
-        """
-        segment = record.seq[check_start:check_end]
-        coverage = False
-        
-        if segment.count("-") <= missing_ratio*len(segment):
-            coverage = True
-            
-        return coverage
-    
+   
     def __calculate_consensus_dict(self, length_threshold=20, taxa_threshold=1):
         """ calculate consensus sequence for each taxon and store to a dictionary
         ----------
@@ -494,33 +430,6 @@ class Miner_filter:
             records_consensus[taxon] = consensus_sequence
             
         self.__taxa_consensus_dict = records_consensus
-    
-    def __count_num_query(self, query_number=1):
-        """ count the number of sequences in the specified query
-        ----------
-        Parameters
-        - query_number - the number index of query to count
-        """
-        initial_msa = self.__in_path / "parameters" / "ref_msa" / f"msa_queries_{query_number}.fasta"
-        record_iter = SeqIO.parse(initial_msa, "fasta")
-        self.__num_query = len(list(record_iter))
-        
-        # write log file
-        msg = f"in <func> count_num_query:\n  {self.__num_query} sequences identified as the reference"
-        self.__logger.write_message(msg)
-
-    def __align_long_seq(self):
-        """ align the sequences from the blast_result_long (chosen ones) using --add
-        """
-        blast_result = self.__tmp_path / "blast_result_long.fasta"
-        msa_query = self.__in_path / "parameters" / "ref_msa" / "msa_queries_1.fasta"
-        msa_blast_result = self.__tmp_path / "msa_blast_result_long.fasta"
-        command = f"mafft --add {blast_result} {msa_query} > {msa_blast_result}"
-        run_command(command)
-        
-        # write log file
-        msg = f'in <func> align_long_seq:\n  Long sequences are aligned with MAFFT using command "{command}"'
-        self.__logger.write_message(msg)
 
     def __evaluate_seq(self):
         """ get [max_num] most longest sequence of each taxon and save
@@ -843,79 +752,7 @@ class Miner_filter:
         ## STEP 3: write the records (each genus a individual fasta file)
         for genus, species_list in genus_dict.items():
             SeqIO.write(species_list, out_path / f"{genus}.fasta", "fasta")
-            
-            
-    def __split_by_length(self, length_ratio=0.6):
-        """ split the fastas (previously split by genus) according to relative length of the records
-        ----------
-        Parameters
-        - length_ratio - records longer than this ratio will be decided as "longer" sequences
-        """
-        ## STEP 1: set and prepare folders
-        in_path = self.__in_path / "tmp_files/extension_control/split_by_genus"
-        out_path = self.__out_path / "tmp_files/extension_control/split_by_length"
-        create_folder(out_path)
-        
-        ## STEP 2: for each fasta file in the in_path, split the dataset according to length ratio
-        for file in [f.name for f in Path(in_path).iterdir()]:
-            file_abs_path = in_path / file
-            genus = Path(file).stem
-            
-            ## substep 1: get the max length
-            length_list = []
-            record_iter = SeqIO.parse(file_abs_path, "fasta")
-            for record in record_iter:
-                length_list.append(len(record.seq))
-            max_length = max(length_list)
-            length_threshold = max_length * length_ratio
-            
-            ## substep 2: split the dataset, longer than ratio and no longer than the ratio
-            longer_records = []
-            shorter_records = []
-            record_iter = SeqIO.parse(file_abs_path, "fasta")
-            for record in record_iter:
-                length = len(record.seq)
-                if length > length_threshold:
-                    longer_records.append(record)
-                else:
-                    shorter_records.append(record)
-                    
-            ## substep 3: sava the current split result
-            SeqIO.write(longer_records, out_path / f"{genus}_longer.fasta", "fasta")
-            if len(shorter_records) > 0:
-                SeqIO.write(shorter_records, out_path / f"{genus}_shorter.fasta", "fasta")
-            
-            
-    def __split_large_subset(self, max_size=200):
-        """ split the fastas (previously split by genus and length) according to number of the records
-        ----------
-        Parameters
-        - max_size - fasta contains more than [max_size] records will be split into smaller ones
-        """
-        ## STEP 1: set and prepare folders
-        self.__quality_control_max_size_subset = max_size
-        in_path = self.__in_path / "tmp_files/extension_control/split_by_length"
-        out_path = self.__out_path / f"tmp_files/extension_control/split_max_{max_size}"
-        create_folder(out_path)
-        
-        ## STEP 2: split large fasta files
-        for file in [f.name for f in Path(in_path).iterdir()]:
-            file_abs_path = in_path / file
-            records = list(SeqIO.parse(file_abs_path, "fasta"))
-            total_size = len(records)
-            
-            if total_size > max_size:
-                num_subset = total_size // max_size + 1
-                sub_size = int(total_size / num_subset)
-                
-                for i in range(num_subset):
-                    sub_records = records[i*sub_size : (i+1)*sub_size]
-                    sub_filename = Path(file).stem + f"_{i}.fasta"
-                    SeqIO.write(sub_records, out_path / sub_filename, "fasta")
-                
-            else:
-                shutil.copyfile(str(file_abs_path), str(out_path / file))
-                
+                                
     def __align_subset(self, add_threshold=5):
         """ align the subsets
         ----------
@@ -1121,69 +958,3 @@ class Miner_filter:
           
     
     
-if __name__ == "__main__":
-
-    """ 延伸控制使用示例如下 
-    第一步，创建一个类实例，要求指定输入文件夹和输出文件夹，要求直接为Sequence Retrieving中的Working Directory，
-        可以有其他指定参数，均有默认值，我觉得应该可以设置成可变的，或许组会前和师姐或者和老师讨论下；
-    第二步，执行控制延伸的函数 control_extension()。
-    
-    输出文件：
-        多数中间文件在 tmp_files/extension_control 中，每个文件夹是一个子步骤；
-        最终需要裁剪掉的延伸部分在 tmp_files/modification.txt 中；
-        裁剪结果在results/blast_results_controlled.fasta 中 """
-    """
-    my_filter = Miner_filter("C:/Users/Yy/学习资料/Project/pyNCBIminer/Windows/simple_test/test_retrieving/ITS", 
-                             "C:/Users/Yy/学习资料/Project/pyNCBIminer/Windows/simple_test/test_retrieving/ITS")
-    my_filter.control_extension()"""
-    
-    def debug_combine_species(path):
-        try:
-            my_filter = Miner_filter(path, path)
-            my_filter.combine_species()
-        except Exception:
-            with open((f"{path}/BUG_log.txt"),"w") as f:
-                f.write(str(traceback.format_exc()))
-    
-    def debug_reduce_dataset(path):
-        try:
-            my_filter = Miner_filter(path, path, DEBUG_MODE=True)
-            my_filter.reduce_dataset(consensus_value=True,
-                                     subsp=True, var=True, f=True,  # for species combination
-                                     sp=True, cf=True, aff=True, x=True, length_threshold=20, ignore_gap=True)
-            return my_filter
-        except Exception:
-            with open((f"{path}/BUG_log.txt"),"w") as f:
-                f.write(str(traceback.format_exc()))
-            return None
-        
-    def debug_control_and_reduce(path):
-        try:
-            my_filter = Miner_filter(path, path, DEBUG_MODE=True)
-            my_filter.control_extension()
-            my_filter.reduce_dataset(consensus_value=False,
-                                     subsp=True, var=True, f=True,  # for species combination
-                                     sp=True, cf=True, aff=True, x=True, length_threshold=20, ignore_gap=True)
-            return my_filter
-        except Exception:
-            with open((f"{path}/BUG_log.txt"),"w") as f:
-                f.write(str(traceback.format_exc()))
-            return None
-                
-    path1 = "C:/Users/Yy/学习资料/Project/pyNCBIminer/开发数据/Magnoliaceae/GAI1"
-    path2 = "C:/Users/Yy/学习资料/Project/pyNCBIminer/开发数据/Asterales/rbcL_20230412"   # 13881 seqs    
-    path3 = "C:/Users/Yy/学习资料/Project/pyNCBIminer/开发数据/Asterales/ITS_20230412"  # 40000+ seqs
-    path4 = "C:/Users/Yy/学习资料/Project/pyNCBIminer/开发数据/Dipsacales/rbcL_20180820_Dipsacales"
-    bug_path = r"C:\Users\Yy\学习资料\Project\pyNCBIminer\测试分析\bugs\2024.3.20\_psbA-trnH"
-    # my_filter = debug_reduce_dataset(bug_path)
-    
-    path = bug_path
-    debug_control_and_reduce(bug_path)
-
-    
-    """
-    my_filter = Miner_filter("单独调用时，类的输入文件夹无所谓，可以初始化为空，但输出要求与实际输出文件夹一致",
-                             "C:/Users/Yy/学习资料/Project/pyNCBIminer/开发数据/Magnoliaceae/rbcL")
-    my_filter.remove_exceptional_records("C:/Users/Yy/学习资料/Project/pyNCBIminer/开发数据/Magnoliaceae/rbcL/results/blast_results_checked.fasta",
-                                         "C:/Users/Yy/学习资料/Project/pyNCBIminer/开发数据/Magnoliaceae/rbcL")
-    """

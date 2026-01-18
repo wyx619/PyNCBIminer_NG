@@ -13,7 +13,7 @@ from pathlib import Path
 from datetime import datetime
 from scipy.sparse import csr_matrix
 from Bio import SeqIO
-from tools import print_line, get_query_accession
+from main_utils import print_line, get_query_accession
 from seq_check_download import seq_check_download_main
 
 # 导入markov_clustering模块

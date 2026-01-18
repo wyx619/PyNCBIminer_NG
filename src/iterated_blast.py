@@ -10,7 +10,7 @@ from pathlib import Path
 from math import ceil
 from Bio import SeqIO
 
-from tools import print_line, get_query_accession
+from main_utils import print_line, get_query_accession
 from my_entrez import format_entrez_query
 from seq_check_download import check_annotation, seq_check_download_main
 from blast_put_get import blast_put_get_main
@@ -36,23 +36,11 @@ def combine_iterated_blast(wd, blast_round, tmp_df, key_annotations, exclude_sou
             blast_count_new = len(new_df)
             blast_count = len(df)
         else:
-            # df.index = df["subject_acc.ver"]
-            # tmp_df.index = tmp_df["subject_acc.ver"]
             acc_set = set(df["subject_acc.ver"])
             tmp_acc_set = set(tmp_df["subject_acc.ver"])
-            # common_acc_set = acc_set & tmp_acc_set
             new_acc_set = tmp_acc_set - acc_set
             blast_count_new = len(new_acc_set)
             blast_count = len(acc_set) + blast_count_new
-            # if blast_count_new == 0:
-            #     source_list = df["Source"].value_counts()
-            #     if blast_round in source_list.index:
-            #         blast_count_new = source_list.loc[blast_round]
-
-            # # compare sequences with the same accession, kep the one with highest bit-score
-            # for acc in common_acc_set:
-            #     if df.loc[acc]["sum_hits_score"] < tmp_df.loc[acc]["sum_hits_score"]:
-            #         df.loc[acc] = tmp_df.loc[acc]
 
             new_df = tmp_df[tmp_df["subject_acc.ver"].isin(new_acc_set)]
 
@@ -143,26 +131,6 @@ def iterated_blast_main(wd, organisms, count,
                     return
             query_path = Path(wd) / Path("parameters") / Path("ref_seq") / Path("queries_1.fasta")
 
-            """
-            query_path = Path(wd) / Path("parameters") / Path("ref_msa") / Path("msa_queries_1.fasta")
-            if not os.path.exists(Path(query_path)) or os.path.getsize(Path(query_path)) == 0:
-                print("Aligning initial queries...")
-                run_command(
-                    "mafft --auto %s > %s" % (Path(wd) / Path("parameters") / Path("ref_seq") / Path("queries_1.fasta"),
-                                              Path(wd) / Path("parameters") / Path("ref_msa") / Path(
-                                                  "msa_queries_1.fasta")))
-
-                # using L-INS-i (Very slow; recommended for <200 sequences with one conserved domain and long gaps)
-
-                run_command(
-                    "mafft --localpair --maxiterate 1000 %s > %s" %
-                    (Path(wd) / Path("parameters") / Path("ref_seq") / Path("queries_1.fasta"), query_path))
-            if os.path.getsize(query_path) == 0:
-                print(
-                    "Failed to align inital queries, "
-                    "please check if MAFFT is correctly installed.")
-                return
-            """
         else:
             query_path = Path(wd) / Path("parameters") / Path("ref_seq") / Path("queries_%d.fasta" % blast_round)
             """
@@ -241,90 +209,6 @@ def iterated_blast_main(wd, organisms, count,
             break
         blast_round += 1
 
-        """
-        # select new reference sequences from different clusters
-        if "hits_clustered.txt" not in file_list:
-            print("Selecting new references...")
-            file_list = os.listdir(Path(wd) / Path("parameters"))
-            # if os.path.exists(Path(wd) / Path("parameters") / Path("all_new_queries_info.txt")):
-            #     all_new_queries = pd.read_table(Path(wd) / Path("parameters") / Path(r"all_new_queries_info.txt"),
-            #                                     sep='\t', engine='python')
-            #     all_new_queries_list = all_new_queries["subject_acc.ver"]
-            #     cluster_queries(wd=tmp_wd, ref_list=all_new_queries_list)
-            if os.path.exists(Path(wd) / Path("parameters") / Path("all_queries_info.txt")):
-                all_queries = pd.read_table(Path(wd) / Path("parameters") / Path(r"all_queries_info.txt"),
-                                            sep='\t', engine='python')
-                all_queries_list = all_queries["ID"]
-                cluster_queries(wd=tmp_wd, ref_list=all_queries_list)
-                # todo: what to do if no more new reference sequnces could be found
-            else:
-                cluster_queries(wd=tmp_wd)
-        else:
-            qcluster_table = pd.read_table(Path(tmp_wd) / Path("hits_clustered.txt"), sep="\t", engine="python")
-            print("Get %d clusters according to query start and query end." % qcluster_table.shape[0])
-            del qcluster_table
-        # todo: hits_clustered.txt main contain repeated rows???
-
-        if "hits_clustered_filtered.txt" not in file_list:
-            seq_check_download_main(wd=tmp_wd, acc_file=r"hits_clustered.txt",
-                                    out_file=r"hits_clustered.fasta",
-                                    key_annotations=key_annotations, exclude_sources=exclude_sources,
-                                    entrez_email=entrez_email)
-            if os.path.exists(Path(wd) / Path("parameters") / Path("ref_seq")):
-                ref_file_list = os.listdir(Path(wd) / Path("parameters") / Path("ref_seq"))
-                ref_seq_list = []
-                for file in ref_file_list:
-                    for record in SeqIO.parse(Path(wd) / Path("parameters") / Path("ref_seq") / Path(file), "fasta"):
-                        ref_seq_list.append(record.seq)
-                n_hits_clustered_filtered = filter_seq(wd=tmp_wd, max_length=max_length, ref_seq_list=ref_seq_list)
-                # print("Number of hits_clustered_filtered %d" % n_hits_clustered_filtered)
-                # todo: sometimes the clustering will fail when sequences number is too small.
-                if n_hits_clustered_filtered < 1:
-                    print("Cannot find more new reference, stop iteration. ")
-                    break
-        # if hits_clustered.fasta only contain no more than 5 sequences, then no need to do MCL step2
-        if "sequences_clustered.txt" not in file_list:
-            scluster_table = cluster_sequences(wd=tmp_wd)
-        else:
-            scluster_table = pd.read_table(Path(tmp_wd) / Path("sequences_clustered.txt"), sep="\t", engine="python")
-
-        if scluster_table is None:
-            print("No sequence passed filtering.")
-            print("Cannot find more new reference, stop iteration. ")
-            break
-
-        elif scluster_table.shape[0] > 0:
-            if "scluster" in scluster_table.columns:
-                print("Get %d clusters according to sequence distance." % scluster_table.shape[0])
-            else:
-                print("Using all of the %d sequences selected in MCL step1." % scluster_table.shape[0])
-            del scluster_table
-
-        else:
-            print("Cannot find more new reference, stop iteration. ")
-            del scluster_table
-            break
-
-        blast_round += 1
-        if "new_queries_info.txt" not in file_list:
-            new_quereis_num = select_new_queries(wd, tmp_wd, blast_round, ref_number)
-            # todo: new ref seqs need to be more than 2???
-            if new_quereis_num < 1:
-                print("Cannot find more new reference. Stop iteration.")
-                break
-        else:
-            new_queries = pd.read_table(Path(tmp_wd) / Path(r"new_queries_info.txt"), sep='\t', engine='python')
-            print("Selected %d new queries." % new_queries.shape[0])
-
-        if not os.path.exists(Path(wd) / Path("parameters") / Path("ref_seq") / Path("queries_%d.fasta" % blast_round)):
-            run_command("copy %s %s" % (Path(tmp_wd) / Path("new_queries.fasta"),
-                                      Path(wd) / Path("parameters") / Path("ref_seq") / Path(
-                                          "queries_%d.fasta" % blast_round)))
-
-    # extend hits After BLAST iteration.
-    ref_msa_file = add_all_queries2(wd)
-    blast_results_extend_main(wd, max_length, ref_msa_file)
-    """
 
     blast_results_extend_main(wd, max_length)
 

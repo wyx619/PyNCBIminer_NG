@@ -15,7 +15,7 @@ from pathlib import Path
 import func_timeout.exceptions
 from func_timeout import func_set_timeout
 from Bio import SeqIO
-from tools import get_query_accession
+from main_utils import get_query_accession
 
 
 def _parse_qblast_ref_page(handle):

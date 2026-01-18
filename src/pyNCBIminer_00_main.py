@@ -15,7 +15,7 @@ from PySide6.QtGui import QTextCursor, QGuiApplication, QIcon
 from pathlib import Path
 import threading
 
-from tools import print_line
+from main_utils import print_line
 import warnings
 
 warnings.filterwarnings('ignore')
@@ -1142,7 +1142,7 @@ def main():
     
     if sys.platform == 'win32':
         try:
-            app_user_model_id = "PyNCBIminer.PyNCBIminer.1.2.12"
+            app_user_model_id = "PyNCBIminer.PyNCBIminer.1.3"
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_user_model_id)
         except:  # noqa: E722
             pass

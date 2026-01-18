@@ -3,15 +3,22 @@ import sys
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal, QObject, QEventLoop, QTimer, Slot, QPropertyAnimation, QEasingCurve
+from PySide6.QtCore import Qt, Signal, QObject, QEventLoop, QTimer, Slot, QPropertyAnimation, QEasingCurve, QDate
 from PySide6.QtGui import QTextCursor, QIcon
-from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QVBoxLayout, QWidget, QStackedWidget
+
+try:
+    from qframelesswindow.utils import getSystemAccentColor
+    HAS_SYSTEM_ACCENT = True
+except ImportError:
+    HAS_SYSTEM_ACCENT = False
 
 from qfluentwidgets import (FluentWindow, NavigationItemPosition, SubtitleLabel, 
                             PrimaryPushButton, PushButton, LineEdit, TextEdit, 
                             ComboBox, CheckBox, RadioButton, CardWidget, 
-                            BodyLabel, ScrollArea, InfoBar, FluentIcon as FIF, Pivot, SettingCardGroup, 
-                            ExpandSettingCard, PlainTextEdit, StrongBodyLabel, setTheme, Theme,InfoBarPosition)
+                            BodyLabel, InfoBar, FluentIcon as FIF,  SegmentedWidget, SettingCardGroup, 
+                            ExpandSettingCard, PlainTextEdit,  setTheme, Theme, InfoBarPosition, DatePicker, 
+                            SingleDirectionScrollArea, setThemeColor, themeColor, ColorPickerButton)
 
 from main_utils import BackendController
 # --- Tools / Utils ---
@@ -62,17 +69,15 @@ class LogWidget(CardWidget):
 
 # --- Interfaces (Pages) ---
 
-class RetrievalInterface(ScrollArea):
+class RetrievalInterface(SingleDirectionScrollArea):
     """Tab 1: Sequence Retrieval"""
     def __init__(self, main_window):
-        super().__init__()
+        super().__init__(parent=main_window)
         self.main_window = main_window
-        self.setObjectName("retrieval_interface")
+        self.date_from_cleared = True
+        self.date_to_cleared = True
+        
         self.view = QWidget(self)
-        self.view.setStyleSheet("background-color: transparent;")
-        self.setWidget(self.view)
-        self.setWidgetResizable(True)
-        self.setStyleSheet("ScrollArea { background-color: transparent; } QWidget#retrieval_interface { background-color: transparent; }")
         self.vBoxLayout = QVBoxLayout(self.view)
         self.vBoxLayout.setContentsMargins(30, 30, 30, 30)
         self.vBoxLayout.setSpacing(20)
@@ -96,26 +101,24 @@ class RetrievalInterface(ScrollArea):
         # 2. Basic Settings
         self.basic_group = SettingCardGroup("Basic Settings", self.view)
         
-        # Taxonomy
+        # 3. Taxonomy
         self.tax_card = CardWidget(self.view)
         self.tax_card.setFixedHeight(150)
         tax_layout = QVBoxLayout(self.tax_card)
         tax_layout.setContentsMargins(15, 10, 15, 15)
-        tax_layout.addWidget(StrongBodyLabel("Target Groups (Taxonomy)"))
+        tax_layout.addWidget(BodyLabel("Target Groups (Taxonomy):"))
         self.tax_edit = PlainTextEdit(self.tax_card)
         self.tax_edit.setPlaceholderText("One taxon per line")
         self.tax_edit.setFixedHeight(100)
         tax_layout.addWidget(self.tax_edit)
         self.basic_group.addSettingCard(self.tax_card)
 
-        # Target Region Selection
+        # 4. Target Region Selection
         self.region_card = CardWidget(self.view)
         self.region_card.setFixedHeight(80)
         reg_layout = QHBoxLayout(self.region_card)
         reg_layout.setContentsMargins(15, 10, 15, 10)
         self.combo_region = ComboBox(self.region_card)
-        # qfluentwidgets的ComboBox可能默认是可编辑的，或者使用不同的方法
-        # 如果需要设置可编辑，尝试使用setEnabled(True)或其他适合的方法
         self.combo_region.addItems(["", "ITS", "rbcL", "matK", "trnL-trnF", "psbA-trnH", "ndhF", "rpoB"])
         self.btn_set_region = PrimaryPushButton("Set Region", self.region_card)
         self.btn_save_settings = PushButton("Save Settings", self.region_card)
@@ -125,14 +128,15 @@ class RetrievalInterface(ScrollArea):
         reg_layout.addWidget(self.btn_save_settings)
         self.basic_group.addSettingCard(self.region_card)
 
-        # Entrez & Dates
+        # 5. Entrez & Dates
         self.entrez_card = CardWidget(self.view)
-        self.entrez_card.setFixedHeight(180)
+        self.entrez_card.setFixedHeight(230)
         ent_layout = QVBoxLayout(self.entrez_card)
         ent_layout.setContentsMargins(15, 10, 15, 10)
         
         row1 = QHBoxLayout()
         self.entrez_qualifier = PlainTextEdit(self.entrez_card)
+        ent_layout.addWidget(BodyLabel("Entrez Qualifier:"))
         self.entrez_qualifier.setPlaceholderText("Constraint on BLAST search (Entrez Qualifier)")
         self.entrez_qualifier.setFixedHeight(100)
         row1.addWidget(self.entrez_qualifier)
@@ -143,20 +147,40 @@ class RetrievalInterface(ScrollArea):
         self.email_edit.setPlaceholderText("User's Email")
         row2.addWidget(BodyLabel("Email:"))
         row2.addWidget(self.email_edit)
-        
-        self.date_from = LineEdit(self.entrez_card)
-        self.date_from.setPlaceholderText("YYYY/MM/DD")
-        self.date_to = LineEdit(self.entrez_card)
-        self.date_to.setPlaceholderText("YYYY/MM/DD")
-        row2.addWidget(BodyLabel("Date From:"))
-        row2.addWidget(self.date_from)
-        row2.addWidget(BodyLabel("To:"))
-        row2.addWidget(self.date_to)
         ent_layout.addLayout(row2)
+        
+        row3 = QHBoxLayout()
+        self.date_from = DatePicker(self.entrez_card)
+        self.date_from.setDate(QDate())
+        self.date_from_cleared = True
+        self.date_from.dateChanged.connect(self.on_date_from_changed)
+        self.btn_clear_from = PushButton(self.entrez_card)
+        self.btn_clear_from.setIcon(FIF.BROOM)
+        self.btn_clear_from.setFixedSize(32, 32)
+        self.btn_clear_from.setStyleSheet("QPushButton { padding: 0px; margin: 0px; }")
+        self.btn_clear_from.clicked.connect(self.clear_date_from)
+        row3.addWidget(BodyLabel("Date From:"))
+        row3.addWidget(self.date_from)
+        row3.addWidget(self.btn_clear_from)
+        row3.addStretch()
+        
+        self.date_to = DatePicker(self.entrez_card)
+        self.date_to.setDate(QDate())
+        self.date_to_cleared = True
+        self.date_to.dateChanged.connect(self.on_date_to_changed)
+        self.btn_clear_to = PushButton(self.entrez_card)
+        self.btn_clear_to.setIcon(FIF.BROOM)
+        self.btn_clear_to.setFixedSize(32, 32)
+        self.btn_clear_to.setStyleSheet("QPushButton { padding: 0px; margin: 0px; }")
+        self.btn_clear_to.clicked.connect(self.clear_date_to)
+        row3.addWidget(BodyLabel("Date To:"))
+        row3.addWidget(self.date_to)
+        row3.addWidget(self.btn_clear_to)
+        ent_layout.addLayout(row3)
         
         self.basic_group.addSettingCard(self.entrez_card)
         
-        # Actions Row
+        # 6. Actions Row
         self.action_card = CardWidget(self.view)
         self.action_card.setFixedHeight(80)
         act_layout = QHBoxLayout(self.action_card)
@@ -171,7 +195,7 @@ class RetrievalInterface(ScrollArea):
 
         self.vBoxLayout.addWidget(self.basic_group)
 
-        # 3. Advanced Settings (Expandable)
+        # 7. Advanced Settings (Expandable)
         self.adv_group = ExpandSettingCard(FIF.SETTING, "Advanced BLAST Parameters", "Click to expand configuration")
         self.adv_group.setExpand(True)
         self.adv_view = QWidget()
@@ -180,7 +204,7 @@ class RetrievalInterface(ScrollArea):
         # Initial Queries (Fasta) - Full width
         adv_layout.addWidget(BodyLabel("Initial Queries (Fasta):"))
         self.init_queries = PlainTextEdit()
-        self.init_queries.setFixedHeight(100)
+        self.init_queries.setFixedHeight(200)
         adv_layout.addWidget(self.init_queries)
         
         # Grid for params
@@ -189,14 +213,15 @@ class RetrievalInterface(ScrollArea):
         col2 = QVBoxLayout()
         
         # Left column: Key Annotations, Exclude Sources
-        self.key_anno = LineEdit()
+        self.key_anno = PlainTextEdit()
         self.key_anno.setPlaceholderText("Key Annotations")
+        self.key_anno.setFixedHeight(60)
         col1.addWidget(BodyLabel("Key Annotations:"))
         col1.addWidget(self.key_anno)
 
         self.excl_source = PlainTextEdit()
         self.excl_source.setPlaceholderText("Exclude Sources")
-        self.excl_source.setFixedHeight(290)
+        self.excl_source.setFixedHeight(265)
         col1.addWidget(BodyLabel("Exclude Sources:"))
         col1.addWidget(self.excl_source)
         col1.addStretch(2)
@@ -232,9 +257,9 @@ class RetrievalInterface(ScrollArea):
         self.vBoxLayout.addWidget(self.adv_group)
 
         # 4. Final Buttons
-        self.btn_submit_blast = PrimaryPushButton("Submit New BLAST", self.view)
+        self.btn_submit_blast = PrimaryPushButton("Submit New BLAST", self)
         self.btn_submit_blast.setIcon(FIF.PLAY)
-        self.btn_load_job = PushButton("Load Previous Job", self.view)
+        self.btn_load_job = PushButton("Load Previous Job", self)
         self.btn_load_job.setIcon(FIF.HISTORY)
         
         btn_row = QHBoxLayout()
@@ -244,6 +269,14 @@ class RetrievalInterface(ScrollArea):
 
         self.vBoxLayout.addStretch(1)
 
+        # Set widget and properties after all components are added
+        self.setWidget(self.view)
+        self.setWidgetResizable(True)
+        self.setObjectName("retrieval_interface")
+
+        self.setStyleSheet("QScrollArea {border: none; background:transparent}")
+        self.view.setStyleSheet('QWidget {background:transparent}')
+
         # Connect internal signals
         self.btn_wd_view.clicked.connect(self.select_wd)
         
@@ -252,27 +285,34 @@ class RetrievalInterface(ScrollArea):
         if path:
             self.wd_edit.setText(path)
 
+    def clear_date_from(self):
+        self.date_from.setDate(QDate())
+        self.date_from_cleared = True
+        self.clear_date_to()  # 同时清除另一个
+
+    def clear_date_to(self):
+        self.date_to.setDate(QDate())
+        self.date_to_cleared = True
+
+    def on_date_from_changed(self, date):
+        if date.isValid():
+            self.date_from_cleared = False
+
+    def on_date_to_changed(self, date):
+        if date.isValid():
+            self.date_to_cleared = False
+
 
 class ConstructionInterface(QWidget):
-    """Tab 2: Supermatrix Construction using Pivot for sub-steps"""
+    """Tab 2: Supermatrix Construction using SegmentedWidget for sub-steps"""
     def __init__(self, main_window):
         super().__init__()
         self.main_window = main_window
         self.setObjectName("construction_interface")
         
         self.vBoxLayout = QVBoxLayout(self)
-        self.pivot = Pivot(self)
-        self.stackedWidget = QWidget() # We'll just hide/show layouts or widgets manually or use stacked layout
-        self.contentLayout = QVBoxLayout(self.stackedWidget)
-        
-        # Add items to Pivot
-        self.pivot.addItem(routeKey="filter", text="Filtering")
-        self.pivot.addItem(routeKey="align", text="Alignment")
-        self.pivot.addItem(routeKey="trim", text="Trimming")
-        self.pivot.addItem(routeKey="concat", text="Concatenation")
-        
-        self.vBoxLayout.addWidget(self.pivot)
-        self.vBoxLayout.addWidget(self.stackedWidget)
+        self.pivot = SegmentedWidget(self)
+        self.stackedWidget = QStackedWidget(self)
         
         # -- Pages --
         self.page_filter = self.create_filtering_page()
@@ -280,37 +320,33 @@ class ConstructionInterface(QWidget):
         self.page_trim = self.create_trimming_page()
         self.page_concat = self.create_concat_page()
         
-        self.contentLayout.addWidget(self.page_filter)
-        self.contentLayout.addWidget(self.page_align)
-        self.contentLayout.addWidget(self.page_trim)
-        self.contentLayout.addWidget(self.page_concat)
+        # Add items to SegmentedWidget
+        self.addSubInterface(self.page_filter, 'filter', 'Filtering')
+        self.addSubInterface(self.page_align, 'align', 'Alignment')
+        self.addSubInterface(self.page_trim, 'trim', 'Trimming')
+        self.addSubInterface(self.page_concat, 'concat', 'Concatenation')
+        
+        self.vBoxLayout.addWidget(self.pivot)
+        self.vBoxLayout.addWidget(self.stackedWidget)
+        self.vBoxLayout.setContentsMargins(30, 10, 30, 30)
         
         # Init state
-        self.page_filter.setVisible(True)
-        self.page_align.setVisible(False)
-        self.page_trim.setVisible(False)
-        self.page_concat.setVisible(False)
-        self.pivot.setCurrentItem("filter")
+        self.stackedWidget.setCurrentWidget(self.page_filter)
+        self.pivot.setCurrentItem('filter')
+        self.pivot.currentItemChanged.connect(
+            lambda k: self.stackedWidget.setCurrentWidget(self.findChild(QWidget, k)))
 
-        self.pivot.currentItemChanged.connect(self.switchPage)
-
-    def switchPage(self, routeKey):
-        self.page_filter.setVisible(routeKey == "filter")
-        self.page_align.setVisible(routeKey == "align")
-        self.page_trim.setVisible(routeKey == "trim")
-        self.page_concat.setVisible(routeKey == "concat")
+    def addSubInterface(self, widget: QWidget, objectName, text):
+        widget.setObjectName(objectName)
+        self.stackedWidget.addWidget(widget)
+        self.pivot.addItem(routeKey=objectName, text=text)
 
     def create_filtering_page(self):
-        w = ScrollArea()
-        container = QWidget()
-        container.setStyleSheet("background-color: transparent;")
-        w.setWidget(container)
-        w.setWidgetResizable(True)
-        w.setStyleSheet("ScrollArea { background-color: transparent; }")
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(20,20,20,20)
+        w = QWidget()
+        layout = QVBoxLayout(w)
+        layout.setContentsMargins(5,20,5,20)
         
-        grp = SettingCardGroup("Sequence Filtering", container)
+        grp = SettingCardGroup("Sequence Filtering", w)
         
         # Options
         card_opts = CardWidget()
@@ -368,16 +404,11 @@ class ConstructionInterface(QWidget):
         return w
 
     def create_alignment_page(self):
-        w = ScrollArea()
-        container = QWidget()
-        container.setStyleSheet("background-color: transparent;")
-        w.setWidget(container)
-        w.setWidgetResizable(True)
-        w.setStyleSheet("ScrollArea { background-color: transparent; }")
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(20,20,20,20)
+        w = QWidget()
+        layout = QVBoxLayout(w)
+        layout.setContentsMargins(5,20,5,20)
         
-        grp = SettingCardGroup("Sequence Alignment (MAFFT)", container)
+        grp = SettingCardGroup("Sequence Alignment (MAFFT)", w)
         
         # Mode and Paths
         card_paths = CardWidget()
@@ -441,16 +472,11 @@ class ConstructionInterface(QWidget):
         return w
 
     def create_trimming_page(self):
-        w = ScrollArea()
-        container = QWidget()
-        container.setStyleSheet("background-color: transparent;")
-        w.setWidget(container)
-        w.setWidgetResizable(True)
-        w.setStyleSheet("ScrollArea { background-color: transparent; }")
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(20,20,20,20)
+        w = QWidget()
+        layout = QVBoxLayout(w)
+        layout.setContentsMargins(5,20,5,20)
         
-        grp = SettingCardGroup("Alignment Trimming (trimAl)", container)
+        grp = SettingCardGroup("Alignment Trimming (trimAl)", w)
         
         # Input/Output
         card_io = CardWidget()
@@ -527,16 +553,11 @@ class ConstructionInterface(QWidget):
         return w
 
     def create_concat_page(self):
-        w = ScrollArea()
-        container = QWidget()
-        container.setStyleSheet("background-color: transparent;")
-        w.setWidget(container)
-        w.setWidgetResizable(True)
-        w.setStyleSheet("ScrollArea { background-color: transparent; }")
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(20,20,20,20)
+        w = QWidget()
+        layout = QVBoxLayout(w)
+        layout.setContentsMargins(5,20,5,20)
         
-        grp = SettingCardGroup("Concatenation", container)
+        grp = SettingCardGroup("Concatenation", w)
         card = CardWidget()
         card.setFixedHeight(150)
         concat_layout = QVBoxLayout(card)
@@ -576,6 +597,9 @@ class ConstructionInterface(QWidget):
         if path:
             line_edit.setText(path)
 
+    def on_date_changed(self, date, date_type):
+        pass
+
     def browse_file_or_dir(self, line_edit, is_single):
         if is_single:
             path, _ = QFileDialog.getOpenFileName(self, "Select File")
@@ -585,25 +609,31 @@ class ConstructionInterface(QWidget):
             line_edit.setText(path)
 
 
-# --- Main Window ---
 
-class DependenciesInterface(ScrollArea):
+
+class ChloroplastMinerInterface(QWidget):
+    """Chloroplast Miner Page"""
+    def __init__(self, main_window):
+        super().__init__()
+        self.main_window = main_window
+        self.setObjectName("chloroplast_miner_interface")
+        self.vBoxLayout = QVBoxLayout(self)
+        self.vBoxLayout.setContentsMargins(30, 30, 30, 30)
+        self.vBoxLayout.setSpacing(20)
+
+
+class DependenciesInterface(QWidget):
     """Dependencies Page"""
     def __init__(self, main_window):
         super().__init__()
         self.main_window = main_window
         self.setObjectName("dependencies_interface")
-        self.view = QWidget(self)
-        self.view.setStyleSheet("background-color: transparent;")
-        self.setWidget(self.view)
-        self.setWidgetResizable(True)
-        self.setStyleSheet("ScrollArea { background-color: transparent; } QWidget#dependencies_interface { background-color: transparent; }")
-        self.vBoxLayout = QVBoxLayout(self.view)
+        self.vBoxLayout = QVBoxLayout(self)
         self.vBoxLayout.setContentsMargins(30, 30, 30, 30)
         self.vBoxLayout.setSpacing(20)
         
         # Dependencies Group
-        grp = SettingCardGroup("Dependencies", self.view)
+        grp = SettingCardGroup("Dependencies", self)
         
         # Install MAFFT
         card_mafft = CardWidget()
@@ -630,13 +660,13 @@ class DependenciesInterface(ScrollArea):
         self.vBoxLayout.addWidget(grp)
         
         # Theme Group
-        theme_grp = SettingCardGroup("Theme Settings", self.view)
+        theme_grp = SettingCardGroup("Theme Settings", self)
         
         card_theme = CardWidget()
         card_theme.setFixedHeight(80)
         h3 = QHBoxLayout(card_theme)
         h3.setContentsMargins(15, 10, 15, 10)
-        h3.addWidget(BodyLabel("Application Theme:"))
+        h3.addWidget(BodyLabel("Application Theme"))
         self.combo_theme = ComboBox(card_theme)
         self.combo_theme.addItems(["Light", "Dark", "Auto"])
         self.combo_theme.setCurrentIndex(2)
@@ -644,27 +674,34 @@ class DependenciesInterface(ScrollArea):
         h3.addWidget(self.combo_theme)
         theme_grp.addSettingCard(card_theme)
         
+        # Theme Color Card
+        card_color = CardWidget()
+        card_color.setFixedHeight(80)
+        h4 = QHBoxLayout(card_color)
+        h4.setContentsMargins(15, 10, 15, 10)
+        h4.addWidget(BodyLabel("Theme Color"))
+        self.color_picker = ColorPickerButton(parent=card_color, title="Color", color=themeColor())
+        self.color_picker.colorChanged.connect(lambda c: setThemeColor(c, save=True))
+        h4.addWidget(self.color_picker)
+        
+        theme_grp.addSettingCard(card_color)
+        
         self.vBoxLayout.addWidget(theme_grp)
         self.vBoxLayout.addStretch()
 
 
-class AboutInterface(ScrollArea):
+class AboutInterface(QWidget):
     """About Page"""
     def __init__(self, main_window):
         super().__init__()
         self.main_window = main_window
         self.setObjectName("about_interface")
-        self.view = QWidget(self)
-        self.view.setStyleSheet("background-color: transparent;")
-        self.setWidget(self.view)
-        self.setWidgetResizable(True)
-        self.setStyleSheet("ScrollArea { background-color: transparent; } QWidget#about_interface { background-color: transparent; }")
-        self.vBoxLayout = QVBoxLayout(self.view)
+        self.vBoxLayout = QVBoxLayout(self)
         self.vBoxLayout.setContentsMargins(30, 30, 30, 30)
         self.vBoxLayout.setSpacing(20)
         
         # About Group
-        grp = SettingCardGroup("About", self.view)
+        grp = SettingCardGroup("About", self)
         
         # About Card
         card_about = CardWidget()
@@ -681,7 +718,7 @@ class AboutInterface(ScrollArea):
         self.vBoxLayout.addWidget(grp)
         self.vBoxLayout.addStretch()
 
-
+# --- Main Window ---
 class MainWindow(FluentWindow):
     @Slot(str)
     def outputWritten(self, text):
@@ -703,6 +740,10 @@ class MainWindow(FluentWindow):
         y = (screen_geometry.height() - self.height()) // 2
         self.move(x, y)
         
+        # Sync with system theme color (Windows and macOS only)
+        if HAS_SYSTEM_ACCENT and sys.platform in ["win32", "darwin"]:
+            setThemeColor(getSystemAccentColor(), save=False)
+        
         # Initialize Backend Controller
         self.backend = BackendController()
         self.backend.log_signal.connect(self.outputWritten)
@@ -710,12 +751,14 @@ class MainWindow(FluentWindow):
         # Define Interfaces
         self.retrieval_interface = RetrievalInterface(self)
         self.construction_interface = ConstructionInterface(self)
+        self.chloroplast_miner_interface = ChloroplastMinerInterface(self)
         self.dependencies_interface = DependenciesInterface(self)
         self.about_interface = AboutInterface(self)
         
         # Add Interfaces to Navigation
         self.addSubInterface(self.retrieval_interface, FIF.SEARCH, "Sequence Retrieval")
         self.addSubInterface(self.construction_interface, FIF.APPLICATION, "Supermatrix Construction")
+        self.addSubInterface(self.chloroplast_miner_interface, FIF.LEAF, "Chloroplast Miner")
         self.addSubInterface(self.dependencies_interface, FIF.SETTING, "Dependencies")
         self.addSubInterface(self.about_interface, FIF.INFO, "About", NavigationItemPosition.BOTTOM)
 
@@ -867,7 +910,7 @@ class MainWindow(FluentWindow):
         ri.word_size.setText(parameters_dict.get("word_size", ""))
         ri.nucl_reward.setText(parameters_dict.get("nucl_reward", ""))
         ri.nucl_penalty.setText(parameters_dict.get("nucl_penalty", ""))
-        ri.key_anno.setText(parameters_dict.get("key_annotations", "").replace("|", "; ")) # LineEdit single line
+        ri.key_anno.setPlainText(parameters_dict.get("key_annotations", "").replace("|", "; "))
         ri.excl_source.setPlainText(parameters_dict.get("exclude_sources", "").replace("|", "\n"))
 
         print(f"Set target region: {target_region}")
@@ -883,7 +926,7 @@ class MainWindow(FluentWindow):
         self.backend.submit_new_blast(self.retrieval_interface)
 
     def load_previous_job(self):
-        self.backend.load_previous_job(self.retrieval_interface)
+        self.backend.load_previous_job(self.retrieval_interface, self)
 
     def set_marker_summary(self, state):
         self.backend.set_marker_summary(self.retrieval_interface, state)

@@ -3,7 +3,7 @@ import sys
 import threading
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal, QObject
+from PySide6.QtCore import Qt, Signal, QObject, QDate
 from qfluentwidgets import (InfoBar, InfoBarPosition)
 
 
@@ -25,8 +25,8 @@ class BackendController(QObject):
     def __init__(self):
         super().__init__()
 
-    def emit_log(self, message):
-        self.log_signal.emit(message)
+    def emit_log(self, message, level="INFO"):
+        self.log_signal.emit(f"[{level}] {message}")
 
     def save_settings(self, retrieval_interface, parent_window):
         target_region = retrieval_interface.combo_region.currentText()
@@ -50,6 +50,10 @@ class BackendController(QObject):
             fw.write(f"word_size\t{retrieval_interface.word_size.text().strip()}\n")
             fw.write(f"nucl_reward\t{retrieval_interface.nucl_reward.text().strip()}\n")
             fw.write(f"nucl_penalty\t{retrieval_interface.nucl_penalty.text().strip()}\n")
+            if retrieval_interface.date_from.date.isValid():
+                fw.write(f"date_from\t{retrieval_interface.date_from.date.toString('yyyy/MM/dd')}\n")
+            if retrieval_interface.date_to.date.isValid():
+                fw.write(f"date_to\t{retrieval_interface.date_to.date.toString('yyyy/MM/dd')}\n")
 
         initial_queries = retrieval_interface.init_queries.toPlainText().strip()
         initial_queries_dir = Path(get_writable_path("initial_queries"))
@@ -78,8 +82,24 @@ class BackendController(QObject):
         
         organisms = [x for x in taxonomy.splitlines() if len(x) > 0]
         email = retrieval_interface.email_edit.text().strip()
-        d_from = retrieval_interface.date_from.text().strip()
-        d_to = retrieval_interface.date_to.text().strip()
+        
+        date_from_obj = retrieval_interface.date_from.date
+        date_to_obj = retrieval_interface.date_to.date
+        
+        d_from = ""
+        d_to = ""
+        
+        if not retrieval_interface.date_from_cleared:
+            d_from = date_from_obj.toString("yyyy/MM/dd")
+        if not retrieval_interface.date_to_cleared:
+            d_to = date_to_obj.toString("yyyy/MM/dd")
+        
+        if d_from and not d_to:
+            d_to = QDate.currentDate().toString("yyyy/MM/dd")
+        elif not d_from and d_to:
+            InfoBar.warning(title="Warning", content="Please select 'Date From' or clear 'Date To'", parent=retrieval_interface.window(), position=InfoBarPosition.TOP)
+            return
+        
         qualifier = retrieval_interface.entrez_qualifier.toPlainText().strip()
 
         self.emit_log("Starting ESearch...")
@@ -121,8 +141,133 @@ class BackendController(QObject):
 
         self.emit_log("BLAST thread started (mock).")
 
-    def load_previous_job(self, retrieval_interface):
+    def load_previous_job(self, retrieval_interface, parent_window):
+        """
+        read BLAST parameters in blast_parameters.txt file
+        connects with load_previous_job button in Sequence Retrieving module
+        :return:
+        """
+        from iterated_blast import iterated_blast_main
+        
+        print_line("*")
         self.emit_log("Loading previous job...")
+
+        # check if working directory exists
+        wd = retrieval_interface.wd_edit.text().strip()
+        if not Path(wd).exists():
+            self.emit_log("Working directory does not exist, please submit new BLAST.")
+            return
+        if not (Path(wd) / "parameters").exists():
+            self.emit_log("Can't find parameters directory, please submit new BLAST.")
+            return
+        if not (Path(wd) / "tmp_files").exists():
+            self.emit_log("Can't find tmp_files directory, please submit new BLAST.")
+            return
+        if not (Path(wd) / "results").exists():
+            self.emit_log("Can't find results directory, please submit new BLAST.")
+            return
+
+        # read BLAST parameters in blast_parameters.txt file
+        parameters_files = [f.name for f in (Path(wd) / "parameters").iterdir()]
+        if "blast_parameters.txt" not in parameters_files:
+            self.emit_log("Can't find BLAST parameters, please submit new BLAST.")
+            return
+        if "initial_queries.fasta" not in parameters_files:
+            self.emit_log("Can't find initial queries, please submit new BLAST.")
+            return
+        else:
+            retrieval_interface.init_queries.clear()
+            with open(Path(wd) / Path("parameters") / Path("initial_queries.fasta"), "r") as fr:
+                seq = fr.read()
+                retrieval_interface.init_queries.setPlainText(seq)
+
+        parameters_dict = {}
+        with open(Path(wd) / Path("parameters") / Path("blast_parameters.txt"), "r") as fr:
+            parameters = fr.read().splitlines()
+            for parameter in parameters:
+                if parameter.strip() != "":
+                    parameters_dict[parameter.split("\t")[0]] = str(parameter.split("\t")[1])
+
+        target_region = parameters_dict.get("target_region", "")
+        taxonomy = parameters_dict.get("taxonomy", "")
+        entrez_qualifier = parameters_dict.get("entrez_qualifier", "")
+        date_from = parameters_dict.get("date_from", "")
+        date_to = parameters_dict.get("date_to", "")
+        entrez_email = parameters_dict.get("entrez_email", "")
+        count = parameters_dict.get("entrez_count", "0")
+        max_length = int(parameters_dict.get("max_length", "0"))
+        key_annotations = parameters_dict.get("key_annotations", "")
+        exclude_sources = parameters_dict.get("exclude_sources", "")
+        expect_value = parameters_dict.get("expect_value", "")
+        gap_costs = parameters_dict.get("gap_costs", "")
+        word_size = parameters_dict.get("word_size", "")
+        nucl_reward = parameters_dict.get("nucl_reward", "")
+        nucl_penalty = parameters_dict.get("nucl_penalty", "")
+
+        # show parameters in the Sequence Retrieving panel
+        target_region_list = [f.name for f in Path(get_resource_path("blast_parameters")).iterdir()]
+        target_region_list = [Path(x).stem for x in target_region_list]
+        if target_region in target_region_list:
+            target_region_list.remove(target_region)
+        target_region_list.insert(0, "")
+        target_region_list.insert(0, target_region)
+        retrieval_interface.combo_region.clear()
+        retrieval_interface.combo_region.addItems(target_region_list)
+        retrieval_interface.tax_edit.setPlainText(taxonomy.replace("|", "\n"))
+        retrieval_interface.entrez_qualifier.setPlainText(entrez_qualifier)
+        
+        if date_from:
+            date_obj = QDate.fromString(date_from, "yyyy/MM/dd")
+            if date_obj.isValid():
+                retrieval_interface.date_from.setDate(date_obj)
+        if date_to:
+            date_obj = QDate.fromString(date_to, "yyyy/MM/dd")
+            if date_obj.isValid():
+                retrieval_interface.date_to.setDate(date_obj)
+        
+        retrieval_interface.email_edit.setText(entrez_email)
+        retrieval_interface.max_len.setText(str(max_length))
+        retrieval_interface.expect_val.setText(str(expect_value))
+        retrieval_interface.gap_costs.setText(gap_costs)
+        retrieval_interface.word_size.setText(str(word_size))
+        retrieval_interface.nucl_reward.setText(str(nucl_reward))
+        retrieval_interface.nucl_penalty.setText(str(nucl_penalty))
+        retrieval_interface.key_anno.setPlainText(key_annotations.replace("|", "; "))
+        retrieval_interface.excl_source.setPlainText(exclude_sources.replace("|", "\n"))
+
+        organisms = taxonomy.split("|")
+        organisms = [x for x in organisms if len(x) > 0]
+        key_annotations_list = key_annotations.split("|")
+        key_annotations_list = [x for x in key_annotations_list if len(x) > 0]
+        exclude_sources_list = exclude_sources.split("|")
+        exclude_sources_list = [x for x in exclude_sources_list if len(x) > 0]
+
+        # todo: show warnings when size of queries file is zero
+        queries_file_list = [f.name for f in (Path(wd) / "parameters" / "ref_seq").iterdir()]
+        if len(queries_file_list) > 0:
+            round_list = []
+            for queries_file in queries_file_list:
+                round_list.append(int(Path(queries_file).stem.split("_")[-1]))
+            round_list.sort()
+            blast_round = round_list[-1]
+        else:
+            blast_round = 1
+        ref_number = 5
+        count = int(count)
+        
+        thread = threading.Thread(target=iterated_blast_main, args=(wd, organisms, count,
+                                                                            expect_value, gap_costs, word_size,
+                                                                            nucl_reward, nucl_penalty, max_length,
+                                                                            key_annotations_list, exclude_sources_list,
+                                                                            ref_number,
+                                                                            date_from, date_to, entrez_email,
+                                                                            blast_round))
+        thread.daemon = True
+        thread.start()
+        
+        retrieval_interface.btn_submit_blast.setEnabled(False)
+        retrieval_interface.btn_load_job.setEnabled(False)
+        InfoBar.success(title="Success", content="Previous job loaded!", parent=parent_window, position=InfoBarPosition.TOP)
 
     def set_marker_summary(self, retrieval_interface, state):
         is_checked = (state == Qt.Checked) if isinstance(state, Qt.CheckState) else (state == 2)
@@ -235,7 +380,7 @@ class BackendController(QObject):
 
     def show_about(self, parent_window):
         InfoBar.info(
-            title="PyNCBIminer v1.3",
+            title="PyNCBIminer-NG",
             content="Author: Ruijing Cheng & Yuxuan Wang\nLicense: GPL V3",
             orient=Qt.Vertical,
             position=InfoBarPosition.BOTTOM_RIGHT,
@@ -245,3 +390,12 @@ class BackendController(QObject):
 
     def check_dependencies(self):
         pass
+
+def print_line(character="#"):
+    print(character * 50)
+
+
+def get_query_accession(record):
+    parts = record.description.split(" ")[0].split("|")[0].split(":")
+    # assert len(parts) == 2
+    return parts[0]

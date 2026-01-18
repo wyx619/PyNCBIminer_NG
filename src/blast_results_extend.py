@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 from math import floor
 from Bio import SeqIO
-from tools import get_query_accession
+from main_utils import get_query_accession
 from run_command import run_command
 
 

@@ -12,7 +12,7 @@ from pathlib import Path
 from datetime import datetime
 from Bio import SeqIO
 import pandas as pd
-from tools import get_query_accession
+from main_utils import get_query_accession
 from run_command import run_command
 
 @func_set_timeout(600)
@@ -258,8 +258,8 @@ def seq_check_download_main(wd, acc_file, out_file, key_annotations, exclude_sou
     else:
         df1 = df.loc[index_list][["s_extstart", "s_extend", "s_strand"]].copy()
     df1.columns = ['start', 'end', 'strand']
-    df1["strand"] = df1["strand"].replace([True, False], [1, 2])
-    # df1[["s_extstart", "s_extend", "s_strand"]] = df1[["s_extstart", "s_extend", "s_strand"]].apply(pd.to_numeric)
+    df1["strand"] = df1["strand"].map({True: 1, False: 2}).astype(int)
+
 
     fw = open(Path(wd) / Path("value_error_list.txt"), "w")
     fw.close()
