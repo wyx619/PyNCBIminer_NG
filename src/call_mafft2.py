@@ -81,7 +81,7 @@ def mafft_add(in_path, in_file, out_path, cmd_str):
         # run_command("mafft --localpair --maxiterate 1000 %s > %s" % (file1, msa1))
         # run_command("mafft --auto --add %s %s > %s" % (file2, msa1, msa2))  # FFT - NS - 2(Fast but rough)
         # run_command("mafft --auto --addfragments %s %s > %s" % (file3, msa2, msa3))  # Multi-INS-fragment
-        run_command(" %s %s > %s" % (cmd_str[0], file1, msa1))
+        run_command(" %s --quiet %s > %s" % (cmd_str[0], file1, msa1))
 
         # run_command("%s --auto --add %s %s > %s" % (cmd_str[1], file2,  msa1, msa2))  # FFT - NS - 2(Fast but rough)
         # run_command("%s --auto --addfragments %s %s > %s" % (cmd_str[2], file3, msa2, msa3))  # Multi-INS-fragment
@@ -100,7 +100,7 @@ def mafft_add(in_path, in_file, out_path, cmd_str):
         msa2.unlink()
         # print("Aligned results: %s" % msa3)
     else:
-        run_command(" %s %s > %s" % (cmd_str[0], Path(in_path) / Path(in_file), Path(out_path) / Path("msa_" + in_file)))
+        run_command(" %s --quiet %s > %s" % (cmd_str[0], Path(in_path) / Path(in_file), Path(out_path) / Path("msa_" + in_file)))
 
 
 def mafft(in_path, out_path='', add_choice='', add_path='', algorithm='auto',
@@ -170,16 +170,16 @@ def mafft(in_path, out_path='', add_choice='', add_path='', algorithm='auto',
             t0 = datetime.now()
             in_file = str(Path(in_path) / file)
             out_file = str(Path(out_path) / ("msa_" + file))
-            command = f"{mafft_exe} --auto --thread {thread} {'--reorder' * reorder} {additional_params} {in_file} > {out_file}"
+            command = f"{mafft_exe} --quiet --auto --thread {thread} {'--reorder' * reorder} {additional_params} {in_file} > {out_file}"
             # print(command)
             print("Aligning %s..." % in_file)
             run_command(command)
             t1 = datetime.now()
             print("Running time: %s seconds" % (t1 - t0))
     else:
-        command1 = f"{mafft_exe} --localpair --maxiterate 1000 --thread {thread} {'--reorder' * reorder} {additional_params}"
-        command2 = f"{mafft_exe} --thread {thread} {'--reorder' * reorder} {additional_params}"
-        command3 = f"{mafft_exe} --thread {thread} {'--reorder' * reorder} {additional_params}"
+        command1 = f"{mafft_exe} --quiet --localpair --maxiterate 1000 --thread {thread} {'--reorder' * reorder} {additional_params}"
+        command2 = f"{mafft_exe} --quiet --thread {thread} {'--reorder' * reorder} {additional_params}"
+        command3 = f"{mafft_exe} --quiet --thread {thread} {'--reorder' * reorder} {additional_params}"
         cmd_str = [command1, command2, command3]
 
         for file in file_list:

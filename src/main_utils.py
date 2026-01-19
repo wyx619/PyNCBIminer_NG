@@ -195,7 +195,10 @@ class BackendController(QObject):
         date_to = parameters_dict.get("date_to", "")
         entrez_email = parameters_dict.get("entrez_email", "")
         count = parameters_dict.get("entrez_count", "0")
-        max_length = int(parameters_dict.get("max_length", "0"))
+        try:
+            max_length = int(parameters_dict.get("max_length", "0"))
+        except ValueError:
+            max_length = 0
         key_annotations = parameters_dict.get("key_annotations", "")
         exclude_sources = parameters_dict.get("exclude_sources", "")
         expect_value = parameters_dict.get("expect_value", "")
@@ -213,7 +216,7 @@ class BackendController(QObject):
         target_region_list.insert(0, target_region)
         retrieval_interface.combo_region.clear()
         retrieval_interface.combo_region.addItems(target_region_list)
-        retrieval_interface.tax_edit.setPlainText(taxonomy.replace("|", "\n"))
+        retrieval_interface.tax_edit.setPlainText(taxonomy.replace("|", "\n") if taxonomy else "")
         retrieval_interface.entrez_qualifier.setPlainText(entrez_qualifier)
         
         if date_from:
@@ -242,9 +245,9 @@ class BackendController(QObject):
         exclude_sources_list = exclude_sources.split("|")
         exclude_sources_list = [x for x in exclude_sources_list if len(x) > 0]
 
-        # todo: show warnings when size of queries file is zero
-        queries_file_list = [f.name for f in (Path(wd) / "parameters" / "ref_seq").iterdir()]
-        if len(queries_file_list) > 0:
+        ref_seq_dir = Path(wd) / "parameters" / "ref_seq"
+        if ref_seq_dir.exists() and any(ref_seq_dir.iterdir()):
+            queries_file_list = [f.name for f in ref_seq_dir.iterdir()]
             round_list = []
             for queries_file in queries_file_list:
                 round_list.append(int(Path(queries_file).stem.split("_")[-1]))
@@ -280,7 +283,10 @@ class BackendController(QObject):
             retrieval_interface.combo_region.setCurrentIndex(0)
 
     def set_reduce_threshold(self, construction_interface, state):
-        is_checked = (state == Qt.Checked) if isinstance(state, Qt.CheckState) else (state == 2)
+        if isinstance(state, bool):
+            is_checked = state
+        else:
+            is_checked = (state == Qt.Checked) if isinstance(state, Qt.CheckState) else (state == 2)
         construction_interface.len_thresh.setEnabled(is_checked)
         construction_interface.combo_consensus.setEnabled(is_checked)
 
@@ -306,36 +312,46 @@ class BackendController(QObject):
             return
 
         action = 0
-        if construction_interface.chk_ext.isChecked() and construction_interface.chk_reduce.isChecked(): 
-            action = 3
-        elif construction_interface.chk_ext.isChecked():
-            action = 1
-        elif construction_interface.chk_reduce.isChecked(): 
-            action = 2
+        if construction_interface.switch_ext.isChecked() and construction_interface.switch_reduce.isChecked():
+            action = 3  # both
+        elif construction_interface.switch_ext.isChecked():
+            action = 1  # extension only
+        elif construction_interface.switch_reduce.isChecked():
+            action = 2  # reduce only
         
         if action == 0:
             self.emit_log("Please select an option")
             return
 
         self.emit_log("Running Filter...")
-        thread = threading.Thread(target=call_miner_filter, args=(in_path, out_path, action, cons, len_thr, False))
+        thread = threading.Thread(target=call_miner_filter, args=(in_path, out_path, action, cons, len_thr))
         thread.daemon = True
         thread.start()
 
     def run_alignment(self, construction_interface):
-        self.check_dependencies()
         from call_mafft2 import mafft
         
         in_path = construction_interface.align_in.text().strip()
         out_path = construction_interface.align_out.text().strip()
+        
+        if not in_path:
+            self.emit_log("Please set input path")
+            return
+        if not out_path:
+            self.emit_log("Please set output path")
+            return
+        
         if not Path(out_path).exists():
-            Path(out_path).mkdir(exist_ok=True)
+            Path(out_path).mkdir(parents=True, exist_ok=True)
         
         algo = construction_interface.align_algo.currentText()
-        thread_num = construction_interface.align_thread.text()
+        try:
+            thread_num = int(construction_interface.align_thread.text().strip())
+        except ValueError:
+            thread_num = -1
         reorder = construction_interface.align_reorder.currentText() == "True"
         
-        self.emit_log("Running MAFFT...")
+        self.emit_log(f"Running MAFFT... Output: {out_path}/msa_*.fasta")
         thread = threading.Thread(target=mafft, args=(in_path, out_path, "", "", algo, thread_num, reorder, "", False, ""))
         thread.daemon = True
         thread.start()

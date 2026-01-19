@@ -242,6 +242,9 @@ class nt_Calculator:
         seq_array = np.array([list(str(record.seq).upper()) for record in record_iter])
         seq_array = self.remove_gaps_in_ends(seq_array)
         
+        if seq_array.ndim == 1 or seq_array.shape[1] == 0:
+            return ""
+        
         consensus_sequence = ""
         for i in range(seq_array.shape[1]):
             dominate_base = self.get_dominate_base(seq_array[:,i])
@@ -429,7 +432,12 @@ class nt_Calculator:
     def remove_minor_large_insertion(record_path, length_threshold=20, taxa_threshold=1, keep_tmp=False):
         ## STEP 1: load related information
         record_iter = list(SeqIO.parse(record_path, "fasta"))
+        if not record_iter:
+            return []
         records = np.array([list(str(record.seq).upper()) for record in record_iter])
+        
+        if records.ndim == 1 or records.shape[1] == 0:
+            return []
         
         ## STEP 2: record minor large insertion (in list remove_ends)
         single_insertion_columns = []

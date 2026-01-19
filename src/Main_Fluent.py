@@ -15,7 +15,7 @@ except ImportError:
 
 from qfluentwidgets import (FluentWindow, NavigationItemPosition, SubtitleLabel, 
                             PrimaryPushButton, PushButton, LineEdit, TextEdit, 
-                            ComboBox, CheckBox, RadioButton, CardWidget, 
+                            ComboBox, CheckBox, RadioButton, CardWidget, SwitchButton,
                             BodyLabel, InfoBar, FluentIcon as FIF,  SegmentedWidget, SettingCardGroup, 
                             ExpandSettingCard, PlainTextEdit,  setTheme, Theme, InfoBarPosition, DatePicker, 
                             SingleDirectionScrollArea, setThemeColor, themeColor, ColorPickerButton)
@@ -348,25 +348,38 @@ class ConstructionInterface(QWidget):
         
         # Options
         card_opts = CardWidget()
-        card_opts.setFixedHeight(150)
-        l_opts = QVBoxLayout(card_opts)
+        card_opts.setFixedHeight(80)
+        l_opts = QHBoxLayout(card_opts)
         l_opts.setContentsMargins(15, 10, 15, 10)
-        self.chk_ext = CheckBox("Extended segments refinement", card_opts)
-        self.chk_reduce = CheckBox("Species-level sequence selection", card_opts)
-        l_opts.addWidget(self.chk_ext)
-        l_opts.addWidget(self.chk_reduce)
+        self.switch_ext = SwitchButton(card_opts)
+        self.switch_ext.setChecked(False)
+        self.switch_reduce = SwitchButton(card_opts)
+        self.switch_reduce.setChecked(False)
+
+        l_opts.addWidget(BodyLabel("Extended segments refinement"))
+        l_opts.addWidget(self.switch_ext)
+        l_opts.addStretch()
         
-        row_params = QHBoxLayout()
+        l_opts.addWidget(BodyLabel("Species-level sequence selection"))
+        l_opts.addWidget(self.switch_reduce)
+        
+        grp.addSettingCard(card_opts)
+        
+        # Parameters
+        card_params = CardWidget()
+        card_params.setFixedHeight(60)
+        l_params = QHBoxLayout(card_params)
+        l_params.setContentsMargins(15, 10, 15, 10)
         self.len_thresh = LineEdit()
         self.len_thresh.setText("100")
         self.combo_consensus = ComboBox()
         self.combo_consensus.addItems(["True", "False"])
-        row_params.addWidget(BodyLabel("Length Threshold:"))
-        row_params.addWidget(self.len_thresh)
-        row_params.addWidget(BodyLabel("Abnormal Index (Consensus):"))
-        row_params.addWidget(self.combo_consensus)
-        l_opts.addLayout(row_params)
-        grp.addSettingCard(card_opts)
+        l_params.addWidget(BodyLabel("Length Threshold:"))
+        l_params.addWidget(self.len_thresh)
+        l_params.addStretch()
+        l_params.addWidget(BodyLabel("Abnormal Index (Consensus):"))
+        l_params.addWidget(self.combo_consensus)
+        grp.addSettingCard(card_params)
         
         # Paths
         card_paths = CardWidget()
@@ -730,7 +743,7 @@ class MainWindow(FluentWindow):
         self.navigationInterface.setExpandWidth(250)
         
         # Set minimum window width
-        self.setMinimumWidth(1000)
+        self.setMinimumWidth(1100)
         
         # Set window size and center on screen
         self.resize(1100, 750)
@@ -833,7 +846,7 @@ class MainWindow(FluentWindow):
         
         # Construction
         ci = self.construction_interface
-        ci.chk_reduce.stateChanged.connect(self.set_reduce_threshold)
+        ci.switch_reduce.checkedChanged.connect(self.set_reduce_threshold)
         ci.combo_trim_method.currentIndexChanged.connect(self.select_tri_method)
         
         ci.btn_run_filter.clicked.connect(self.run_filtering)
@@ -973,6 +986,8 @@ class MainWindow(FluentWindow):
 if __name__ == "__main__":
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     app = QApplication(sys.argv)
+    # 设置全局字体
+
     app.setApplicationName("PyNCBIminer")
     app.setOrganizationName("PyNCBIminer")
     app.setApplicationDisplayName("PyNCBIminer")

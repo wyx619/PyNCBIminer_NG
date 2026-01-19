@@ -25,16 +25,26 @@ def rename_results(wd):
         print("Renamed blast_result_controlled.fasta as blast_results_checked.fasta. ")
 
 
-def combine_keep_records(wd_list):
+def combine_keep_records(wd_list, out_path):
     print("Combining keep records...")
     combined_records = None
     col_list = ["taxon_name"]
+    out_path = Path(out_path)
+    
     for wd in wd_list:
-
-        name = Path(wd).name
+        wd = Path(wd)
+        name = wd.name
         col_list.append(name)
+        
+        # 当 out_path == wd 时，结果直接在 out_path/results/
+        # 当 out_path != wd 时，结果在 out_path/name/results/
+        if out_path == wd:
+            kept_file = out_path / "results" / "blast_result_kept.txt"
+        else:
+            kept_file = out_path / name / "results" / "blast_result_kept.txt"
+            
         try:
-            df = pd.read_table(Path(wd) / Path("results") / Path("blast_result_kept.txt"), sep="\t")
+            df = pd.read_table(kept_file, sep="\t")
             if combined_records is None:
                 combined_records = df[["taxon_name", "subject_acc.ver"]]
             else:
@@ -43,32 +53,37 @@ def combine_keep_records(wd_list):
             combined_records.columns = col_list
         except FileNotFoundError:
             print("%s has not been reduced." % name)
-
-        # species = species | set(df["taxon name"])
-        # print(Path(file).stem, end="\t")
-        # print(df.shape[0])
     
     if combined_records is not None:
         combined_records = combined_records.fillna("-")
-        combined_records.to_csv(Path(wd).parent / Path("combined_records.txt"), index=False, sep="\t")
-        print("Combined records save in %s" % Path(wd).parent)
+        combined_records.to_csv(out_path / "combined_records.txt", index=False, sep="\t")
+        print("Combined records save in %s" % out_path)
     else:
         print("No records found to combine.")
 
 
-def put_filtered_seq_together(wd_list):
+def put_filtered_seq_together(wd_list, out_path):
     print("Copying filtered sequences into one directory...")
+    out_path = Path(out_path)
 
     for wd in wd_list:
-        filtered_seqs_path = Path(wd).parent / "filtered_seqs"
+        wd = Path(wd)
+        name = wd.name
+        filtered_seqs_path = out_path / "filtered_seqs"
         if not filtered_seqs_path.exists():
             filtered_seqs_path.mkdir()
-
-        name = Path(wd).name
+        
+        # 当 out_path == wd 时，结果直接在 out_path/results/
+        # 当 out_path != wd 时，结果在 out_path/name/results/
+        if out_path == wd:
+            filtered_file = out_path / "results" / "blast_results_filtered.fasta"
+        else:
+            filtered_file = out_path / name / "results" / "blast_results_filtered.fasta"
+            
         try:
-            with open(Path(wd).parent / "filtered_seqs"/(name+".fasta"), "w") as fw:
-                for record in SeqIO.parse(Path(wd) / "results" / "blast_results_filtered.fasta", "fasta"):
-                    fw.write(">"+record.description.split("|")[1])
+            with open(filtered_seqs_path / (name + ".fasta"), "w") as fw:
+                for record in SeqIO.parse(filtered_file, "fasta"):
+                    fw.write(">" + record.description.split("|")[1])
                     fw.write("\n")
                     fw.write(str(record.seq))
                     fw.write("\n")
@@ -80,7 +95,7 @@ def put_filtered_seq_together(wd_list):
     print("All filtered sequences are into ‘filtered_seqs’ folder")
 
 
-def call_miner_filter(in_path, out_path, action, consensus_value, len_shresh, name_correction=False):
+def call_miner_filter(in_path, out_path, action, consensus_value, len_shresh):
     """
     Call miner_filter, and modify input and output file names, using one thread.
     :param in_path: working directory of one marker or the parent directory of multiple working directories
@@ -109,8 +124,8 @@ def call_miner_filter(in_path, out_path, action, consensus_value, len_shresh, na
         for wd in wd_list:
             print("Control extension: %s" % wd)
             t0 = datetime.now()
-            my_miner_filter = Miner_filter(wd, wd)
-            my_miner_filter.control_extension(length_ratio=0.6, max_subset_size=200, gappyness_threshold=0.5)
+            my_miner_filter = Miner_filter(wd, out_path)
+            my_miner_filter.control_extension(gappyness_threshold=0.5)
             t1 = datetime.now()
             print("Running time: %s seconds" % (t1 - t0))
     elif action == 2:  # reduce dataset
@@ -118,30 +133,30 @@ def call_miner_filter(in_path, out_path, action, consensus_value, len_shresh, na
             rename_results(wd)
             print("Reduce dataset: %s" % wd)
             t0 = datetime.now()
-            my_miner_filter = Miner_filter(wd, wd)
-            my_miner_filter.reduce_dataset(name_correction=name_correction,  # for name correction using trns (rtrns)
+            my_miner_filter = Miner_filter(wd, out_path)
+            my_miner_filter.reduce_dataset(consensus_value=consensus_value,  # for consensus calculation
                                            subsp=True, var=True, f=True,  # for species combination
                                            sp=True, cf=True, aff=True, x=True,
-                                           consensus_value=consensus_value, length_threshold=len_shresh,
+                                           length_threshold=len_shresh,
                                            ignore_gap=True,
                                            # for exception removal
                                            )
             t1 = datetime.now()
             print("Running time: %s seconds" % (t1 - t0))
-        combine_keep_records(wd_list)
+        combine_keep_records(wd_list, out_path)
     elif action == 3:  # control extension, then reduce dataset
         for wd in wd_list:
-            my_miner_filter = Miner_filter(wd, wd)
+            my_miner_filter = Miner_filter(wd, out_path)
             print("Control extension: %s" % wd)
             t0 = datetime.now()
-            my_miner_filter.control_extension(length_ratio=0.6, max_subset_size=200, gappyness_threshold=0.5)
+            my_miner_filter.control_extension(gappyness_threshold=0.5)
             t1 = datetime.now()
             print("Running time: %s seconds" % (t1 - t0))
 
             rename_results(wd)
 
             print("Reduce dataset: %s" % wd)
-            my_miner_filter.reduce_dataset(name_correction=False,  # for name correction using trns (rtrns)
+            my_miner_filter.reduce_dataset(consensus_value=consensus_value,  # for consensus calculation
                                            subsp=True, var=True, f=True,  # for species combination
                                            sp=True, cf=True, aff=True, x=True, length_threshold=len_shresh,
                                            ignore_gap=True,
@@ -149,5 +164,5 @@ def call_miner_filter(in_path, out_path, action, consensus_value, len_shresh, na
                                            )
             t2 = datetime.now()
             print("Running time: %s seconds" % (t2 - t1))
-        combine_keep_records(wd_list)
-        put_filtered_seq_together(wd_list)
+        combine_keep_records(wd_list, out_path)
+        put_filtered_seq_together(wd_list, out_path)

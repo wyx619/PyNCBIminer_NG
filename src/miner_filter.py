@@ -10,7 +10,7 @@ import time
 from functional import create_folder
 from message_logger import MessageLogger
 from nt_calculator import nt_Calculator
-from aligner import Aligner
+
 from run_command import run_command
 
 
@@ -314,13 +314,19 @@ class Miner_filter:
         """ control the extension of all seqs, trim if necessary
         ----------
         Parameters
-        - length_ratio - records longer than this ratio will be decided as longer seqs while spliting by length
-        - max_size - fasta contains more than [max_size] records will be split into smaller ones
         - gappyness_threshold - if extension with gappyness more than this number will be removed/trimmed
         """
+        from functional import create_folder
+        
+        # Check and remove duplicates if needed
+        out_file = self.__out_path / "results" / "blast_results_non_duplicate.fasta"
+        if not out_file.exists():
+            self.remove_duplicate()
+        
         create_folder(self.__out_path / "tmp_files/extension_control")
         self.__split_by_genus()
-        ## TODO: partially replace with alofi
+        self.__split_by_length()
+        self.__split_large_subset()
         self.__align_subset()
         self.__remove_erroneous_extension(gappyness_threshold=gappyness_threshold)
         
@@ -708,6 +714,7 @@ class Miner_filter:
         
     ## ===========================================================================================================    
     ## ================================== for <func> control_extension ===========================================
+    
     @staticmethod
     def __get_upper_taxonomic_unit(this_taxonomy, info_list):
         """ get the upper taxonomic group of the given taxonomy, for example given Magnolia, return Magnoliaceae
@@ -731,12 +738,12 @@ class Miner_filter:
     def __split_by_genus(self):
         """ split the fasta file according to genus of the records
         """
-        ## STEP 1: set and prepare folders
-        in_path = self.__in_path / "results/blast_results_checked.fasta"
-        out_path = self.__out_path / "tmp_files/extension_control/split_by_genus"
+        from functional import create_folder
+        
+        in_path = self.__in_path / "results" / "blast_results_checked.fasta"
+        out_path = self.__out_path / "tmp_files" / "extension_control" / "split_by_genus"
         create_folder(out_path)
         
-        ## STEP 2: parse the blast_results_checked.fasta and save into dictionary by genus
         taxonomy_df = pd.read_csv(self.__in_path / "results" / self.__get_info_csv(),
                                   usecols=["accession", "taxonomy"],
                                   sep="\t")
@@ -745,107 +752,167 @@ class Miner_filter:
         genus_dict = {}
         for record in record_iter:
             accession_number = record.description.split("|")[0].split(":")[0]
+            if accession_number not in taxonomy_dict:
+                continue
             genus = [unit for unit in taxonomy_dict[accession_number].split("|") if " " not in unit][-1]
             genus_dict.setdefault(genus, [])
             genus_dict[genus].append(record)
             
-        ## STEP 3: write the records (each genus a individual fasta file)
         for genus, species_list in genus_dict.items():
             SeqIO.write(species_list, out_path / f"{genus}.fasta", "fasta")
-                                
+            
+            
+    def __split_by_length(self, length_ratio=0.6):
+        """ split the fastas (previously split by genus) according to relative length of the records
+        ----------
+        Parameters
+        - length_ratio - records longer than this ratio will be decided as "longer" sequences
+        """
+        from functional import create_folder
+        
+        in_path = self.__in_path / "tmp_files" / "extension_control" / "split_by_genus"
+        out_path = self.__out_path / "tmp_files" / "extension_control" / "split_by_length"
+        create_folder(out_path)
+        
+        for file_path in in_path.iterdir():
+            if not file_path.is_file():
+                continue
+            file = file_path.name
+            genus = file_path.stem
+            
+            length_list = []
+            record_iter = SeqIO.parse(file_path, "fasta")
+            for record in record_iter:
+                length_list.append(len(record.seq))
+            max_length = max(length_list)
+            length_threshold = max_length * length_ratio
+            
+            longer_records = []
+            shorter_records = []
+            record_iter = SeqIO.parse(file_path, "fasta")
+            for record in record_iter:
+                length = len(record.seq)
+                if length > length_threshold:
+                    longer_records.append(record)
+                else:
+                    shorter_records.append(record)
+                    
+            SeqIO.write(longer_records, out_path / f"{genus}_longer.fasta", "fasta")
+            if len(shorter_records) > 0:
+                SeqIO.write(shorter_records, out_path / f"{genus}_shorter.fasta", "fasta")
+            
+            
+    def __split_large_subset(self, max_size=200):
+        """ split the fastas (previously split by genus and length) according to number of the records
+        ----------
+        Parameters
+        - max_size - fasta contains more than [max_size] records will be split into smaller ones
+        """
+        from functional import create_folder
+        
+        self.__quality_control_max_size_subset = max_size
+        in_path = self.__in_path / "tmp_files" / "extension_control" / "split_by_length"
+        out_path = self.__out_path / "tmp_files" / "extension_control" / f"split_max_{max_size}"
+        create_folder(out_path)
+        
+        for file_path in in_path.iterdir():
+            if not file_path.is_file():
+                continue
+            records = list(SeqIO.parse(file_path, "fasta"))
+            total_size = len(records)
+            
+            if total_size > max_size:
+                num_subset = total_size // max_size + 1
+                sub_size = int(total_size / num_subset)
+                
+                for i in range(num_subset):
+                    sub_records = records[i*sub_size : (i+1)*sub_size]
+                    sub_filename = f"{file_path.stem}_{i}.fasta"
+                    SeqIO.write(sub_records, out_path / sub_filename, "fasta")
+                
+            else:
+                shutil.copyfile(file_path, out_path / file_path.name)
+                
     def __align_subset(self, add_threshold=5):
         """ align the subsets
         ----------
         Parameters
         - add_threshold - files contain seqs less than this number will use --add (refer to another MSA)
         """
-        ## STEP 1: set and prepare folders
-        in_path = self.__in_path / "tmp_files/extension_control/split_by_genus"
-        out_path = self.__out_path / "tmp_files/extension_control/subset_MSA"
+        from call_mafft2 import mafft
+        from functional import create_folder
+        import shutil
+        from Bio import SeqIO
+        from pathlib import Path
+        
+        in_path = self.__in_path / "tmp_files" / "extension_control" / "split_by_genus"
+        out_path = self.__out_path / "tmp_files" / "extension_control" / "subset_MSA"
         create_folder(out_path)
         
-        ## STEP 2: decide the largest fasta file (contains the biggest number of sequences)
-        file_size_dict = {}
-        for file in [f.name for f in Path(in_path).iterdir()]:
-            record_iter = SeqIO.parse(in_path / file, "fasta")
-            iter_length = len(list(record_iter))
-            file_size_dict[file] = iter_length
-        file_size_dict = dict(sorted(file_size_dict.items(), key=lambda x:x[1], reverse=True)) # sort by length
+        file_list = [f.name for f in in_path.iterdir() if f.is_file() and f.suffix in [".fasta", ".fas", ".fa"]]
+        if not file_list:
+            return
         
-        ## STEP 2: perform multiple sequence alignment
         file_waiting_list = []
-        for file in [f.name for f in Path(in_path).iterdir()]:
+        for file in file_list:
             file_abs_path = in_path / file
-            tmp_folder_path = out_path.parent / "tmp_file"
-            create_folder(tmp_folder_path)
-            file_tmp_path = tmp_folder_path / file.replace('.fasta','')
-            create_folder(file_tmp_path)
-            file_out_path = str(out_path / f"{Path(file).stem}_MSA.fasta")
+            file_out_path = out_path / f"{Path(file).stem}_MSA.fasta"
             
-            ## substep 1: if the fasta file contains more than [add_threshold] seqs, exec command using --auto
-            if file_size_dict[file] > add_threshold:
-                aligner = Aligner(file_abs_path, file_tmp_path)
-                result = aligner.alofi()
-                # 检查alofi方法是否成功执行
-                if result is not None:
-                    # Aligner.alofi方法会将结果保存为输入文件名的同名文件，放在输出路径中
-                    aligned_file = file_tmp_path / Path(file).name
-                    if aligned_file.exists():
-                        shutil.copyfile(str(aligned_file), file_out_path)
+            record_count = len(list(SeqIO.parse(file_abs_path, "fasta")))
             
-            ## substep 2: if file contains no more than [add_threshold] seqs, store these for further --add
+            if record_count > add_threshold:
+                mafft(in_path=str(in_path), 
+                      in_file=file, 
+                      out_path=str(out_path), 
+                      algorithm="auto", 
+                      thread=-1, 
+                      reorder=True)
             else:
                 file_waiting_list.append(file)
                 
-        ## substep 3: get taxonomic information
-        df_taxonomy = pd.read_csv(self.__in_path / "results" / self.__get_info_csv(),
-                                  sep="\t")
-        taxonomy_genus_and_above = list(set(list(map(lambda x:x[:x.rindex("|")], df_taxonomy["taxonomy"]))))
+        if not file_waiting_list:
+            return
         
-        ## substep 4: for each file in waiting list, find the most related taxonomic group to --add to MSA
+        df_taxonomy = pd.read_csv(self.__in_path / "results" / self.__get_info_csv(), sep="\t")
+        taxonomy_genus_and_above = list(set(list(map(lambda x: x[:x.rindex("|")], df_taxonomy["taxonomy"]))))
+        
         for file in file_waiting_list:
-            file_abs_path = str(in_path / file)
-            file_out_path = str(out_path / f"{Path(file).stem}_MSA.fasta")
-            this_taxonomy = file.split("_")[0]
+            file_abs_path = in_path / file
+            file_out_path = out_path / f"{Path(file).stem}_MSA.fasta"
+            this_taxonomy = Path(file).stem.split("_")[0]
             upper_unit = self.__get_upper_taxonomic_unit(this_taxonomy, taxonomy_genus_and_above)
+            
             reference = None
-            file_ref_path = None
-            for ref_file in file_size_dict:
-                # if the genus of the candidate file is the same as this_taxonomy
-                if (self.__get_upper_taxonomic_unit(ref_file.split("_")[0], taxonomy_genus_and_above) == upper_unit
-                    and ref_file != file):
+            for ref_file in file_list:
+                if ref_file == file:
+                    continue
+                if self.__get_upper_taxonomic_unit(Path(ref_file).stem.split("_")[0], taxonomy_genus_and_above) == upper_unit:
                     reference = ref_file
-                    file_ref_path = str(out_path / f"{Path(ref_file).stem}_MSA.fasta")
                     break
             
-            try:
-                if not reference or not file_ref_path:
-                    raise Exception("No reference found")
-                command = f"mafft --add {file_abs_path} {file_ref_path} > {file_out_path}"
-            except Exception:
-                warning_msg = f"In file {file}: there may be error in extension check" \
-                              "because no other genus from the same family can be used as reference."
+            if reference is None:
+                reference = file_list[0]
+                warning_msg = f"In file {file}: there may be error in extension check because no other genus from the same family can be used as reference."
                 self.__logger.collect_warning(warning_msg)
-                reference = list(file_size_dict.keys())[0]
-                file_ref_path = str(out_path / f"{Path(reference).stem}_MSA.fasta")
-                command = f"mafft --add {file_abs_path} {file_ref_path} > {file_out_path}"
             
-            run_command(command)
-            # 直接使用file_out_path而不是从命令中解析
-            file_name = file_out_path
-            record_iter = SeqIO.parse(file_name, "fasta")
+            ref_aligned_path = out_path / f"{Path(reference).stem}_MSA.fasta"
             
-            count = 0
-            records = []
-            for record in record_iter:
-                count += 1
-                if count >= file_size_dict[reference]:
-                    break
-            for record in record_iter:
-                records.append(record)
-            SeqIO.write(records, file_name, "fasta")
-            del file_ref_path
+            if not ref_aligned_path.exists():
+                self.__logger.collect_warning(f"Reference alignment not found for {file}")
+                continue
             
+            mafft(in_path=str(file_abs_path), 
+                  out_path=str(out_path), 
+                  add_choice="add", 
+                  add_path=str(ref_aligned_path), 
+                  algorithm="auto", 
+                  thread=-1, 
+                  reorder=True)
+            
+            msa_file = out_path / f"msa_{file}"
+            if msa_file.exists():
+                shutil.move(str(msa_file), str(file_out_path))
+        
         self.__logger.write_warning()
              
     def __remove_erroneous_extension(self, gappyness_threshold=0.5):
@@ -853,39 +920,33 @@ class Miner_filter:
         ----------
         Parameters
         - gappyness_threshold - if extension with gappyness more than this number will be removed/trimmed"""
+        from functional import create_folder
+        
         self.__logger.write_message("Into removal.")
         record_ids = []
         
-        ## STEP 1: set and prepare folders
-        in_path = self.__in_path / "tmp_files/extension_control/subset_MSA"
-        tmp_path = self.__out_path / "tmp_files/extension_control"
+        in_path = self.__in_path / "tmp_files" / "extension_control" / "subset_MSA"
+        tmp_path = self.__out_path / "tmp_files" / "extension_control"
         out_path = self.__out_path / "results"
         create_folder(tmp_path)
         
-        ## STEP 2: load the information table results/blast_results.txt
-        blast_result_path = self.__in_path / "results/blast_results.txt"
+        blast_result_path = self.__in_path / "results" / "blast_results.txt"
         df_blast_result = pd.read_csv(blast_result_path, usecols=["subject_acc.ver","s_start","s_end"], sep="\t")
         
-        ## STEP 3: get the position of extension part in MSA (according to results/blast_results.txt)
         df_modification = pd.DataFrame(columns=["subject_acc.ver", "new_start", "new_end", "s_new_start", "s_new_end"])
-        for file in [f.name for f in Path(in_path).iterdir()]:
-            self.__logger.write_message(f"Performing removal on {file}.")
-            file_abs_path = in_path / file
-            record_iter = SeqIO.parse(file_abs_path, "fasta")
+        for file_path in in_path.iterdir():
+            if not file_path.is_file():
+                continue
+            self.__logger.write_message(f"Performing removal on {file_path.name}.")
+            record_iter = SeqIO.parse(file_path, "fasta")
                 
             for record in record_iter:
                 accession_number = record.description.split(":")[0]
                 info_line = df_blast_result.loc[df_blast_result["subject_acc.ver"]==accession_number]
                 
-                # explanation of some variables:
-                # before extension:  s_start  ---> TTCCGG <---  s_end
-                # after  extension:  r_start --> AATTCCGGAA <-- r_end
-                # after  alignment: as_start ---> T-TCCG-G <--- as_end
-                # after  alignment: ar_start -> AAT-TCCG-GAA <- ar_end
-                
                 s_start, s_end = info_line.iloc[0][["s_start","s_end"]]
                 s_start, s_end = min([s_start, s_end]), max([s_start, s_end])
-                r_start, r_end = record.description.split("|")[0].split(":")[1].split("_")[0].split("-") # r for blast_'R'esult
+                r_start, r_end = record.description.split("|")[0].split(":")[1].split("_")[0].split("-")
                 r_start, r_end = min([r_start, r_end]), max([r_start, r_end])
                 s_start, s_end, r_start, r_end = list(map(int, [s_start, s_end, r_start, r_end]))
                 
@@ -894,9 +955,6 @@ class Miner_filter:
                 as_end   = self.__nt_calculator.get_position_in_alignment(record, max(r_end-(s_end-1),1), left_to_right=False)
                 ar_end   = self.__nt_calculator.get_position_in_alignment(record, max(r_end-(r_end-1),1), left_to_right=False)
                 
-                
-                ## STEP 4: check gappyness and remove ones that are too gappy
-                ## substep 1: check gappyness
                 if ar_start == as_start:
                     gappyness_start = 0
                 else:
@@ -928,8 +986,7 @@ class Miner_filter:
         
         df_modification.to_csv(tmp_path / "modification.txt", index=False, sep="\t")
         
-        ## STEP 5: save the raw seqs (trimmed but not aligned) and the alignment (empty columns are removed)
-        blast_result_checked = self.__in_path / "results/blast_results_checked.fasta"
+        blast_result_checked = self.__in_path / "results" / "blast_results_checked.fasta"
         existing_accession = []
         new_records = []
         records_to_trim = list(df_modification["subject_acc.ver"])
@@ -954,7 +1011,5 @@ class Miner_filter:
                 
         self.__logger.write_message("Extension control finished.")
         new_records.sort(key=lambda x:x.description)
-        SeqIO.write(new_records, out_path / "blast_results_controlled.fasta", "fasta")
-          
-    
+        SeqIO.write(new_records, out_path / "blast_results_controlled.fasta", "fasta") 
     
