@@ -15,10 +15,18 @@ import pandas as pd
 from main_utils import get_query_accession
 from run_command import run_command
 
+
 @func_set_timeout(600)
 def my_efetch(accession, strand, seq_start, seq_stop):
-    handle = Entrez.efetch(db="nucleotide", rettype="gb", retmode="text", id=accession,
-                           strand=strand, seq_start=seq_start, seq_stop=seq_stop)
+    handle = Entrez.efetch(
+        db="nucleotide",
+        rettype="gb",
+        retmode="text",
+        id=accession,
+        strand=strand,
+        seq_start=seq_start,
+        seq_stop=seq_stop,
+    )
     print("Extended start: %d, " % seq_start, end="")
     print("Extended end: %d, " % seq_stop, end="")
     print("Strand: %d, " % strand, end="")
@@ -27,7 +35,10 @@ def my_efetch(accession, strand, seq_start, seq_stop):
 
 def filter_duplicate_key(wd, file):
     if (Path(wd) / Path(file)).stat().st_size > 0:
-        run_command("copy %s %s" % (str(Path(wd) / Path(file)), str(Path(wd) / Path("tmp_" + file))))
+        run_command(
+            "copy %s %s"
+            % (str(Path(wd) / Path(file)), str(Path(wd) / Path("tmp_" + file)))
+        )
     key_list = []
     with open(Path(wd) / Path(file), "w") as fw:
         for record in SeqIO.parse(Path(wd) / Path("tmp_" + file), "fasta"):
@@ -127,10 +138,37 @@ def write_seq_info(record, start, end, strand, wd, file):
         identified_by = "unknown"
 
     with open(Path(wd) / Path(file), "a") as fw:
-        fw.write(accession + "\t" + str(start) + "\t" + str(end) + "\t" + str(strand) + "\t" + str(
-            length) + "\t" + date + "\t")
-        fw.write(description + "\t" + source + "\t" + organism + "\t" + taxonomy_str + "\t")
-        fw.write(title + "\t" + authors + "\t" + journal + "\t" + organelle + "\t" + mol_type + "\t" + db_xref + "\t")
+        fw.write(
+            accession
+            + "\t"
+            + str(start)
+            + "\t"
+            + str(end)
+            + "\t"
+            + str(strand)
+            + "\t"
+            + str(length)
+            + "\t"
+            + date
+            + "\t"
+        )
+        fw.write(
+            description + "\t" + source + "\t" + organism + "\t" + taxonomy_str + "\t"
+        )
+        fw.write(
+            title
+            + "\t"
+            + authors
+            + "\t"
+            + journal
+            + "\t"
+            + organelle
+            + "\t"
+            + mol_type
+            + "\t"
+            + db_xref
+            + "\t"
+        )
         fw.write(specimen_voucher + "\t" + country + "\t" + lat_lon + "\t")
         fw.write(collection_date + "\t" + collected_by + "\t" + identified_by + "\n")
 
@@ -145,22 +183,38 @@ def write_fas_file(record, start, end, strand, wd, file):
         # if start <= 0:
         #     start = 1
         # end = len(record.seq) + start - 1
-        fas_description = ">%s:%d-%d|%s|%s" % (record.id, start, end, organism, description)
+        fas_description = ">%s:%d-%d|%s|%s" % (
+            record.id,
+            start,
+            end,
+            organism,
+            description,
+        )
         fas_seq = str(record.seq)
     else:
         # if end <= 0:
         #     end = 1
         # start = len(record.seq) + end - 1
         # fas_description = ">%s:%d-%d_reverse_complement|%s|%s" % (record.id, end, start, organism, description)
-        fas_description = ">%s:%d-%d_reverse_complement|%s|%s" % (record.id, start, end, organism, description)
+        fas_description = ">%s:%d-%d_reverse_complement|%s|%s" % (
+            record.id,
+            start,
+            end,
+            organism,
+            description,
+        )
         fas_seq = str(record.seq)  # 659
     with open(Path(wd) / Path(file), "a") as fw:
         fw.write(fas_description + "\n")
         fw.write(fas_seq + "\n")
-    write_seq_info(record, start, end, strand, wd, file=Path(file).stem + "_seq_info.txt")
+    write_seq_info(
+        record, start, end, strand, wd, file=Path(file).stem + "_seq_info.txt"
+    )
 
 
-def seq_check_download(wd, acc_file, out_file, key_annotations, exclude_sources, entrez_email):
+def seq_check_download(
+    wd, acc_file, out_file, key_annotations, exclude_sources, entrez_email
+):
     """download fasta files from Genbank according to given accessions"""
     # todo: use user provided email
     Entrez.email = entrez_email
@@ -176,7 +230,12 @@ def seq_check_download(wd, acc_file, out_file, key_annotations, exclude_sources,
                 seq_start, seq_stop = (seq_stop, seq_start)
             # print("start： %d" % start)
             # print("end： %d" % end)
-            handle = my_efetch(accession=accession, strand=strand, seq_start=seq_start, seq_stop=seq_stop)
+            handle = my_efetch(
+                accession=accession,
+                strand=strand,
+                seq_start=seq_start,
+                seq_stop=seq_stop,
+            )
             record = SeqIO.read(handle, "gb")
             print("Actual sequence length: %d" % len(record.seq))
             feature_list = []
@@ -189,14 +248,28 @@ def seq_check_download(wd, acc_file, out_file, key_annotations, exclude_sources,
             if check_annotation(feature_list, key_annotations, exclude_sources):
                 write_fas_file(record, seq_start, seq_stop, strand, wd, file=out_file)
             else:
-                if not (Path(wd) / f"erroneous_{Path(out_file).stem}_seq_info.txt").exists():
-                    with (Path(wd) / f"erroneous_{Path(out_file).stem}_seq_info.txt").open("w") as fw:
+                if not (
+                    Path(wd) / f"erroneous_{Path(out_file).stem}_seq_info.txt"
+                ).exists():
+                    with (
+                        Path(wd) / f"erroneous_{Path(out_file).stem}_seq_info.txt"
+                    ).open("w") as fw:
                         fw.write(
-                            "accession\tstart\tend\tstrand\tlength\tdate\tdescription\tsource\torganism\ttaxonomy\t")
-                        fw.write("title\tauthors\tjournal\torganelle\tmol_type\tdb_xref\t")
+                            "accession\tstart\tend\tstrand\tlength\tdate\tdescription\tsource\torganism\ttaxonomy\t"
+                        )
+                        fw.write(
+                            "title\tauthors\tjournal\torganelle\tmol_type\tdb_xref\t"
+                        )
                         fw.write("specimen_voucher\tcountry\tlat_lon\t")
                         fw.write("collection_date\tcollected_by\tidentified_by\n")
-                write_fas_file(record, seq_start, seq_stop, strand, wd, file="erroneous_" + out_file)
+                write_fas_file(
+                    record,
+                    seq_start,
+                    seq_stop,
+                    strand,
+                    wd,
+                    file="erroneous_" + out_file,
+                )
             t1 = datetime.now()
             print("%s downloaded in %s seconds" % (accession, t1 - t0))
             acc_list.pop(0)
@@ -204,7 +277,10 @@ def seq_check_download(wd, acc_file, out_file, key_annotations, exclude_sources,
             acc_list.pop(0)
             with open(Path(wd) / Path("value_error_list.txt"), "a") as fw:
                 fw.write(accession + "\n")
-            print("ValueError: CompoundLocation should have at least 2 parts, skip %s" % accession)
+            print(
+                "ValueError: CompoundLocation should have at least 2 parts, skip %s"
+                % accession
+            )
         except urllib.error.HTTPError:  # HTTP Error 400, wrongly parsed accession
             acc_list.pop(0)
             with open(Path(wd) / Path("bad_request_list.txt"), "a") as fw:
@@ -216,7 +292,9 @@ def seq_check_download(wd, acc_file, out_file, key_annotations, exclude_sources,
             print("Error: %s, try downloading %s again..." % (result, accession))
 
 
-def seq_check_download_main(wd, acc_file, out_file, key_annotations, exclude_sources, entrez_email, extend=False):
+def seq_check_download_main(
+    wd, acc_file, out_file, key_annotations, exclude_sources, entrez_email, extend=False
+):
     # print_line()
     print("Downloading sequences...")
     df = pd.read_table(Path(wd) / Path(acc_file), sep="\t", engine="python")
@@ -231,25 +309,40 @@ def seq_check_download_main(wd, acc_file, out_file, key_annotations, exclude_sou
     index_list = list(df.index)
     if out_file in file_list:
         filter_duplicate_key(wd, out_file)
-        seq_dict = SeqIO.to_dict(SeqIO.parse(Path(wd) / Path(out_file), "fasta"), key_function=get_query_accession)
+        seq_dict = SeqIO.to_dict(
+            SeqIO.parse(Path(wd) / Path(out_file), "fasta"),
+            key_function=get_query_accession,
+        )
         print("Correct sequences already downloaded: %d" % len(seq_dict.keys()))
         index_list = list(set(index_list) - set(seq_dict.keys()))
     if "erroneous_" + out_file in file_list:
         filter_duplicate_key(wd, "erroneous_" + out_file)
-        seq_dict = SeqIO.to_dict(SeqIO.parse(Path(wd) / Path("erroneous_" + out_file), "fasta"),
-                                 key_function=get_query_accession)
+        seq_dict = SeqIO.to_dict(
+            SeqIO.parse(Path(wd) / Path("erroneous_" + out_file), "fasta"),
+            key_function=get_query_accession,
+        )
         print("Erroneous sequences already downloaded: %d" % len(seq_dict.keys()))
         index_list = list(set(index_list) - set(seq_dict.keys()))
     if Path(out_file).stem + "_seq_info.txt" not in file_list:
         with open(Path(wd) / Path(Path(out_file).stem + "_seq_info.txt"), "w") as fw:
-            fw.write("accession\tstart\tend\tstrand\tlength\tdate\tdescription\tsource\torganism\ttaxonomy\t")
+            fw.write(
+                "accession\tstart\tend\tstrand\tlength\tdate\tdescription\tsource\torganism\ttaxonomy\t"
+            )
             fw.write("title\tauthors\tjournal\torganelle\tmol_type\tdb_xref\t")
             fw.write("specimen_voucher\tcountry\tlat_lon\t")
             fw.write("collection_date\tcollected_by\tidentified_by\n")
     else:
-        seq_info = pd.read_table(Path(wd) / Path(Path(out_file).stem + "_seq_info.txt"), sep="\t", engine="python")
-        seq_info.drop_duplicates(subset=['accession'], keep='first', inplace=True)
-        seq_info.to_csv(Path(wd) / Path(Path(out_file).stem + "_seq_info.txt"), sep="\t", index=False)
+        seq_info = pd.read_table(
+            Path(wd) / Path(Path(out_file).stem + "_seq_info.txt"),
+            sep="\t",
+            engine="python",
+        )
+        seq_info.drop_duplicates(subset=["accession"], keep="first", inplace=True)
+        seq_info.to_csv(
+            Path(wd) / Path(Path(out_file).stem + "_seq_info.txt"),
+            sep="\t",
+            index=False,
+        )
 
     index_list.sort()
     print("Sequences to download: %d" % len(index_list))
@@ -257,27 +350,38 @@ def seq_check_download_main(wd, acc_file, out_file, key_annotations, exclude_sou
         df1 = df.loc[index_list][["s_start", "s_end", "s_strand"]].copy()
     else:
         df1 = df.loc[index_list][["s_extstart", "s_extend", "s_strand"]].copy()
-    df1.columns = ['start', 'end', 'strand']
+    df1.columns = ["start", "end", "strand"]
     df1["strand"] = df1["strand"].map({True: 1, False: 2}).astype(int)
-
 
     fw = open(Path(wd) / Path("value_error_list.txt"), "w")
     fw.close()
     fw = open(Path(wd) / Path("bad_request_list.txt"), "w")
     fw.close()
 
-    seq_check_download(wd=wd, acc_file=df1, out_file=out_file,
-                       key_annotations=key_annotations, exclude_sources=exclude_sources, entrez_email=entrez_email)
+    seq_check_download(
+        wd=wd,
+        acc_file=df1,
+        out_file=out_file,
+        key_annotations=key_annotations,
+        exclude_sources=exclude_sources,
+        entrez_email=entrez_email,
+    )
 
     fw = open(Path(wd) / Path("value_error_list.txt"), "r")
     value_error_list = fw.read().splitlines()
     if len(value_error_list) > 0:
-        print("%d value errors, the accession numbers were save in value_error_list.txt" % len(value_error_list))
+        print(
+            "%d value errors, the accession numbers were save in value_error_list.txt"
+            % len(value_error_list)
+        )
     fw.close()
     fw = open(Path(wd) / Path("bad_request_list.txt"), "r")
     bad_request_list = fw.read().splitlines()
     if len(bad_request_list) > 0:
-        print("%d bad requests, the accession numbers were save in bad_request_list.txt" % len(bad_request_list))
+        print(
+            "%d bad requests, the accession numbers were save in bad_request_list.txt"
+            % len(bad_request_list)
+        )
     fw.close()
 
     print("All sequences successfully downloaded!")

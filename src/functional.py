@@ -2,6 +2,7 @@ from pathlib import Path
 import time
 from message_logger import MessageLogger
 
+
 def check_inpath_validity(path):
     """check if an input path is valid (an existing path except shortcuts and .result files)
     ----------
@@ -13,7 +14,7 @@ def check_inpath_validity(path):
     False if path is NOT valid"""
     if not isinstance(path, str):  # invalid input: value type
         return False
-    if path.endswith('.lnk'):
+    if path.endswith(".lnk"):
         return False  # do nothing with shortcut files
     if not Path(path).exists():  # invalid input: no such path
         return False
@@ -31,7 +32,7 @@ def check_outpath_validity(path):
     False if path is NOT valid"""
     if not isinstance(path, str):
         return False
-    if path.endswith('.lnk'):
+    if path.endswith(".lnk"):
         return False  # do nothing with shortcut files
     path_obj = Path(path)
     if not path_obj.exists():  # invalid input: no such path
@@ -69,11 +70,11 @@ def get_file_handles(in_path):
     Parameters
     - in_path - the input file(s) and folder(s). could be a list or a string.
     -------
-    Returns 
+    Returns
     - file_handles - all file handles in a list"""
     # STEP 0: initialize a message logger
     message_logger = MessageLogger()
-    
+
     # STEP 1: if in_path is not a list, then make it a list
     if not isinstance(in_path, list):
         in_path = [in_path]
@@ -87,7 +88,7 @@ def get_file_handles(in_path):
             warning_message = f"{file_path} invalid, thus omitted."
             message_logger.collect_warning(warning_message)
             continue
-        
+
         # substep 1 : if an element is a file, add the file to result
         file_path_obj = Path(file_path)
         if file_path_obj.is_file():
@@ -95,12 +96,14 @@ def get_file_handles(in_path):
 
         # substep 2 : if an element is a folder, get files directly in the folder
         else:  # is a folder
-            file_handles += [str(file_path_obj / file) for file in file_path_obj.iterdir()
-                             if ((file_path_obj / file).is_file()
-                                 and not file.endswith('.lnk'))]  # exclude shortcut
+            file_handles += [
+                str(file_path_obj / file)
+                for file in file_path_obj.iterdir()
+                if ((file_path_obj / file).is_file() and not file.endswith(".lnk"))
+            ]  # exclude shortcut
 
     # STEP 3: replace reverse slash, remove duplicates and sort
-    file_handles = list(map(lambda x: x.replace('\\', '/'), file_handles))
+    file_handles = list(map(lambda x: x.replace("\\", "/"), file_handles))
     for handle in file_handles:
         abs_handles.setdefault(str(Path(handle).absolute()), [])
         abs_handles[str(Path(handle).absolute())].append(handle)
@@ -113,8 +116,10 @@ def get_file_handles(in_path):
                 break
     # if there are paths omitted, collect warning message
     if len(abs_handles.values()) != len(file_handles):
-        warning_message = "Redundant input files detected, duplicates automatically removed"
-    
+        warning_message = (
+            "Redundant input files detected, duplicates automatically removed"
+        )
+
     # if there are no paths kept, show error message, else show warning message
     if len(file_handles) == 0:
         error_message = "All input file(s) invalid, please check your input!"
@@ -122,13 +127,14 @@ def get_file_handles(in_path):
         message_logger.print_error()
     else:
         message_logger.print_warning()
-        
+
     file_handles.sort()
 
     return file_handles
 
+
 def overwriting_potential(in_path, out_path):
-    """ check whether there is potential danger that original file may be overwritten
+    """check whether there is potential danger that original file may be overwritten
         happens when out_path is in one of the folders of in_path,
         or out_path is one of the parent folders of files in in_path
     ----------
@@ -142,25 +148,27 @@ def overwriting_potential(in_path, out_path):
     # transform in_path into list object if needed
     if not isinstance(in_path, list):
         in_path = [in_path]
-    
+
     # get absolutely path for each path in in_path
     in_path = list(map(lambda path: str(Path(path).absolute()), in_path))
-    
+
     # replace files in in_path with parent folder for each file in in_path
     # and keep folders in_path
-    in_path = [path for path in in_path if Path(path).is_dir()] + \
-        [str(Path(path).parent) for path in in_path if Path(path).is_file()]
-    
+    in_path = [path for path in in_path if Path(path).is_dir()] + [
+        str(Path(path).parent) for path in in_path if Path(path).is_file()
+    ]
+
     # check if overwriting is possible
     overwriting_potential = False
     out_path = str(Path(out_path).absolute())
     if out_path in in_path:
         overwriting_potential = True
-    
+
     return overwriting_potential
 
+
 def get_checked_path(in_path, out_path, overwriting_check=True):
-    """ do following checks:
+    """do following checks:
             1. check the validity of in_path
             2. get valid inpath(s)
             3. check the validity of out_path
@@ -177,12 +185,12 @@ def get_checked_path(in_path, out_path, overwriting_check=True):
     """
     # initialize message logger
     message_logger = MessageLogger()
-    
+
     # get all file handles, inside which input path validity is checked
     file_handles = get_file_handles(in_path)
     if file_handles == []:
         return []
-    
+
     # check if output path is valid
     if not check_outpath_validity(out_path):
         error_message = "Output path invalid, please check your outout path!"
@@ -190,7 +198,7 @@ def get_checked_path(in_path, out_path, overwriting_check=True):
         message_logger.print_error()
         message_logger.print_message("Operation aborted")
         return []  # write nothing if output folder is invalid
-    
+
     # check if there is potential danger of overwriting original files
     if overwriting_check:
         if overwriting_potential(in_path, out_path):
@@ -199,36 +207,45 @@ def get_checked_path(in_path, out_path, overwriting_check=True):
             message_logger.print_error()
             message_logger.print_message("Operation aborted")
             return []
-    
+
     return file_handles
 
+
 def get_fasta(file_handles):
-    """ filter file_handles and keep only those ends with fa, fas or fasta
+    """filter file_handles and keep only those ends with fa, fas or fasta
     ----------
     Parameters
     - file_handles - the input file(s) and folder(s). could be a list or a string.
     -------
     Returns
     """
-    fasta_files = [in_path for in_path in file_handles 
-                   if in_path.endswith(".fasta") or in_path.endswith(".fas") or in_path.endswith(".fa")]
-    
+    fasta_files = [
+        in_path
+        for in_path in file_handles
+        if in_path.endswith(".fasta")
+        or in_path.endswith(".fas")
+        or in_path.endswith(".fa")
+    ]
+
     return fasta_files
 
+
 def timer(f):
-     def inner(*args, **kwargs):
-         start = time.time()
-         ret = f(*args, **kwargs)
-         end = time.time()
-         print(f"time taken: {end-start} seconds")
-         return ret
-     return inner
- 
+    def inner(*args, **kwargs):
+        start = time.time()
+        ret = f(*args, **kwargs)
+        end = time.time()
+        print(f"time taken: {end - start} seconds")
+        return ret
+
+    return inner
+
+
 class Timer:
     def __init__(self, out_path):
         self.out_path = out_path
         self.time_checkpoint = time.time()
-        
+
     def record(self, msg):
         time_current = time.time()
         time_consumed = round(time_current - self.time_checkpoint, 2)
@@ -236,12 +253,3 @@ class Timer:
         with open(self.out_path, "a") as f:
             msg = f"{msg}: {time_consumed} seconds\n"
             f.write(msg)
-    
-    
-    
-    
-    
-    
-    
-    
-    

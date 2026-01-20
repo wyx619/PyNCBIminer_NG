@@ -21,17 +21,27 @@ from blast_results_extend import blast_results_extend_main
 
 def combine_iterated_blast(wd, blast_round, tmp_df, key_annotations, exclude_sources):
     if blast_round == 1:
-        tmp_df.to_csv(Path(wd) / Path("results") / Path("blast_results.txt"), index=False, sep="\t")
+        tmp_df.to_csv(
+            Path(wd) / Path("results") / Path("blast_results.txt"),
+            index=False,
+            sep="\t",
+        )
         blast_count_new = tmp_df.shape[0]
         blast_count = blast_count_new
         blast_count_new1 = blast_count_new
         print("Results saved in blast_results.txt")
     else:
         print("Reading results from multiple BLAST...")
-        df = pd.read_table(Path(wd) / Path("results") / Path("blast_results.txt"), sep="\t", engine="python")
+        df = pd.read_table(
+            Path(wd) / Path("results") / Path("blast_results.txt"),
+            sep="\t",
+            engine="python",
+        )
         # if blast_round in df["Source"]: # always True, fail to combine new sequences
         if blast_round in set(df["Source"].values):
-            print("Results of BLAST round %d already in blast_results.txt" % blast_round)
+            print(
+                "Results of BLAST round %d already in blast_results.txt" % blast_round
+            )
             new_df = df[df["Source"] == blast_round]
             blast_count_new = len(new_df)
             blast_count = len(df)
@@ -45,7 +55,11 @@ def combine_iterated_blast(wd, blast_round, tmp_df, key_annotations, exclude_sou
             new_df = tmp_df[tmp_df["subject_acc.ver"].isin(new_acc_set)]
 
             df = pd.concat([df, new_df])
-            df.to_csv(Path(wd) / Path("results") / Path("blast_results.txt"), index=False, sep="\t")
+            df.to_csv(
+                Path(wd) / Path("results") / Path("blast_results.txt"),
+                index=False,
+                sep="\t",
+            )
         print("Combined results saved in BLAST_results.txt")
         # check definition of all new sequences
 
@@ -62,20 +76,39 @@ def combine_iterated_blast(wd, blast_round, tmp_df, key_annotations, exclude_sou
     return blast_count_new, blast_count_new1, blast_count
 
 
-def iterated_blast_main(wd, organisms, count,
-                        expect, gapcosts, word_size,
-                        nucl_reward, nucl_penalty, max_length,
-                        key_annotations, exclude_sources, ref_number, date_from, date_to, entrez_email,
-                        blast_round=1):
+def iterated_blast_main(
+    wd,
+    organisms,
+    count,
+    expect,
+    gapcosts,
+    word_size,
+    nucl_reward,
+    nucl_penalty,
+    max_length,
+    key_annotations,
+    exclude_sources,
+    ref_number,
+    date_from,
+    date_to,
+    entrez_email,
+    blast_round=1,
+):
     blast_round = 1  # to correct error in combining blast results.
     print("Start BLAST iteration...")
-    entrez_query = format_entrez_query(organisms=organisms, date_from=date_from, date_to=date_to)
+    entrez_query = format_entrez_query(
+        organisms=organisms, date_from=date_from, date_to=date_to
+    )
     alignments = ceil(count * 1.05)
     last_new = 9999
     # read previous BLAST results if blast_results.txt exists in results folder
     if (Path(wd) / Path("results") / Path("blast_results.txt")).exists():
         print("Reading previous BLAST results...")
-        blast_results = pd.read_table(Path(wd) / Path("results") / Path("blast_results.txt"), sep='\t', engine='python')
+        blast_results = pd.read_table(
+            Path(wd) / Path("results") / Path("blast_results.txt"),
+            sep="\t",
+            engine="python",
+        )
         source_list = blast_results["Source"].value_counts()
         total_seq_num = 0
         for i in range(blast_round - 1):
@@ -84,7 +117,10 @@ def iterated_blast_main(wd, organisms, count,
             else:
                 seq_num = 0
             total_seq_num += seq_num
-            print("BLAST round %d: %d new sequences, %d sequences in total." % (i + 1, seq_num, total_seq_num))
+            print(
+                "BLAST round %d: %d new sequences, %d sequences in total."
+                % (i + 1, seq_num, total_seq_num)
+            )
             last_new = seq_num
         if blast_round > 1:
             print("Find %d new sequences in the last round." % last_new)
@@ -106,14 +142,28 @@ def iterated_blast_main(wd, organisms, count,
         print_line("*")
         print("BLAST round %d" % blast_round)
         if blast_round == 1:
-            if not (Path(wd) / Path("parameters") / Path("ref_seq") / Path("queries_1.fasta")).exists():
+            if not (
+                Path(wd)
+                / Path("parameters")
+                / Path("ref_seq")
+                / Path("queries_1.fasta")
+            ).exists():
                 description_list = []
                 seq_list = []
                 m = 0
                 n = 0
                 # inital_queries.fasta may contain duplicate sequences, queries_1.fasta only saves unique sequences.
-                with open(Path(wd) / Path("parameters") / Path("ref_seq") / Path("queries_1.fasta"), "w") as fw:
-                    for record in SeqIO.parse(Path(wd) / Path("parameters") / Path("initial_queries.fasta"), "fasta"):
+                with open(
+                    Path(wd)
+                    / Path("parameters")
+                    / Path("ref_seq")
+                    / Path("queries_1.fasta"),
+                    "w",
+                ) as fw:
+                    for record in SeqIO.parse(
+                        Path(wd) / Path("parameters") / Path("initial_queries.fasta"),
+                        "fasta",
+                    ):
                         m += 1
                         if record.description in description_list:
                             pass
@@ -129,10 +179,20 @@ def iterated_blast_main(wd, organisms, count,
                 if n < 2:
                     print("At least 2 initial queries are required")
                     return
-            query_path = Path(wd) / Path("parameters") / Path("ref_seq") / Path("queries_1.fasta")
+            query_path = (
+                Path(wd)
+                / Path("parameters")
+                / Path("ref_seq")
+                / Path("queries_1.fasta")
+            )
 
         else:
-            query_path = Path(wd) / Path("parameters") / Path("ref_seq") / Path("queries_%d.fasta" % blast_round)
+            query_path = (
+                Path(wd)
+                / Path("parameters")
+                / Path("ref_seq")
+                / Path("queries_%d.fasta" % blast_round)
+            )
             """
             query_path = Path(wd) / Path("parameters") / Path("ref_msa") / Path("msa_queries_%d.fasta" % blast_round)
             if not os.path.exists(Path(query_path)) or os.path.getsize(Path(query_path)) == 0:
@@ -147,25 +207,43 @@ def iterated_blast_main(wd, organisms, count,
             """
 
         # save queries information
-        queries = SeqIO.to_dict(SeqIO.parse(Path(query_path), "fasta"), key_function=get_query_accession)
-        column_list = ["ID", "Description", "Sequence", "Sequence_length", "blast_round"]
+        queries = SeqIO.to_dict(
+            SeqIO.parse(Path(query_path), "fasta"), key_function=get_query_accession
+        )
+        column_list = [
+            "ID",
+            "Description",
+            "Sequence",
+            "Sequence_length",
+            "blast_round",
+        ]
         sum_mat = np.zeros((len(queries), len(column_list)), dtype=str)
         sum_table = pd.DataFrame(sum_mat, columns=column_list, dtype=str)
 
-        for (i, key) in enumerate(queries.keys()):
+        for i, key in enumerate(queries.keys()):
             sum_table.loc[i, "ID"] = key
             sum_table.loc[i, "Description"] = queries[key].description
             sum_table.loc[i, "Sequence"] = str(queries[key].seq.upper())
             sum_table.loc[i, "Sequence_length"] = len(sum_table.loc[i, "Sequence"])
             sum_table.loc[i, "blast_round"] = blast_round
         if not (Path(wd) / Path("parameters") / Path("all_queries_info.txt")).exists():
-            sum_table.to_csv(Path(wd) / Path("parameters") / Path("all_queries_info.txt"), index=False, sep="\t")
+            sum_table.to_csv(
+                Path(wd) / Path("parameters") / Path("all_queries_info.txt"),
+                index=False,
+                sep="\t",
+            )
             print("Queries information is saved in all_queries_info.txt.")
         else:
-            all_queries = pd.read_table(Path(wd) / Path("parameters") / Path("all_queries_info.txt"), sep="\t")
+            all_queries = pd.read_table(
+                Path(wd) / Path("parameters") / Path("all_queries_info.txt"), sep="\t"
+            )
             if blast_round not in set(all_queries["blast_round"]):
                 all_queries = pd.concat([all_queries, sum_table])
-                all_queries.to_csv(Path(wd) / Path("parameters") / Path("all_queries_info.txt"), index=False, sep="\t")
+                all_queries.to_csv(
+                    Path(wd) / Path("parameters") / Path("all_queries_info.txt"),
+                    index=False,
+                    sep="\t",
+                )
                 print("Queries information is updated in all_queries_info.txt.")
             else:
                 print("Queries information is already saved in all_queries_info.txt.")
@@ -175,45 +253,76 @@ def iterated_blast_main(wd, organisms, count,
         tmp_wd.mkdir(parents=True, exist_ok=True)
 
         # put BLAST request and get BLAST results
-        blast_put_get_main(wd=tmp_wd, queries_path=query_path, entrez_query=entrez_query,
-                           alignments=alignments, expect=expect, gapcosts=gapcosts, word_size=word_size,
-                           nucl_reward=nucl_reward, nucl_penalty=nucl_penalty)
+        blast_put_get_main(
+            wd=tmp_wd,
+            queries_path=query_path,
+            entrez_query=entrez_query,
+            alignments=alignments,
+            expect=expect,
+            gapcosts=gapcosts,
+            word_size=word_size,
+            nucl_reward=nucl_reward,
+            nucl_penalty=nucl_penalty,
+        )
         # join and extend hits
-        #file_list = os.listdir(tmp_wd)
+        # file_list = os.listdir(tmp_wd)
         # todo: do not extend in each round of BLAST.
         # tmp_results = hits_join_extend_main(wd=tmp_wd, max_len=max_length)
         tmp_results = hits_parse_join_select_main(wd=tmp_wd, max_len=max_length)
         tmp_results["Source"] = blast_round
         # combine results of iterated BLAST
-        blast_count_new, blast_count_new1, blast_count = combine_iterated_blast(wd=wd, blast_round=blast_round,
-                                                                                tmp_df=tmp_results,
-                                                                                key_annotations=key_annotations,
-                                                                                exclude_sources=exclude_sources)
-        print("Find %d new sequences in round %d of BLAST." % (blast_count_new, blast_round))
+        blast_count_new, blast_count_new1, blast_count = combine_iterated_blast(
+            wd=wd,
+            blast_round=blast_round,
+            tmp_df=tmp_results,
+            key_annotations=key_annotations,
+            exclude_sources=exclude_sources,
+        )
+        print(
+            "Find %d new sequences in round %d of BLAST."
+            % (blast_count_new, blast_round)
+        )
         print("%d sequences passed definition checking." % blast_count_new1)
         print("Find %d sequences in total." % blast_count)
 
         # check if the iteration should stop
         # if blast_count > count * 1.1:
         if blast_count > count * 1.2:
-            print("Total sequences number is greater than Entrez search results number. Stop BLAST iteration.")
+            print(
+                "Total sequences number is greater than Entrez search results number. Stop BLAST iteration."
+            )
             break
         if blast_count_new1 < 3 and last_new < 3:
-            print("Cannot find more than 2 correct new sequences. Stop BLAST iteration.")
+            print(
+                "Cannot find more than 2 correct new sequences. Stop BLAST iteration."
+            )
             break
         last_new = blast_count_new1
 
         # select new reference sequences
-        new_quereis_num = select_new_queries_main(wd, tmp_wd, key_annotations, exclude_sources, entrez_email, max_length, blast_round,ref_number)
+        new_quereis_num = select_new_queries_main(
+            wd,
+            tmp_wd,
+            key_annotations,
+            exclude_sources,
+            entrez_email,
+            max_length,
+            blast_round,
+            ref_number,
+        )
         if new_quereis_num is None:
             break
         blast_round += 1
 
-
     blast_results_extend_main(wd, max_length)
 
-    seq_check_download_main(wd=Path(wd) / Path("results"), acc_file=r"blast_results.txt",
-                            out_file=r"blast_results_checked.fasta",
-                            key_annotations=key_annotations, exclude_sources=exclude_sources, entrez_email=entrez_email,
-                            extend=True)
+    seq_check_download_main(
+        wd=Path(wd) / Path("results"),
+        acc_file=r"blast_results.txt",
+        out_file=r"blast_results_checked.fasta",
+        key_annotations=key_annotations,
+        exclude_sources=exclude_sources,
+        entrez_email=entrez_email,
+        extend=True,
+    )
     print("Stop thread.")

@@ -1,7 +1,8 @@
 from pathlib import Path
 
+
 class MessageLogger:
-    """ Class MessageLogger - to store, print, pop up and write messages including error, warning and notice
+    """Class MessageLogger - to store, print, pop up and write messages including error, warning and notice
     Public:
         <func> MessageLogger - construction method
         <func> collect_error - collect error message and append to error message list
@@ -22,9 +23,9 @@ class MessageLogger:
         <attr> error_messages - a list to store error messages
         <attr> warning_messages - a list to store warning messages
     """
-    
+
     def __init__(self, log_file="log_file.txt", log_rewrite=True):
-        """ construction method 
+        """construction method
         ----------
         Parameters
         - log_file - the path of the log file (or the parent folder of the log file)
@@ -35,36 +36,33 @@ class MessageLogger:
             self.__log_file = str(Path(log_file) / "log_file.txt")
         else:
             self.__log_file = log_file
-            
+
         # delete old log_file
         f = open(self.__log_file, "w")
         f.close()
-        
+
         # initialize message lists
         self.__error_messages = []
         self.__warning_messages = []
-        
-        
+
     def collect_error(self, error_message):
-        """ collect error message and append to error message list
+        """collect error message and append to error message list
         ----------
         Parameters
         - string error_message - error message to be added to the error list
         """
         self.__error_messages.append(error_message)
-        
-        
+
     def collect_warning(self, warning_message):
-        """ collect warning message and append to warning message list
+        """collect warning message and append to warning message list
         ----------
         Parameters
         - string warning_message - warning message to be added to the warning list
         """
         self.__warning_messages.append(warning_message)
-        
-        
+
     def print_error(self, which="all"):
-        """ print all error messages if which=="all", otherwise latest error message
+        """print all error messages if which=="all", otherwise latest error message
         ----------
         Parameters
         - which - print all error messages if which=="all", otherwise latest error
@@ -72,7 +70,7 @@ class MessageLogger:
         """
         if len(self.__error_messages) == 0:
             return
-        
+
         print("\n===== error message(s) =====")
         if which == "all":  # print all messages
             for msg in self.__error_messages:
@@ -80,10 +78,9 @@ class MessageLogger:
         else:  # print only the latest one
             print(f"ERROR: {self.__error_messages[-1]}")
         print("===== error message(s) =====")
-        
-        
+
     def print_warning(self, which="all"):
-        """ print all warning messages if which=="all", otherwise latest warning message
+        """print all warning messages if which=="all", otherwise latest warning message
         ----------
         Parameters
         - which - print all warning messages if which=="all", otherwise latest warning
@@ -91,7 +88,7 @@ class MessageLogger:
         """
         if len(self.__warning_messages) == 0:
             return
-        
+
         print("\n===== warning message(s) =====")
         if which == "all":  # print all messages
             for msg in self.__warning_messages:
@@ -100,9 +97,8 @@ class MessageLogger:
             print(f"WARNING: {self.__error_messages[-1]}")
         print("===== warning message(s) =====")
 
-    
     def print_message(self, message):
-        """ print notice message in the console 
+        """print notice message in the console
         ----------
         Parameters
         - message - message to print in the console, a string or a list of string
@@ -114,9 +110,8 @@ class MessageLogger:
         else:
             print(message)
 
-        
     def write_error(self, which="all", mode="w"):
-        """ write into the log file all error messages if which=="all", otherwise latest error message
+        """write into the log file all error messages if which=="all", otherwise latest error message
         ----------
         Parameters
         - which - write error messages if which=="all", otherwise latest error
@@ -126,16 +121,15 @@ class MessageLogger:
         """
         if len(self.__error_messages) == 0:
             return
-        
+
         log_file = open(self.__log_file, mode)
         if which == "all":
             for msg in self.__error_messages:
                 log_file.write("ERROR:" + msg + "\n")
         log_file.close()
-        
-        
+
     def write_warning(self, which="all", mode="w"):
-        """ write into the log file all warning messages if which=="all", otherwise latest warning message
+        """write into the log file all warning messages if which=="all", otherwise latest warning message
         ----------
         Parameters
         - which - write warning messages if which=="all", otherwise latest warning
@@ -145,16 +139,15 @@ class MessageLogger:
         """
         if len(self.__warning_messages) == 0:
             return
-        
+
         log_file = open(self.__log_file, mode)
         if which == "all":
             for msg in self.__warning_messages:
                 log_file.write("Warning:" + msg + "\n")
         log_file.close()
-        
-        
+
     def write_message(self, message, mode="a"):
-        """ write message into the log file 
+        """write message into the log file
         ----------
         Parameters
         - message - the message to be written into the log file
@@ -167,13 +160,11 @@ class MessageLogger:
             log_file = open(self.__log_file, "w")
         log_file.write(message + "\n")
         log_file.close()
-        
-        
+
     def clear_error(self):
-        """ clear all error messages stored in the error list """
+        """clear all error messages stored in the error list"""
         self.__error_messages = []
-        
-        
+
     def clear_warning(self):
-        """ clear all warning messages stored in the warning list """
+        """clear all warning messages stored in the warning list"""
         self.__warning_messages = []

@@ -30,14 +30,14 @@ def _parse_qblast_ref_page(handle):
         rid = None
     else:
         j = s.find("\n", i)
-        rid = s[i + len("RID ="): j].strip()
+        rid = s[i + len("RID =") : j].strip()
 
     i = s.find("RTOE =")
     if i == -1:
         rtoe = None
     else:
         j = s.find("\n", i)
-        rtoe = s[i + len("RTOE ="): j].strip()
+        rtoe = s[i + len("RTOE =") : j].strip()
 
     if not rid and not rtoe:
         # Can we reliably extract the error message from the HTML page?
@@ -49,14 +49,14 @@ def _parse_qblast_ref_page(handle):
         # This used to occur inside a <div class="error msInf"> entry:
         i = s.find('<div class="error msInf">')
         if i != -1:
-            msg = s[i + len('<div class="error msInf">'):].strip()
+            msg = s[i + len('<div class="error msInf">') :].strip()
             msg = msg.split("</div>", 1)[0].split("\n", 1)[0].strip()
             if msg:
                 raise ValueError("Error message from NCBI: %s" % msg)
         # In spring 2010 the markup was like this:
         i = s.find('<p class="error">')
         if i != -1:
-            msg = s[i + len('<p class="error">'):].strip()
+            msg = s[i + len('<p class="error">') :].strip()
             msg = msg.split("</p>", 1)[0].split("\n", 1)[0].strip()
             if msg:
                 raise ValueError("Error message from NCBI: %s" % msg)
@@ -101,24 +101,27 @@ def put_blast_requests(url_base, message, header):
     return rid, rtoe
 
 
-def put_blast(wd, queries_path=None,
-              program="blastn",
-              database="nt",
-              url_base="https://blast.ncbi.nlm.nih.gov/Blast.cgi",
-              entrez_query="(none)",
-              expect=10.0,
-              gapcosts="2 1",
-              alignments=1000,
-              word_size=7,
-              nucl_reward=1,
-              nucl_penalty=-1,
-              table="blast_summary.txt"):
+def put_blast(
+    wd,
+    queries_path=None,
+    program="blastn",
+    database="nt",
+    url_base="https://blast.ncbi.nlm.nih.gov/Blast.cgi",
+    entrez_query="(none)",
+    expect=10.0,
+    gapcosts="2 1",
+    alignments=1000,
+    word_size=7,
+    nucl_reward=1,
+    nucl_penalty=-1,
+    table="blast_summary.txt",
+):
     """
     Format the "Put" command, send search requests to NCBI, get RID and RTOE
     RTOE is probably 'Request Time of Execution' and RID would be 'Request Identifier'
     """
     if (Path(wd) / Path(table)).exists():
-        sum_table = pd.read_table(Path(wd) / Path(table), sep='\t', engine='python')
+        sum_table = pd.read_table(Path(wd) / Path(table), sep="\t", engine="python")
         sum_table.loc[sum_table["RID"].isna(), "RID"] = ""
     else:
         # queries = AlignIO.read(Path(queries_path), "fasta")
@@ -127,14 +130,27 @@ def put_blast(wd, queries_path=None,
         #                                            "Missing_left", "Missing_right", "Message_put", "Time_put", "RID",
         #                                            "RTOE", "Message_get", "Time_get", "Status", "Query"], dtype=str)
 
-        queries = SeqIO.to_dict(SeqIO.parse(Path(queries_path), "fasta"), key_function=get_query_accession)
-        column_list = ["ID", "Description", "Sequence", "Sequence_length",
-                       "Message_put", "Time_put", "RID",
-                       "RTOE", "Message_get", "Time_get", "Status", "Query"]
+        queries = SeqIO.to_dict(
+            SeqIO.parse(Path(queries_path), "fasta"), key_function=get_query_accession
+        )
+        column_list = [
+            "ID",
+            "Description",
+            "Sequence",
+            "Sequence_length",
+            "Message_put",
+            "Time_put",
+            "RID",
+            "RTOE",
+            "Message_get",
+            "Time_get",
+            "Status",
+            "Query",
+        ]
         sum_mat = np.zeros((len(queries), len(column_list)), dtype=str)
         sum_table = pd.DataFrame(sum_mat, columns=column_list, dtype=str)
 
-        for (i, key) in enumerate(queries.keys()):
+        for i, key in enumerate(queries.keys()):
             sum_table.loc[i, "ID"] = key
             sum_table.loc[i, "Description"] = queries[key].description
             sum_table.loc[i, "Sequence"] = str(queries[key].seq.upper())
@@ -171,12 +187,14 @@ def put_blast(wd, queries_path=None,
                 ("PROGRAM", program),
                 ("QUERY", sequence),
                 ("WORD_SIZE", word_size),
-                ("CMD", "Put")
+                ("CMD", "Put"),
             ]
             query = [x for x in parameters if x[1] is not None]
             message = urlencode(query)
             sum_table.loc[index, "Message_put"] = message
-        sum_table.to_csv(Path(wd) / Path(table), index=False, sep="\t")  # save parameters
+        sum_table.to_csv(
+            Path(wd) / Path(table), index=False, sep="\t"
+        )  # save parameters
         print("Information of initial query saved in %s" % table)
     # queries_info = sum_table[["ID", "Description", "Sequence", "Sequence_length"]].copy()
     # queries_info["blast_round"] = blast_round
@@ -197,14 +215,22 @@ def put_blast(wd, queries_path=None,
                 # # request = Request(url_base, message, headers=header)
                 # handle = urlopen(request) # get rid and rtoe
                 # rid, rtoe = _parse_qblast_ref_page(handle)
-                rid, rtoe = put_blast_requests(url_base, message, {"User-Agent": "BiopythonClient"})
+                rid, rtoe = put_blast_requests(
+                    url_base, message, {"User-Agent": "BiopythonClient"}
+                )
                 sum_table.loc[index, "Time_put"] = time.time()
                 sum_table.loc[index, "RID"] = rid
                 sum_table.loc[index, "RTOE"] = rtoe
                 sum_table.to_csv(Path(wd) / Path(table), index=False, sep="\t")
-                print("Query %s submitted, RID = %s, RTOE = %s" % (sum_table.loc[index, "ID"], rid, rtoe))
+                print(
+                    "Query %s submitted, RID = %s, RTOE = %s"
+                    % (sum_table.loc[index, "ID"], rid, rtoe)
+                )
             except func_timeout.exceptions.FunctionTimedOut:
-                print("Time out, try submitting Query %s again..." % sum_table.loc[index, "ID"])
+                print(
+                    "Time out, try submitting Query %s again..."
+                    % sum_table.loc[index, "ID"]
+                )
             except Exception as result:
                 print(result)
         indices = sum_table[sum_table["RID"] == ""].index
@@ -216,16 +242,19 @@ def get_blast_results(url_base, message, header):
     request = Request(url_base, message, headers=header)
     handle = urlopen(request)  # time-consuming
     print("Decoding results...")
-    results = handle.read().decode()  # tabular is fast to decode, but other formats take more time
+    results = (
+        handle.read().decode()
+    )  # tabular is fast to decode, but other formats take more time
     return results
 
 
-def get_blast(wd,
-              url_base="https://blast.ncbi.nlm.nih.gov/Blast.cgi",
-              alignments=1000,
-              format_type="XML",
-              table="blast_summary.txt"
-              ):
+def get_blast(
+    wd,
+    url_base="https://blast.ncbi.nlm.nih.gov/Blast.cgi",
+    alignments=1000,
+    format_type="XML",
+    table="blast_summary.txt",
+):
     """
     Format the "Get" command, get the formatted results from put_blast
     :param wd: the directory where blast_summary.txt file is saved
@@ -239,7 +268,7 @@ def get_blast(wd,
     # Parameters taken from http://www.ncbi.nlm.nih.gov/BLAST/Doc/node6.html on 9 July 2007
     # new website: https://ncbi.github.io/blast-cloud/dev/api.html (2023/06/12)
 
-    sum_table = pd.read_table(Path(wd) / Path(table), sep='\t', engine='python')
+    sum_table = pd.read_table(Path(wd) / Path(table), sep="\t", engine="python")
 
     for index in sum_table.index:
         rid = sum_table.loc[index, "RID"]
@@ -248,7 +277,7 @@ def get_blast(wd,
             # ("ALIGNMENTS", alignments),
             ("FORMAT_TYPE", format_type),
             ("RID", rid),
-            ("CMD", "Get")
+            ("CMD", "Get"),
         ]
         query = [x for x in parameters if x[1] is not None]
         message = urlencode(query)
@@ -283,8 +312,10 @@ def get_blast(wd,
                 sum_table.loc[index, "Status"] = ""
                 sum_table.loc[index, "Query"] = ""
                 sum_table.to_csv(Path(wd) / Path(table), index=False, sep="\t")
-                print("The waiting time has exceeded 24 hours, try submitting query %s again..." % sum_table.loc[
-                    index, "ID"])
+                print(
+                    "The waiting time has exceeded 24 hours, try submitting query %s again..."
+                    % sum_table.loc[index, "ID"]
+                )
                 return False
             try:
                 current = time.time()
@@ -302,9 +333,14 @@ def get_blast(wd,
 
                 message = sum_table.loc[index, "Message_get"]
                 message = message.encode()
-                print("Contacting the server to get results for %s..." % sum_table.loc[index, "RID"])
+                print(
+                    "Contacting the server to get results for %s..."
+                    % sum_table.loc[index, "RID"]
+                )
                 # results = get_blast_results(url_base, message, header)
-                results = get_blast_results(url_base, message, {"User-Agent": "BiopythonClient"})
+                results = get_blast_results(
+                    url_base, message, {"User-Agent": "BiopythonClient"}
+                )
 
                 # Can see an "\n\n" page while results are in progress,
                 # if so just wait a bit longer...
@@ -318,15 +354,24 @@ def get_blast(wd,
                         continue
                     i = results.index("Status=")
                     j = results.index("\n", i)
-                    status = results[i + len("Status="): j].strip()
+                    status = results[i + len("Status=") : j].strip()
                     if status.upper() == "READY":
                         print("Writing results...")
-                        with open(Path(wd) / Path(sum_table.loc[index, "RID"] + "_Tabular.txt"), "w") as fw:
+                        with open(
+                            Path(wd)
+                            / Path(sum_table.loc[index, "RID"] + "_Tabular.txt"),
+                            "w",
+                        ) as fw:
                             fw.write(results)
-                        print("Results saved in %s_Tabular.txt" % sum_table.loc[index, "RID"])
+                        print(
+                            "Results saved in %s_Tabular.txt"
+                            % sum_table.loc[index, "RID"]
+                        )
                         sum_table.loc[index, "Status"] = "Successful"
                         sum_table.loc[index, "Time_get"] = time.time()
-                        sum_table.to_csv(Path(wd) / Path("blast_summary.txt"), index=False, sep="\t")
+                        sum_table.to_csv(
+                            Path(wd) / Path("blast_summary.txt"), index=False, sep="\t"
+                        )
                         # todo: sometimes the results are not completely downloaded
                         # for example: IncompleteRead(306872 bytes read)
                     else:
@@ -344,27 +389,42 @@ def get_blast(wd,
                             sum_table.loc[index, "Time_get"] = ""
                             sum_table.loc[index, "Status"] = ""
                             sum_table.loc[index, "Query"] = ""
-                            sum_table.to_csv(Path(wd) / Path(table), index=False, sep="\t")
-                            print("The results are invalid, try submitting query %s again..." % sum_table.loc[
-                                index, "ID"])
+                            sum_table.to_csv(
+                                Path(wd) / Path(table), index=False, sep="\t"
+                            )
+                            print(
+                                "The results are invalid, try submitting query %s again..."
+                                % sum_table.loc[index, "ID"]
+                            )
                             return False
-                        with open(Path(wd) / Path(sum_table.loc[index, "RID"] + "_XML.txt"), "w") as fw:
+                        with open(
+                            Path(wd) / Path(sum_table.loc[index, "RID"] + "_XML.txt"),
+                            "w",
+                        ) as fw:
                             fw.write(results)
                             # todo: IncompleteRead(1347250 bytes read)
-                        print("Results saved in %s_XML.txt" % sum_table.loc[index, "RID"])
+                        print(
+                            "Results saved in %s_XML.txt" % sum_table.loc[index, "RID"]
+                        )
                         sum_table.loc[index, "Status"] = "Successful"
                         sum_table.loc[index, "Time_get"] = time.time()
-                        find_query = re.compile('<BlastOutput_query-ID>(.*?)</BlastOutput_query-ID>')
+                        find_query = re.compile(
+                            "<BlastOutput_query-ID>(.*?)</BlastOutput_query-ID>"
+                        )
                         query = re.findall(find_query, results)[0]
                         sum_table.loc[index, "Query"] = query
                         sum_table.to_csv(Path(wd) / Path(table), index=False, sep="\t")
 
             except func_timeout.exceptions.FunctionTimedOut:
                 print(
-                    "Time out, try contacting the server to get results for %s again..." % sum_table.loc[index, "RID"])
+                    "Time out, try contacting the server to get results for %s again..."
+                    % sum_table.loc[index, "RID"]
+                )
             except Exception as result:
-                print("Error: %s, try contacting the server to get results for %s again..." %
-                      (result, sum_table.loc[index, "RID"]))
+                print(
+                    "Error: %s, try contacting the server to get results for %s again..."
+                    % (result, sum_table.loc[index, "RID"])
+                )
         indices = sum_table[sum_table["Status"] != "Successful"].index
         if len(indices) == 1:
             # Wasn't a quick return, must wait at least a minute
@@ -375,19 +435,29 @@ def get_blast(wd,
     return True
 
 
-def blast_put_get_main(wd, queries_path, entrez_query, alignments, expect, gapcosts, word_size, nucl_reward,
-                       nucl_penalty):
+def blast_put_get_main(
+    wd,
+    queries_path,
+    entrez_query,
+    alignments,
+    expect,
+    gapcosts,
+    word_size,
+    nucl_reward,
+    nucl_penalty,
+):
     while True:
-        put_blast(wd=wd,
-                  queries_path=queries_path,
-                  entrez_query=entrez_query,
-                  alignments=alignments,
-                  expect=expect,
-                  gapcosts=gapcosts,
-                  word_size=word_size,
-                  nucl_reward=nucl_reward,
-                  nucl_penalty=nucl_penalty
-                  )
+        put_blast(
+            wd=wd,
+            queries_path=queries_path,
+            entrez_query=entrez_query,
+            alignments=alignments,
+            expect=expect,
+            gapcosts=gapcosts,
+            word_size=word_size,
+            nucl_reward=nucl_reward,
+            nucl_penalty=nucl_penalty,
+        )
         finished = get_blast(wd=wd, alignments=alignments)
         if finished:
             break

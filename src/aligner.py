@@ -9,16 +9,24 @@ from sklearn.metrics import silhouette_score
 from run_command import run_command
 
 import sys
+
 sys.path.append(".")
 from functional import create_folder, Timer
 from nt_calculator import nt_Calculator
 
+
 class Aligner:
-    def __init__(self, in_file, out_path,
-                 max_cluster_num=10, initial_cluster_num=3,
-                 long_length_ratio=0.7, fragment_length_ratio=0.5,
-                 DEBUG_MODE=False):
-        """ Class Separator: do separate MSA
+    def __init__(
+        self,
+        in_file,
+        out_path,
+        max_cluster_num=10,
+        initial_cluster_num=3,
+        long_length_ratio=0.7,
+        fragment_length_ratio=0.5,
+        DEBUG_MODE=False,
+    ):
+        """Class Separator: do separate MSA
         ----------
         Parameters
         - in_file - the input fasta file (only one) in which sequences are to be aligend
@@ -35,7 +43,7 @@ class Aligner:
         self.log_path = Path(out_path) / "log"
         self.timer = Timer(self.log_path / "DEBUG_log.txt")
         self.DEBUG_MODE = DEBUG_MODE
-        
+
         # calculator
         self.nt_calculator = nt_Calculator()
 
@@ -68,7 +76,7 @@ class Aligner:
         self.compare_by_add = False
 
     def check_redundant_description(self):
-        """ check if there are redundant description in the input file 
+        """check if there are redundant description in the input file
         -------
         Returns
         - redundant - True if there is redundancy, False if not
@@ -86,7 +94,7 @@ class Aligner:
         return redundant
 
     def extract_index_and_length(self):
-        """ extract the index and length of each sequence
+        """extract the index and length of each sequence
         -------
         Returns
         - length_dct - a dictionary storing the {description: length} of each sequence
@@ -107,12 +115,14 @@ class Aligner:
         Parameters
         - new_cluster_num - literally new value of cluster_num, must be smaller than MAX_CLUSTER_NUM
         """
-        assert new_cluster_num <= self.MAX_CLUSTER_NUM, "Bad cluster num from <func> set_cluster_num"
+        assert new_cluster_num <= self.MAX_CLUSTER_NUM, (
+            "Bad cluster num from <func> set_cluster_num"
+        )
 
         self.cluster_num = new_cluster_num
 
     def hierarchical_cluster_length(self):
-        """ do hierarchical clustering on lengths
+        """do hierarchical clustering on lengths
         -------
         Returns
         - clusters - list of int representing the clusters each length (sequence) belongs to
@@ -124,14 +134,14 @@ class Aligner:
         dist_mat = pdist(data)
 
         # Build hierarchical clustering object
-        linkage_obj = linkage(dist_mat, method='single')
+        linkage_obj = linkage(dist_mat, method="single")
 
         # Get cluster labels based on number of clusters
         cluster_num = self.cluster_num
-        clusters = fcluster(linkage_obj, t=cluster_num, criterion='maxclust')
+        clusters = fcluster(linkage_obj, t=cluster_num, criterion="maxclust")
 
         return clusters
-    
+
     def hierarchical_cluster_distance(self, distance_matrix, max_cluster_num=None):
         if not max_cluster_num:
             max_cluster_num = len(distance_matrix)
@@ -142,14 +152,15 @@ class Aligner:
 
         for i in range(2, max_cluster_num):
             num_clusters = i
-            clustering = AgglomerativeClustering(n_clusters=num_clusters, 
-                                                 metric="precomputed", 
-                                                 linkage="average") \
-                                                .fit(distance_matrix)
-                                                
+            clustering = AgglomerativeClustering(
+                n_clusters=num_clusters, metric="precomputed", linkage="average"
+            ).fit(distance_matrix)
+
             cluster_result = clustering.labels_
-            score = silhouette_score(X=distance_matrix, labels=cluster_result, metric="precomputed")
-            
+            score = silhouette_score(
+                X=distance_matrix, labels=cluster_result, metric="precomputed"
+            )
+
             last_cluster_result = final_cluster_result
             if score >= max_silhouette_score:
                 max_silhouette_score = score
@@ -159,21 +170,21 @@ class Aligner:
                 break
             else:
                 decrease += 1
-                
+
             if list(cluster_result).count(cluster_result[-1]) == 1:
                 if i == 2:
                     final_cluster_result = np.ones(len(final_cluster_result))
                 else:
                     final_cluster_result = last_cluster_result
                 break
-            
+
         if len(final_cluster_result) == 0:
             final_cluster_result = np.ones(1)
-            
+
         return final_cluster_result
 
     def count_average_length(self):
-        """ calculate average length of each cluster in self.cluster_result
+        """calculate average length of each cluster in self.cluster_result
         -------
         Returns
         - cluster_average_length - the length of each cluster ordered by cluster id
@@ -183,7 +194,9 @@ class Aligner:
 
         for i in range(self.cluster_num):
             cluster_id = i + 1
-            idx = np.where(self.cluster_result == cluster_id)[0]  # find idx of this cluster
+            idx = np.where(self.cluster_result == cluster_id)[
+                0
+            ]  # find idx of this cluster
             if len(idx) == 0:
                 cluster_average_length.append(0)
             else:
@@ -203,7 +216,7 @@ class Aligner:
         self.PIT = round(new_PIT, 8)
 
     def align_and_write(self, longest_record_idx):
-        """ do MSA among the long_sequence_group and write into disk aligned group
+        """do MSA among the long_sequence_group and write into disk aligned group
         ----------
         Parameters
         - longest_record_idx - the indices of long_sequence_group in length_dct
@@ -215,14 +228,16 @@ class Aligner:
             long_sequence_group.append(record_list[i])
 
         # substep 2: write into disk (temp) for multiple sequence alignment
-        SeqIO.write(long_sequence_group,
-                    self.temp_folder / self.temp_long_seqs_filename,
-                    "fasta")
+        SeqIO.write(
+            long_sequence_group,
+            self.temp_folder / self.temp_long_seqs_filename,
+            "fasta",
+        )
 
         # substep 3: perform multiple sequence alignment using --reorder
         mafft_in = self.temp_folder / self.temp_long_seqs_filename
         mafft_out = self.temp_folder / self.temp_aligned_filename
-        
+
         if len(list(SeqIO.parse(mafft_in, "fasta"))) == 1:
             shutil.copyfile(mafft_in, mafft_out)
         else:
@@ -231,7 +246,7 @@ class Aligner:
 
     def set_in_path(self, in_file):
         self.in_file = in_file
-        
+
     def set_out_path(self, out_path):
         self.out_path = out_path
         self.temp_folder = Path(self.out_path) / "temp"
@@ -239,14 +254,14 @@ class Aligner:
         self.log_path = Path(out_path) / "log.txt"
 
     def alofi(self):
-        """ seperate long_sequence_group from sequences to be aligned using repeated clustering and MSA
-            long_sequence_group aligend first and all others are added using "-addfragements"
-            to imporve the quality of MSA
-            
-            * perhaps the only method of this class that needed calling outside
-            
-            the result of MSA and seperated long_sequence_group will be written in out_path
-            a log file will also be created in the "log" folder in out_path
+        """seperate long_sequence_group from sequences to be aligned using repeated clustering and MSA
+        long_sequence_group aligend first and all others are added using "-addfragements"
+        to imporve the quality of MSA
+
+        * perhaps the only method of this class that needed calling outside
+
+        the result of MSA and seperated long_sequence_group will be written in out_path
+        a log file will also be created in the "log" folder in out_path
         """
         ## Exception situation: only one sequence in the input fasta file: just copy the file as is the alignment
         records = list(SeqIO.parse(self.in_file, "fasta"))
@@ -254,7 +269,7 @@ class Aligner:
         if len(records) == 1:
             shutil.copyfile(self.in_file, out_path_for_exception)
             return 1
-        
+
         ## STEP 1: Extract the index and length of each sequence, export a pair of [index, length] for each sequence.
         if self.check_redundant_description():
             error_message = "in file {self.in_file}: Redundant sequences detected, please filter your data first"
@@ -265,13 +280,13 @@ class Aligner:
 
         self.length_dct = self.extract_index_and_length()
         self.record_num = len(self.length_dct.values())
-        
+
         if self.DEBUG_MODE:
             self.timer.record("STEP 1: load basic info of sequences and lengths")
 
         ## STEP 2: Initialize the number of clusters n to 3.
         self.set_cluster_num(self.INITIAL_CLUSTER_NUM)
-        
+
         if self.DEBUG_MODE:
             self.timer.record("STEP 2: initialize clustering on lengths")
 
@@ -284,39 +299,46 @@ class Aligner:
             longest_cluster_idx = np.argmax(avg_lengths)
 
             ## STEP 5: If the min length of "long sequence group" < MIN_LONG_RECORD_RATIO, set n=n+1 and return step 3.
-            longest_record_idx = np.where(np.array(self.cluster_result) == longest_cluster_idx + 1)[0]
+            longest_record_idx = np.where(
+                np.array(self.cluster_result) == longest_cluster_idx + 1
+            )[0]
             longest_record_num = len(longest_record_idx)
 
             message = f"Clustering into {self.cluster_num} clusters..."
             print(message)
-            
 
             # if there are seq no longer than 70%, re-cluster into n+1 clusters
             all_lengths = np.array(list(self.length_dct.values()))
             max_length = np.max(all_lengths)
-            length_threshold = self.LONG_LENGTH_RATIO*max_length
+            length_threshold = self.LONG_LENGTH_RATIO * max_length
 
-            if ((np.min(all_lengths[longest_record_idx]) <= self.LONG_LENGTH_RATIO*max_length) or
-                    (longest_record_num <= 0)):  # this may happen when there are sequences of same length
+            if (
+                np.min(all_lengths[longest_record_idx])
+                <= self.LONG_LENGTH_RATIO * max_length
+            ) or (
+                longest_record_num <= 0
+            ):  # this may happen when there are sequences of same length
                 try:
                     self.set_cluster_num(self.cluster_num + 1)
                 except AssertionError:
                     longest_record_num = -1  # force to break and goto step 6.
-                    break   
+                    break
                 continue
             else:
                 break
-            
+
         if self.DEBUG_MODE:
             self.timer.record("STEP 3-5: decide long sequence group by clustering")
 
         ## STEP 6: If only one or too many seqs in the "long sequence group," retain seqs longer than MIN_LONG_RECORD_RATIO.
         if longest_record_num <= 1:
-            longest_record_idx = [i for i in range(len(all_lengths)) if all_lengths[i] > length_threshold]
+            longest_record_idx = [
+                i for i in range(len(all_lengths)) if all_lengths[i] > length_threshold
+            ]
 
         message = f"\nClustering finished, {len(longest_record_idx)} records in the long sequence group.\n"
         print(message)
-        
+
         if self.DEBUG_MODE:
             self.timer.record("STEP 6: decide long sequence group by counting lengths")
 
@@ -325,61 +347,83 @@ class Aligner:
         print(message)
 
         self.align_and_write(longest_record_idx)
-        
+
         if self.DEBUG_MODE:
             self.timer.record("STEP 7: align long sequence group")
-        
-        ## STEP 8: calculate consensus sequence and append to msa of long group 
-        long_msa_records = list(SeqIO.parse(self.temp_folder / self.temp_aligned_filename, "fasta"))
+
+        ## STEP 8: calculate consensus sequence and append to msa of long group
+        long_msa_records = list(
+            SeqIO.parse(self.temp_folder / self.temp_aligned_filename, "fasta")
+        )
         consensus_long = self.nt_calculator.get_consensus_sequence(long_msa_records)
-        consensus_record = SeqRecord.SeqRecord(Seq.Seq(str(consensus_long)), description="consensus", id="", name="")
+        consensus_record = SeqRecord.SeqRecord(
+            Seq.Seq(str(consensus_long)), description="consensus", id="", name=""
+        )
         long_msa_records = long_msa_records + [consensus_record]
-        SeqIO.write(long_msa_records, self.temp_folder / "aligned_long_sequence_group_modified.fasta", "fasta")
-        
+        SeqIO.write(
+            long_msa_records,
+            self.temp_folder / "aligned_long_sequence_group_modified.fasta",
+            "fasta",
+        )
+
         if self.DEBUG_MODE:
-            self.timer.record("STEP 8: calculate consensus sequence of long sequence alignment")
-        
+            self.timer.record(
+                "STEP 8: calculate consensus sequence of long sequence alignment"
+            )
+
         ## STEP 9: construct distance matrix on long sequence alignment
-        distance_matrix = self.nt_calculator.\
-            calculate_distance_matrix(in_path = self.temp_folder / "aligned_long_sequence_group_modified.fasta",
-                                      out_path = self.temp_folder,
-                                      method="distance_calculation_only")
-        
+        distance_matrix = self.nt_calculator.calculate_distance_matrix(
+            in_path=self.temp_folder / "aligned_long_sequence_group_modified.fasta",
+            out_path=self.temp_folder,
+            method="distance_calculation_only",
+        )
+
         if self.DEBUG_MODE:
-            self.timer.record("STEP 9: construct distance matrix on long sequence alignment")
-        
+            self.timer.record(
+                "STEP 9: construct distance matrix on long sequence alignment"
+            )
+
         ## STEP 10: perform hierarchical clustering to search for the best match of consensus sequence
         cluster_result_consensus = self.hierarchical_cluster_distance(distance_matrix)
-        
+
         if self.DEBUG_MODE:
             self.timer.record("STEP 10: perform clustering on long sequence alignment")
-        
 
         ## STEP 11: keep sequences together with the consensus sequence (last) as the long_consensus_group
-        consensus_group_idx = cluster_result_consensus[-1] ## TODO : bug was here raised once [IndexError: list index out of range]
+        consensus_group_idx = cluster_result_consensus[
+            -1
+        ]  ## TODO : bug was here raised once [IndexError: list index out of range]
         consensus_group_records = []
-        record_iter = SeqIO.parse(self.temp_folder / self.temp_long_seqs_filename,"fasta")
-                
+        record_iter = SeqIO.parse(
+            self.temp_folder / self.temp_long_seqs_filename, "fasta"
+        )
+
         count = 0
         for record in record_iter:
             if cluster_result_consensus[count] == consensus_group_idx:
                 consensus_group_records.append(record)
             count += 1
-        
-        SeqIO.write(consensus_group_records, self.temp_folder / "long_consensus_group.fasta", "fasta")
-        
+
+        SeqIO.write(
+            consensus_group_records,
+            self.temp_folder / "long_consensus_group.fasta",
+            "fasta",
+        )
+
         if self.DEBUG_MODE:
             self.timer.record("STEP 11: decide long consensus group")
-        
+
         ## STEP 12: align the long consensus group
         mafft_in = self.temp_folder / "long_consensus_group.fasta"
         mafft_out = self.temp_folder / "aligned_long_consensus_group.fasta"
         if len(list(SeqIO.parse(mafft_in, "fasta"))) > 1:
-            command = f"mafft --maxiterate 100 --thread -1 --reorder {mafft_in} > {mafft_out}"
+            command = (
+                f"mafft --maxiterate 100 --thread -1 --reorder {mafft_in} > {mafft_out}"
+            )
             run_command(command)
         else:
             shutil.copyfile(mafft_in, mafft_out)
-                
+
         if self.DEBUG_MODE:
             self.timer.record("STEP 12: align long consensus group")
 
@@ -387,37 +431,46 @@ class Aligner:
         message = "\nAligning by --add."
         print(message)
 
-        
         # substep 1: long_sequence_group is written and other shorter ones also need to be written into disk
         record_iter = SeqIO.parse(self.in_file, "fasta")
 
-        consensus_group_description = [record.description for record in consensus_group_records]
-        unaligned = [record for record in record_iter if record.description not in consensus_group_description]
+        consensus_group_description = [
+            record.description for record in consensus_group_records
+        ]
+        unaligned = [
+            record
+            for record in record_iter
+            if record.description not in consensus_group_description
+        ]
         unaligned_short = []
         unaligned_other = []
         for record in unaligned:
-            if len(record) < self.FRAGMENT_LENGTH_RATIO*max_length:
+            if len(record) < self.FRAGMENT_LENGTH_RATIO * max_length:
                 unaligned_short.append(record)
             else:
                 unaligned_other.append(record)
-        
+
         mafft_add_other = self.temp_folder / self.temp_unaligned_other_filename
         mafft_add_short = self.temp_folder / self.temp_unaligned_short_filename
-        
+
         if len(unaligned_short) != 0:
-            SeqIO.write(unaligned_short,
-                        self.temp_folder / self.temp_unaligned_short_filename,
-                        "fasta")
-        if len(unaligned_other) != 0: 
-            SeqIO.write(unaligned_other,
-                        self.temp_folder / self.temp_unaligned_other_filename,
-                        "fasta")
+            SeqIO.write(
+                unaligned_short,
+                self.temp_folder / self.temp_unaligned_short_filename,
+                "fasta",
+            )
+        if len(unaligned_other) != 0:
+            SeqIO.write(
+                unaligned_other,
+                self.temp_folder / self.temp_unaligned_other_filename,
+                "fasta",
+            )
 
         # substep 2: do MSA, adding fragments to aligned_long_sequence_group.fasta
         mafft_in = self.temp_folder / "aligned_long_consensus_group.fasta"
         mafft_tmp = self.temp_folder / "partial_added.fasta"
         mafft_out = Path(self.out_path) / Path(self.in_file).name
-        
+
         if mafft_add_other.is_file():
             command = f"mafft --maxiterate 100 --thread -1 --reorder --add {mafft_add_other} {mafft_in} > {mafft_tmp}"
             run_command(command)
@@ -433,13 +486,16 @@ class Aligner:
             if mafft_tmp.is_file():
                 shutil.copyfile(mafft_tmp, mafft_out)
             else:
-                shutil.copyfile(mafft_in,  mafft_out)
-        
-        message = "\n==========" \
-            "\nMSA done by separately aligning and adding fragments" \
+                shutil.copyfile(mafft_in, mafft_out)
+
+        message = (
+            "\n=========="
+            "\nMSA done by separately aligning and adding fragments"
             f"\nSize of long consensus group:\t {len(consensus_group_records)}"
+        )
         print(message)
-        
+
         if self.DEBUG_MODE:
-            self.timer.record("STEP 13: align whole dataset by adding unaligned sequences")
-    
+            self.timer.record(
+                "STEP 13: align whole dataset by adding unaligned sequences"
+            )

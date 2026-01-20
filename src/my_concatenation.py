@@ -14,7 +14,11 @@ def my_concatenation(in_path, out_path):
     out_path_obj = Path(out_path)
     if not out_path_obj.exists():
         out_path_obj.mkdir(exist_ok=True)
-    file_list = [file.name for file in Path(in_path).iterdir() if file.suffix in [".fasta", ".fas", ".fa"]]
+    file_list = [
+        file.name
+        for file in Path(in_path).iterdir()
+        if file.suffix in [".fasta", ".fas", ".fa"]
+    ]
     # todo: the description of trimal output seqs contain blank space?
     for file in file_list:
         fr = open(Path(in_path) / file, "r")

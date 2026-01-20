@@ -1,4 +1,8 @@
-from format_wizard import check_inpath_validity, check_outpath_validity, get_file_handles
+from format_wizard import (
+    check_inpath_validity,
+    check_outpath_validity,
+    get_file_handles,
+)
 from pathlib import Path
 from Bio import SeqIO
 from datetime import datetime
@@ -11,18 +15,18 @@ def get_mafft_path():
     """Get path to mafft executable"""
     # Try to find mafft in common locations
     mafft_dir = Path.cwd() / "mafft"
-    
+
     if mafft_dir.exists():
         # Recursively search for mafft executable
         for root, dirs, files in os.walk(mafft_dir):
             for file in files:
                 if file.lower() in ["mafft.exe", "mafft.bat", "mafft"]:
                     return str(Path(root) / file)
-    
+
     # Check if it's in PATH
     if shutil.which("mafft"):
         return "mafft"
-    
+
     # If not found, return "mafft" and let's error show
     return "mafft"
 
@@ -88,10 +92,13 @@ def mafft_add(in_path, in_file, out_path, cmd_str):
 
         # add fragments first
         run_command(
-            "%s --auto --addfragments %s %s > %s" % (cmd_str[1], file2, msa1, msa2))  # FFT - NS - 2(Fast but rough)
+            "%s --auto --addfragments %s %s > %s" % (cmd_str[1], file2, msa1, msa2)
+        )  # FFT - NS - 2(Fast but rough)
         if msa2.stat().st_size == 0:
             run_command("%s --auto --add %s %s > %s" % (cmd_str[1], file2, msa1, msa2))
-        run_command("%s --auto --add %s %s > %s" % (cmd_str[2], file3, msa2, msa3))  # Multi-INS-fragment
+        run_command(
+            "%s --auto --add %s %s > %s" % (cmd_str[2], file3, msa2, msa3)
+        )  # Multi-INS-fragment
 
         file1.unlink()
         file2.unlink()
@@ -100,12 +107,28 @@ def mafft_add(in_path, in_file, out_path, cmd_str):
         msa2.unlink()
         # print("Aligned results: %s" % msa3)
     else:
-        run_command(" %s --quiet %s > %s" % (cmd_str[0], Path(in_path) / Path(in_file), Path(out_path) / Path("msa_" + in_file)))
+        run_command(
+            " %s --quiet %s > %s"
+            % (
+                cmd_str[0],
+                Path(in_path) / Path(in_file),
+                Path(out_path) / Path("msa_" + in_file),
+            )
+        )
 
 
-def mafft(in_path, out_path='', add_choice='', add_path='', algorithm='auto',
-          thread=-1, reorder=True, additional_params='',
-          pure_command_mode=False, pure_command=''):
+def mafft(
+    in_path,
+    out_path="",
+    add_choice="",
+    add_path="",
+    algorithm="auto",
+    thread=-1,
+    reorder=True,
+    additional_params="",
+    pure_command_mode=False,
+    pure_command="",
+):
     """
     call mafft to do multiple sequence alignment
     ----------
@@ -128,7 +151,7 @@ def mafft(in_path, out_path='', add_choice='', add_path='', algorithm='auto',
     [] if path invalid"""
     # STEP 0: if pure command, then only execute input command
     if pure_command_mode:
-        pure_command = pure_command.split('\n')
+        pure_command = pure_command.split("\n")
         for command in pure_command:
             run_command(command)
         return pure_command
@@ -137,13 +160,15 @@ def mafft(in_path, out_path='', add_choice='', add_path='', algorithm='auto',
     file_handles = get_file_handles(in_path)
     if not check_outpath_validity(out_path):
         return []
-    if add_choice and not check_inpath_validity(add_path):  # if add is True, then the following path should be valid
+    if add_choice and not check_inpath_validity(
+        add_path
+    ):  # if add is True, then the following path should be valid
         return []
 
     # STEP 2: get parameters and call mafft
     mafft_exe = get_mafft_path()
     print(f"Using MAFFT: {mafft_exe}")
-    
+
     # for in_file in file_handles:
     #     basename = os.path.basename(in_file)
     #     out_file = os.path.join(out_path, basename)

@@ -5,12 +5,21 @@
 # @Software:PyCharm
 
 
-
 import sys
 import ctypes
 from ui_main import Ui_MainWindow
 from PySide6.QtWidgets import QApplication, QMessageBox, QFileDialog, QMainWindow
-from PySide6.QtCore import QObject, Signal, QEventLoop, QTimer, Slot, SIGNAL, Qt, QPropertyAnimation, QEasingCurve
+from PySide6.QtCore import (
+    QObject,
+    Signal,
+    QEventLoop,
+    QTimer,
+    Slot,
+    SIGNAL,
+    Qt,
+    QPropertyAnimation,
+    QEasingCurve,
+)
 from PySide6.QtGui import QTextCursor, QGuiApplication, QIcon
 from pathlib import Path
 import threading
@@ -18,7 +27,7 @@ import threading
 from main_utils import print_line
 import warnings
 
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
 
 def get_resource_path(relative_path):
@@ -31,7 +40,7 @@ def get_resource_path(relative_path):
     except AttributeError:
         # 如果不是打包环境，使用脚本所在目录
         base_path = str(Path(__file__).parent)
-    
+
     return str(Path(base_path) / relative_path)
 
 
@@ -63,6 +72,7 @@ class MainWindow(QMainWindow):
     """
     define the main window of graphical user interface
     """
+
     @Slot()
     def outputWritten(self, text):
         """
@@ -91,29 +101,36 @@ class MainWindow(QMainWindow):
 
         self.ui.message_box.appendPlainText("Welcome to PyNCBIminer!\n")
 
-
         # resize the window to a comfortable size that works on high-DPI screens
         app = QApplication.instance()
         app.setAttribute(Qt.AA_EnableHighDpiScaling)
         app.setAttribute(Qt.AA_UseHighDpiPixmaps)
-        
+
         screen = QGuiApplication.primaryScreen()
-        available_geometry = screen.availableGeometry()  # Get available screen space (excludes taskbar)
-        
+        available_geometry = (
+            screen.availableGeometry()
+        )  # Get available screen space (excludes taskbar)
+
         # Set a fixed size that's comfortable on most screens
         # or use a percentage of available space with minimum limits
         min_width = 1200
         min_height = 800
-        
+
         # Calculate size as percentage of available space but not smaller than minimums
         newW = max(min_width, int(available_geometry.width() * 0.6))
         newH = max(min_height, int(available_geometry.height() * 0.7))
-        
+
         # Center the window
-        newLeft = int((available_geometry.width() - newW) / 2) + available_geometry.left()
-        newTop = int((available_geometry.height() - newH) / 3) + available_geometry.top()
-        
-        self.resize(newW, newH)  # Use self instead of self.ui since we're in MainWindow class
+        newLeft = (
+            int((available_geometry.width() - newW) / 2) + available_geometry.left()
+        )
+        newTop = (
+            int((available_geometry.height() - newH) / 3) + available_geometry.top()
+        )
+
+        self.resize(
+            newW, newH
+        )  # Use self instead of self.ui since we're in MainWindow class
         self.move(newLeft, newTop)
 
         # connect menu with actions
@@ -132,7 +149,9 @@ class MainWindow(QMainWindow):
 
         self.ui.target_region.setEditable(True)
         self.ui.set_target_region.setEnabled(False)
-        target_region_list = [f.name for f in Path(get_resource_path("blast_parameters")).iterdir()]
+        target_region_list = [
+            f.name for f in Path(get_resource_path("blast_parameters")).iterdir()
+        ]
         target_region_list = [Path(x).stem for x in target_region_list]
         self.ui.target_region.clear()
         self.ui.target_region.addItems([""] + target_region_list)
@@ -188,9 +207,13 @@ class MainWindow(QMainWindow):
 
         # redirect the output messages to the message box
         sys.stdout = EmittingStr()
-        self.ui.message_box.connect(sys.stdout, SIGNAL("textWritten(QString)"), self.outputWritten)
+        self.ui.message_box.connect(
+            sys.stdout, SIGNAL("textWritten(QString)"), self.outputWritten
+        )
         sys.stderr = EmittingStr()
-        self.ui.message_box.connect(sys.stderr, SIGNAL("textWritten(QString)"), self.outputWritten)
+        self.ui.message_box.connect(
+            sys.stderr, SIGNAL("textWritten(QString)"), self.outputWritten
+        )
 
         # --------------------------------- Tools ---------------------------------
         self.mafft_checked = False
@@ -203,15 +226,16 @@ class MainWindow(QMainWindow):
         self.fade_in_animation.setStartValue(0.0)
         self.fade_in_animation.setEndValue(1.0)
         self.fade_in_animation.setEasingCurve(QEasingCurve.InOutQuad)
-        
+
         # Use QTimer to start animation after window is shown
         QTimer.singleShot(50, self.fade_in_animation.start)
-        
+
         # Check dependencies after window is shown (non-blocking)
         QTimer.singleShot(100, self.check_dependencies)
 
     def run_install_mafft(self):
         from install_dependencies import install_mafft
+
         self.ui.thread = threading.Thread(target=install_mafft)
         self.ui.thread.setDaemon(True)
         self.ui.thread.start()
@@ -219,6 +243,7 @@ class MainWindow(QMainWindow):
 
     def run_install_trimal(self):
         from install_dependencies import install_trimal
+
         self.ui.thread = threading.Thread(target=install_trimal)
         self.ui.thread.setDaemon(True)
         self.ui.thread.start()
@@ -226,28 +251,33 @@ class MainWindow(QMainWindow):
 
     def check_dependencies(self):
         import os
+
         """
         Check if MAFFT and TrimAl are installed and update PATH if needed.
         This method uses caching to avoid repeated disk checks.
         """
         root_path = Path.cwd()
-        
+
         if not self.mafft_checked:
             mafft_path = Path(root_path) / Path(r"./mafft/mafft-win")
             if (root_path / "./mafft/mafft-win/mafft.bat").exists():
                 os.environ["PATH"] = os.environ["PATH"] + ";" + str(mafft_path)
-                print('MAFFT found')
+                print("MAFFT found")
             else:
-                print("Please check if MAFFT is installed. You can install it through the Tools menu.")
+                print(
+                    "Please check if MAFFT is installed. You can install it through the Tools menu."
+                )
             self.mafft_checked = True
-        
+
         if not self.trimal_checked:
             trimal_path = Path(root_path) / Path(r"./trimal/trimAl_Windows_x86-64")
             if (root_path / "./trimal/trimAl_Windows_x86-64/trimal.exe").exists():
                 os.environ["PATH"] = os.environ["PATH"] + ";" + str(trimal_path)
-                print('TrimAl found')
+                print("TrimAl found")
             else:
-                print("Please check if TrimAl is installed. You can install it through the Tools menu.")
+                print(
+                    "Please check if TrimAl is installed. You can install it through the Tools menu."
+                )
             self.trimal_checked = True
 
     def show_about(self):
@@ -277,16 +307,16 @@ class MainWindow(QMainWindow):
         """
         Override closeEvent to add fade-out animation before closing
         """
-        if hasattr(self, '_is_closing') and self._is_closing:
+        if hasattr(self, "_is_closing") and self._is_closing:
             return
-        
+
         self._is_closing = True
         self.fade_animation = QPropertyAnimation(self, b"windowOpacity")
         self.fade_animation.setDuration(150)
         self.fade_animation.setStartValue(1.0)
         self.fade_animation.setEndValue(0.0)
         self.fade_animation.setEasingCurve(QEasingCurve.InOutQuad)
-        
+
         self.fade_animation.finished.connect(self.close_window)
         self.fade_animation.start()
         event.ignore()
@@ -322,7 +352,7 @@ class MainWindow(QMainWindow):
         """
         # todo: save parameters in separate files and allow users to save their settings.
 
-        '''
+        """
         parameters = {
             "ITS": (
                     "ITS 1\ninternal transcribed spacer\nITS 2\ninternal transcribed spacers 1 and 2\n5.8S",  # key_annotations
@@ -394,7 +424,7 @@ class MainWindow(QMainWindow):
                      '(("rpoB" OR "RNA polymerase beta subunit") NOT "environmental sample" NOT "environmental_sample")',
                      # entrez_qualifier
                      "3300")
-        }'''
+        }"""
 
         target_region = self.ui.target_region.currentText()
         if target_region == "":
@@ -404,19 +434,23 @@ class MainWindow(QMainWindow):
         # 先尝试从工作目录读取自定义设置
         blast_params_dir = Path(get_writable_path("blast_parameters"))
         custom_params_file = blast_params_dir / Path(target_region + ".txt")
-        
+
         if custom_params_file.exists():
             # 使用自定义设置
             params_file = custom_params_file
         else:
             # 使用默认设置（资源目录）
-            params_file = Path(get_resource_path("blast_parameters")) / Path(target_region + ".txt")
-        
+            params_file = Path(get_resource_path("blast_parameters")) / Path(
+                target_region + ".txt"
+            )
+
         with open(params_file, "r") as fr:
             parameters = fr.read().splitlines()
             for parameter in parameters:
                 if parameter.strip() != "":
-                    parameters_dict[parameter.split("\t")[0]] = str(parameter.split("\t")[1])
+                    parameters_dict[parameter.split("\t")[0]] = str(
+                        parameter.split("\t")[1]
+                    )
 
         target_region = parameters_dict["target_region"]
         entrez_qualifier = parameters_dict["entrez_qualifier"]
@@ -433,14 +467,16 @@ class MainWindow(QMainWindow):
         # 先尝试从工作目录读取自定义查询序列
         initial_queries_dir = Path(get_writable_path("initial_queries"))
         custom_queries_dir = initial_queries_dir / Path(target_region)
-        
+
         if custom_queries_dir.exists():
             # 使用自定义查询序列
             queries_dir = custom_queries_dir
         else:
             # 使用默认查询序列（资源目录）
-            queries_dir = Path(get_resource_path("initial_queries")) / Path(target_region)
-        
+            queries_dir = Path(get_resource_path("initial_queries")) / Path(
+                target_region
+            )
+
         for file in [f.name for f in Path(queries_dir).iterdir() if f.is_file()]:
             with open(queries_dir / Path(file), "r") as fr:
                 seq = fr.read()
@@ -486,7 +522,7 @@ class MainWindow(QMainWindow):
         # 保存到工作目录（可写路径）
         blast_params_dir = Path(get_writable_path("blast_parameters"))
         blast_params_dir.mkdir(parents=True, exist_ok=True)
-        
+
         with open(blast_params_dir / Path(target_region + ".txt"), "w") as fw:
             fw.write("target_region\t" + target_region + "\n")
             fw.write("entrez_qualifier\t" + entrez_qualifier + "\n")
@@ -504,7 +540,7 @@ class MainWindow(QMainWindow):
         initial_queries_dir.mkdir(parents=True, exist_ok=True)
         target_region_dir = initial_queries_dir / Path(target_region)
         target_region_dir.mkdir(parents=True, exist_ok=True)
-        
+
         with open(target_region_dir / Path(target_region + ".fasta"), "w") as fw:
             fw.write(initial_queries)
 
@@ -529,7 +565,7 @@ class MainWindow(QMainWindow):
         :return: None
         """
         from my_entrez import entrez_count, entrez_summary
-        
+
         print_line()
         taxonomy = self.ui.taxonomy.toPlainText().strip()
         if taxonomy == "":
@@ -541,27 +577,41 @@ class MainWindow(QMainWindow):
         entrez_email = self.ui.entrez_email.text().strip()
         date_from = self.ui.date_from.text().strip()
         date_to = self.ui.date_to.text().strip()
-        #print("Entrez email: %s" % entrez_email)
+        # print("Entrez email: %s" % entrez_email)
         if self.ui.marker_summary.isChecked():
-            target_region_list = [f.name for f in Path(get_resource_path("blast_parameters")).iterdir()]
+            target_region_list = [
+                f.name for f in Path(get_resource_path("blast_parameters")).iterdir()
+            ]
             target_region_list = [Path(x).stem for x in target_region_list]
             target_region_dict = {}
             for target_region in target_region_list:
                 parameters_dict = {}
-                with open(Path(get_resource_path("blast_parameters")) / Path(target_region + ".txt"), "r") as fr:
+                with open(
+                    Path(get_resource_path("blast_parameters"))
+                    / Path(target_region + ".txt"),
+                    "r",
+                ) as fr:
                     parameters = fr.read().splitlines()
                     for parameter in parameters:
                         if parameter.strip() != "":
-                            parameters_dict[parameter.split("\t")[0]] = str(parameter.split("\t")[1])
+                            parameters_dict[parameter.split("\t")[0]] = str(
+                                parameter.split("\t")[1]
+                            )
                 target_region_dict[target_region] = parameters_dict["entrez_qualifier"]
 
-            self.ui.thread = threading.Thread(target=entrez_summary, args=(entrez_email, organisms, target_region_dict, date_from, date_to))
+            self.ui.thread = threading.Thread(
+                target=entrez_summary,
+                args=(entrez_email, organisms, target_region_dict, date_from, date_to),
+            )
             self.ui.thread.setDaemon(True)
             self.ui.thread.start()
         else:
             # entrez_query = format_entrez_query(organisms=organisms, entrez_qualifier=entrez_qualifier, date_from=date_from,
             #                                    date_to=date_to)
-            self.ui.thread = threading.Thread(target=entrez_count, args=(entrez_email, organisms, entrez_qualifier, date_from, date_to))
+            self.ui.thread = threading.Thread(
+                target=entrez_count,
+                args=(entrez_email, organisms, entrez_qualifier, date_from, date_to),
+            )
             self.ui.thread.setDaemon(True)
             self.ui.thread.start()
 
@@ -573,7 +623,7 @@ class MainWindow(QMainWindow):
         """
         from my_entrez import entrez_count
         from iterated_blast import iterated_blast_main
-        
+
         print_line("*")
         print("Submitting New BLAST...")
 
@@ -615,48 +665,64 @@ class MainWindow(QMainWindow):
             word_size = int(word_size)
         except ValueError:
             print("Invalid value for word_size: %s." % word_size)
-            print("Please visit https://ncbi.github.io/blast-cloud/dev/api.html for details about allowed values.")
+            print(
+                "Please visit https://ncbi.github.io/blast-cloud/dev/api.html for details about allowed values."
+            )
             return
         else:
             if word_size < 0:
                 print("word_size needs to be a positive integer")
-                print("Please visit https://ncbi.github.io/blast-cloud/dev/api.html for details about allowed values.")
+                print(
+                    "Please visit https://ncbi.github.io/blast-cloud/dev/api.html for details about allowed values."
+                )
                 return
 
         try:
             expect_value = float(expect_value)
         except ValueError:
             print("Invalid value for expect_value: %s." % expect_value)
-            print("Please visit https://ncbi.github.io/blast-cloud/dev/api.html for details about allowed values.")
+            print(
+                "Please visit https://ncbi.github.io/blast-cloud/dev/api.html for details about allowed values."
+            )
             return
         else:
             if expect_value < 0:
                 print("expect_value needs to be a nonnegative number")
-                print("Please visit https://ncbi.github.io/blast-cloud/dev/api.html for details about allowed values.")
+                print(
+                    "Please visit https://ncbi.github.io/blast-cloud/dev/api.html for details about allowed values."
+                )
                 return
 
         try:
             nucl_reward = int(nucl_reward)
         except ValueError:
             print("Invalid value for nucl_reward: %s." % nucl_reward)
-            print("Please visit https://ncbi.github.io/blast-cloud/dev/api.html for details about allowed values.")
+            print(
+                "Please visit https://ncbi.github.io/blast-cloud/dev/api.html for details about allowed values."
+            )
             return
         else:
             if nucl_reward < 0:
                 print("nucl_reward needs to be a nonnegative integer")
-                print("Please visit https://ncbi.github.io/blast-cloud/dev/api.html for details about allowed values.")
+                print(
+                    "Please visit https://ncbi.github.io/blast-cloud/dev/api.html for details about allowed values."
+                )
                 return
 
         try:
             nucl_penalty = int(nucl_penalty)
         except ValueError:
             print("Invalid value for nucl_penalty: %s." % nucl_penalty)
-            print("Please visit https://ncbi.github.io/blast-cloud/dev/api.html for details about allowed values.")
+            print(
+                "Please visit https://ncbi.github.io/blast-cloud/dev/api.html for details about allowed values."
+            )
             return
         else:
             if nucl_penalty > 0:
                 print("nucl_penalty needs to be a nonpositive integer")
-                print("Please visit https://ncbi.github.io/blast-cloud/dev/api.html for details about allowed values.")
+                print(
+                    "Please visit https://ncbi.github.io/blast-cloud/dev/api.html for details about allowed values."
+                )
                 return
 
         try:
@@ -664,7 +730,9 @@ class MainWindow(QMainWindow):
             assert len(gap_costs_list) == 2
         except AssertionError:
             print("Invalid value for gap_costs: %s." % gap_costs)
-            print("Please visit https://ncbi.github.io/blast-cloud/dev/api.html for details about allowed values.")
+            print(
+                "Please visit https://ncbi.github.io/blast-cloud/dev/api.html for details about allowed values."
+            )
             return
         else:
             try:
@@ -672,13 +740,18 @@ class MainWindow(QMainWindow):
                 cost1 = int(gap_costs_list[1])
             except ValueError:
                 print("Invalid value for gap_costs: %s." % gap_costs)
-                print("Please visit https://ncbi.github.io/blast-cloud/dev/api.html for details about allowed values.")
+                print(
+                    "Please visit https://ncbi.github.io/blast-cloud/dev/api.html for details about allowed values."
+                )
                 return
             else:
                 if cost0 < 0 or cost1 < 0:
-                    print("gap_costs need to be two positive integers separated by a space")
                     print(
-                        "Please visit https://ncbi.github.io/blast-cloud/dev/api.html for details about allowed values.")
+                        "gap_costs need to be two positive integers separated by a space"
+                    )
+                    print(
+                        "Please visit https://ncbi.github.io/blast-cloud/dev/api.html for details about allowed values."
+                    )
                     return
 
         if not Path(wd).exists():
@@ -696,10 +769,14 @@ class MainWindow(QMainWindow):
 
         organisms = taxonomy.splitlines()
         organisms = [x for x in organisms if len(x) > 0]
-        count = entrez_count(entrez_email, organisms, entrez_qualifier, date_from, date_to)
+        count = entrez_count(
+            entrez_email, organisms, entrez_qualifier, date_from, date_to
+        )
 
         # save BLAST parameters in the blast_parameters.txt file
-        with open(Path(wd) / Path("parameters") / Path("blast_parameters.txt"), "w") as fw:
+        with open(
+            Path(wd) / Path("parameters") / Path("blast_parameters.txt"), "w"
+        ) as fw:
             fw.write("target_region\t" + target_region + "\n")
             fw.write("taxonomy\t" + taxonomy.replace("\n", "|") + "\n")
             fw.write("entrez_qualifier\t" + entrez_qualifier + "\n")
@@ -718,7 +795,9 @@ class MainWindow(QMainWindow):
 
         # print("BLAST parameters saved in parameters folder as blast_parameters.txt")
         if len(initial_queries) > 0:
-            with open(Path(wd) / Path("parameters") / Path("initial_queries.fasta"), "w") as fw:
+            with open(
+                Path(wd) / Path("parameters") / Path("initial_queries.fasta"), "w"
+            ) as fw:
                 fw.write(initial_queries)
         else:
             print("Please add initial queries!")
@@ -732,12 +811,26 @@ class MainWindow(QMainWindow):
 
         ref_number = 5
 
-        self.ui.thread = threading.Thread(target=iterated_blast_main, args=(wd, organisms, count,
-                                                                            expect_value, gap_costs, word_size,
-                                                                            nucl_reward, nucl_penalty, max_length,
-                                                                            key_annotations, exclude_sources,
-                                                                            ref_number,
-                                                                            date_from, date_to, entrez_email))
+        self.ui.thread = threading.Thread(
+            target=iterated_blast_main,
+            args=(
+                wd,
+                organisms,
+                count,
+                expect_value,
+                gap_costs,
+                word_size,
+                nucl_reward,
+                nucl_penalty,
+                max_length,
+                key_annotations,
+                exclude_sources,
+                ref_number,
+                date_from,
+                date_to,
+                entrez_email,
+            ),
+        )
         self.ui.thread.setDaemon(True)
         self.ui.thread.start()
         self.ui.submit_new_blast.setEnabled(False)
@@ -751,7 +844,7 @@ class MainWindow(QMainWindow):
         :return:
         """
         from iterated_blast import iterated_blast_main
-        
+
         print_line("*")
         print("Loading previous job...")
 
@@ -781,16 +874,22 @@ class MainWindow(QMainWindow):
             return
         else:
             self.ui.initial_queries.clear()
-            with open(Path(wd) / Path("parameters") / Path("initial_queries.fasta"), "r") as fr:
+            with open(
+                Path(wd) / Path("parameters") / Path("initial_queries.fasta"), "r"
+            ) as fr:
                 seq = fr.read()
                 self.ui.initial_queries.appendPlainText(seq)
 
         parameters_dict = {}
-        with open(Path(wd) / Path("parameters") / Path("blast_parameters.txt"), "r") as fr:
+        with open(
+            Path(wd) / Path("parameters") / Path("blast_parameters.txt"), "r"
+        ) as fr:
             parameters = fr.read().splitlines()
             for parameter in parameters:
                 if parameter.strip() != "":
-                    parameters_dict[parameter.split("\t")[0]] = str(parameter.split("\t")[1])
+                    parameters_dict[parameter.split("\t")[0]] = str(
+                        parameter.split("\t")[1]
+                    )
 
         target_region = parameters_dict["target_region"]
         taxonomy = parameters_dict["taxonomy"]
@@ -810,7 +909,9 @@ class MainWindow(QMainWindow):
 
         # show parameters in the Sequence Retrieving panel
         # target_region_list = ["ITS", "rbcL", "matK", "trnL-trnF", "psbA-trnH", "ndhF", "rpoB"]
-        target_region_list = [f.name for f in Path(get_resource_path("blast_parameters")).iterdir()]
+        target_region_list = [
+            f.name for f in Path(get_resource_path("blast_parameters")).iterdir()
+        ]
         target_region_list = [Path(x).stem for x in target_region_list]
         if target_region in target_region_list:
             target_region_list.remove(target_region)
@@ -840,7 +941,9 @@ class MainWindow(QMainWindow):
         exclude_sources = [x for x in exclude_sources if len(x) > 0]
 
         # todo: show warnings when the size of queries file is zero
-        queries_file_list = [f.name for f in (Path(wd) / "parameters" / "ref_seq").iterdir()]
+        queries_file_list = [
+            f.name for f in (Path(wd) / "parameters" / "ref_seq").iterdir()
+        ]
         if len(queries_file_list) > 0:
             round_list = []
             for queries_file in queries_file_list:
@@ -851,13 +954,27 @@ class MainWindow(QMainWindow):
             blast_round = 1
         ref_number = 5
         count = int(count)
-        self.ui.thread = threading.Thread(target=iterated_blast_main, args=(wd, organisms, count,
-                                                                            expect_value, gap_costs, word_size,
-                                                                            nucl_reward, nucl_penalty, max_length,
-                                                                            key_annotations, exclude_sources,
-                                                                            ref_number,
-                                                                            date_from, date_to, entrez_email,
-                                                                            blast_round))
+        self.ui.thread = threading.Thread(
+            target=iterated_blast_main,
+            args=(
+                wd,
+                organisms,
+                count,
+                expect_value,
+                gap_costs,
+                word_size,
+                nucl_reward,
+                nucl_penalty,
+                max_length,
+                key_annotations,
+                exclude_sources,
+                ref_number,
+                date_from,
+                date_to,
+                entrez_email,
+                blast_round,
+            ),
+        )
         self.ui.thread.setDaemon(True)
         self.ui.thread.start()
         self.ui.submit_new_blast.setEnabled(False)
@@ -884,7 +1001,6 @@ class MainWindow(QMainWindow):
         path = QFileDialog.getExistingDirectory(self.ui, "select file path", r"D:\\")
         self.ui.in_path1.setText(path)
 
-
     def view_out_path1(self):
         path = QFileDialog.getExistingDirectory(self.ui, "select file path", r"D:\\")
         self.ui.out_path1.setText(path)
@@ -892,10 +1008,14 @@ class MainWindow(QMainWindow):
     # view input path and output path of Sequence Alignment
     def view_in_path2(self):
         if self.ui.buttonGroup_2.checkedButton().text() == "input one file":
-            path = QFileDialog.getOpenFileName(self.ui, "select file path", r"D:\\", "file type (*.fasta *.fas *.fa)")
+            path = QFileDialog.getOpenFileName(
+                self.ui, "select file path", r"D:\\", "file type (*.fasta *.fas *.fa)"
+            )
             self.ui.in_path2.setText(path[0])
         else:
-            path = QFileDialog.getExistingDirectory(self.ui, "select file path", r"D:\\")
+            path = QFileDialog.getExistingDirectory(
+                self.ui, "select file path", r"D:\\"
+            )
             self.ui.in_path2.setText(path)
 
     def view_out_path2(self):
@@ -905,10 +1025,14 @@ class MainWindow(QMainWindow):
     # view input path and output path of Alignments Trimming
     def view_in_path3(self):
         if self.ui.buttonGroup_3.checkedButton().text() == "input one file":
-            path = QFileDialog.getOpenFileName(self.ui, "select file path", r"D:\\", "file type (*.fasta *.fas *.fa)")
+            path = QFileDialog.getOpenFileName(
+                self.ui, "select file path", r"D:\\", "file type (*.fasta *.fas *.fa)"
+            )
             self.ui.in_path3.setText(path[0])
         else:
-            path = QFileDialog.getExistingDirectory(self.ui, "select file path", r"D:\\")
+            path = QFileDialog.getExistingDirectory(
+                self.ui, "select file path", r"D:\\"
+            )
             self.ui.in_path3.setText(path)
 
     def view_out_path3(self):
@@ -925,8 +1049,12 @@ class MainWindow(QMainWindow):
         self.ui.out_path4.setText(path)
 
     def view_in_path5(self):
-        path = QFileDialog.getOpenFileName(self.ui, "select file path", r"D:\\",
-                                           "file type (*.fasta *.fas *.fa *.phylip *.phy)")
+        path = QFileDialog.getOpenFileName(
+            self.ui,
+            "select file path",
+            r"D:\\",
+            "file type (*.fasta *.fas *.fa *.phylip *.phy)",
+        )
         self.ui.in_path5.setText(path[0])
 
     def set_marker_summary(self):
@@ -960,7 +1088,7 @@ class MainWindow(QMainWindow):
 
     def run_filtering2(self):
         from my_filter import call_miner_filter
-        
+
         in_path1 = self.ui.in_path1.text().strip()
         # out_path1 = self.ui.out_path1.text().strip()
         out_path1 = in_path1
@@ -972,27 +1100,42 @@ class MainWindow(QMainWindow):
         if self.ui.control_extension.isChecked() and self.ui.reduce_dataset.isChecked():
             print("Control extension and reduce dataset...")
             action = 3
-            self.ui.thread = threading.Thread(target=call_miner_filter,
-                                              args=(in_path1, out_path1, action, consensus_value, len_threshold, name_correction))
+            self.ui.thread = threading.Thread(
+                target=call_miner_filter,
+                args=(
+                    in_path1,
+                    out_path1,
+                    action,
+                    consensus_value,
+                    len_threshold,
+                    name_correction,
+                ),
+            )
             self.ui.thread.setDaemon(True)
             self.ui.thread.start()
         elif self.ui.control_extension.isChecked():
             print("Control extension...")
-            action = 1  # call_miner_filter(in_path, out_path, action, len_shresh, max_num)
-            self.ui.thread = threading.Thread(target=call_miner_filter,
-                                              args=(in_path1, out_path1, action, len_threshold, name_correction))
+            action = (
+                1  # call_miner_filter(in_path, out_path, action, len_shresh, max_num)
+            )
+            self.ui.thread = threading.Thread(
+                target=call_miner_filter,
+                args=(in_path1, out_path1, action, len_threshold, name_correction),
+            )
             self.ui.thread.setDaemon(True)
             self.ui.thread.start()
         elif self.ui.reduce_dataset.isChecked():
             print("Reduce dataset...")
             action = 2
-            self.ui.thread = threading.Thread(target=call_miner_filter,
-                                              args=(in_path1, out_path1, action, len_threshold, name_correction))
+            self.ui.thread = threading.Thread(
+                target=call_miner_filter,
+                args=(in_path1, out_path1, action, len_threshold, name_correction),
+            )
             self.ui.thread.setDaemon(True)
             self.ui.thread.start()
 
         else:
-            print("Please select one option.")                                                
+            print("Please select one option.")
 
     def run_alignment(self):
         """
@@ -1001,7 +1144,7 @@ class MainWindow(QMainWindow):
         """
         self.check_dependencies()
         from call_mafft2 import mafft
-        
+
         in_path2 = self.ui.in_path2.text().strip()
         out_path2 = self.ui.out_path2.text().strip()
         if not Path(out_path2).exists():
@@ -1010,7 +1153,9 @@ class MainWindow(QMainWindow):
         # ali_cmd = self.ui.ali_cmd.toPlainText().strip()
         # ali_add_cho = self.ui.ali_add_cho.currentText().strip()
         # ali_add_path = self.ui.ali_add_path.text().strip()
-        ali_alg = self.ui.ali_alg.currentText().strip().split(" ")[0]  # algorithm, auto, add
+        ali_alg = (
+            self.ui.ali_alg.currentText().strip().split(" ")[0]
+        )  # algorithm, auto, add
         ali_thr = self.ui.ali_thr.text().strip()  # thread
         ali_reo = eval(self.ui.ali_reo.currentText().strip())  # reorder
         # ali_add_par = self.ui.ali_add_par.text().strip()
@@ -1023,8 +1168,21 @@ class MainWindow(QMainWindow):
         """in_path, out_path = '', add_choice = '', add_path = '', algorithm = 'auto',
         thread = -1, reorder = True, additional_params = '',
         pure_command_mode = False, pure_command = ''"""
-        self.ui.thread = threading.Thread(target=mafft, args=(in_path2, out_path2, ali_add_cho, ali_add_path,
-                                                              ali_alg, ali_thr, ali_reo, ali_add_par, ali_mod, ali_cmd))
+        self.ui.thread = threading.Thread(
+            target=mafft,
+            args=(
+                in_path2,
+                out_path2,
+                ali_add_cho,
+                ali_add_path,
+                ali_alg,
+                ali_thr,
+                ali_reo,
+                ali_add_par,
+                ali_mod,
+                ali_cmd,
+            ),
+        )
         print("Running alignment...")
         self.ui.thread.setDaemon(True)
         self.ui.thread.start()
@@ -1039,7 +1197,10 @@ class MainWindow(QMainWindow):
         :return:
         """
         tri_method = self.ui.tri_met.currentText()
-        if tri_method == "user defined method (set thresholds of non gap, similarity, consistency...)":
+        if (
+            tri_method
+            == "user defined method (set thresholds of non gap, similarity, consistency...)"
+        ):
             self.ui.tri_gt.setEnabled(True)
             self.ui.tri_st.setEnabled(True)
             self.ui.tri_ct.setEnabled(True)
@@ -1061,7 +1222,7 @@ class MainWindow(QMainWindow):
         """
         self.check_dependencies()
         from call_trimal import trimal
-        
+
         in_path3 = self.ui.in_path3.text().strip()
         out_path3 = self.ui.out_path3.text().strip()
         if not Path(out_path3).exists():
@@ -1089,10 +1250,23 @@ class MainWindow(QMainWindow):
            implement_methods='automated1', gt='', st='', ct='', cons='',
            additional_params='', pure_command_mode=False, pure_command=''
         """
-        self.ui.thread = threading.Thread(target=trimal, args=(in_path3, out_path3,
-                                                               tri_htm, tri_bpl, tri_met,
-                                                               tri_gt, tri_st, tri_ct, tri_con,
-                                                               tri_add_par, tri_mod, tri_cmd))
+        self.ui.thread = threading.Thread(
+            target=trimal,
+            args=(
+                in_path3,
+                out_path3,
+                tri_htm,
+                tri_bpl,
+                tri_met,
+                tri_gt,
+                tri_st,
+                tri_ct,
+                tri_con,
+                tri_add_par,
+                tri_mod,
+                tri_cmd,
+            ),
+        )
         print("Running trimming...")
         self.ui.thread.setDaemon(True)
         self.ui.thread.start()
@@ -1108,12 +1282,14 @@ class MainWindow(QMainWindow):
         :return: None
         """
         from my_concatenation import my_concatenation
-        
+
         in_path4 = self.ui.in_path4.text().strip()
         out_path4 = self.ui.out_path4.text().strip()
         if not Path(out_path4).exists():
             Path(out_path4).mkdir(exist_ok=True)
-        self.ui.thread = threading.Thread(target=my_concatenation, args=(in_path4, out_path4))
+        self.ui.thread = threading.Thread(
+            target=my_concatenation, args=(in_path4, out_path4)
+        )
         print("Running concatenation...")
         self.ui.thread.setDaemon(True)
         self.ui.thread.start()
@@ -1121,37 +1297,39 @@ class MainWindow(QMainWindow):
 
 def main():
     app = QApplication([])
-    
+
     app.setAttribute(Qt.AA_EnableHighDpiScaling)
     app.setAttribute(Qt.AA_UseHighDpiPixmaps)
-    
+
     app.setApplicationName("PyNCBIminer")
     app.setOrganizationName("PyNCBIminer")
     app.setApplicationDisplayName("PyNCBIminer")
-    
+
     icon_path = get_resource_path("icons/app_icon.ico")
     if Path(icon_path).exists():
         app.setWindowIcon(QIcon(icon_path))
-    
+
     main_window = MainWindow()
-    
+
     if Path(icon_path).exists():
         main_window.setWindowIcon(QIcon(icon_path))
-    
+
     main_window.show()
-    
-    if sys.platform == 'win32':
+
+    if sys.platform == "win32":
         try:
             app_user_model_id = "PyNCBIminer.PyNCBIminer.1.3"
-            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_user_model_id)
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+                app_user_model_id
+            )
         except:  # noqa: E722
             pass
-    
+
     sys.exit(app.exec_())
 
 
 if __name__ == "__main__":
-   # todo: print cannot show?
+    # todo: print cannot show?
     # (_OLD_VIRTUAL_PATH)
     # root_path = os.path.abspath(os.path.dirname(__file__))  # running dir
     main()
@@ -1161,7 +1339,3 @@ if __name__ == "__main__":
     # main_window = MainWindow()
     # main_window.ui.show()
     # sys.exit(app.exec_())
-
-
-
-

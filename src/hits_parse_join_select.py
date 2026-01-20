@@ -15,25 +15,26 @@ def parse_xml_by_re(wd, in_file):
     fr = open(Path(wd) / in_file, "r")
     xml = fr.read()
     fr.close()
-    find_query = re.compile('<BlastOutput_query-ID>(.*?)</BlastOutput_query-ID>')
-    find_hit = re.compile('<Hit>(.*?)</Hit>', re.S)
-    find_hit_id = re.compile('<Hit_id>(.*?)</Hit_id>')
-    find_hit_def = re.compile('<Hit_def>(.*?)</Hit_def>')  # &gt; multiple def
-    find_hsp = re.compile('<Hsp>(.*?)</Hsp>', re.S)
-    find_identity = re.compile('<Hsp_identity>(.*?)</Hsp_identity>')
-    find_align_len = re.compile('<Hsp_align-len>(.*?)</Hsp_align-len>')
-    find_gaps = re.compile('<Hsp_gaps>(.*?)</Hsp_gaps>')
-    find_q_start = re.compile('<Hsp_query-from>(.*?)</Hsp_query-from>')
-    find_q_end = re.compile('<Hsp_query-to>(.*?)</Hsp_query-to>')
-    find_s_start = re.compile('<Hsp_hit-from>(.*?)</Hsp_hit-from>')
-    find_s_end = re.compile('<Hsp_hit-to>(.*?)</Hsp_hit-to>')
-    find_evalue = re.compile('<Hsp_evalue>(.*?)</Hsp_evalue>')
-    find_bit_score = re.compile('<Hsp_bit-score>(.*?)</Hsp_bit-score>')
+    find_query = re.compile("<BlastOutput_query-ID>(.*?)</BlastOutput_query-ID>")
+    find_hit = re.compile("<Hit>(.*?)</Hit>", re.S)
+    find_hit_id = re.compile("<Hit_id>(.*?)</Hit_id>")
+    find_hit_def = re.compile("<Hit_def>(.*?)</Hit_def>")  # &gt; multiple def
+    find_hsp = re.compile("<Hsp>(.*?)</Hsp>", re.S)
+    find_identity = re.compile("<Hsp_identity>(.*?)</Hsp_identity>")
+    find_align_len = re.compile("<Hsp_align-len>(.*?)</Hsp_align-len>")
+    find_gaps = re.compile("<Hsp_gaps>(.*?)</Hsp_gaps>")
+    find_q_start = re.compile("<Hsp_query-from>(.*?)</Hsp_query-from>")
+    find_q_end = re.compile("<Hsp_query-to>(.*?)</Hsp_query-to>")
+    find_s_start = re.compile("<Hsp_hit-from>(.*?)</Hsp_hit-from>")
+    find_s_end = re.compile("<Hsp_hit-to>(.*?)</Hsp_hit-to>")
+    find_evalue = re.compile("<Hsp_evalue>(.*?)</Hsp_evalue>")
+    find_bit_score = re.compile("<Hsp_bit-score>(.*?)</Hsp_bit-score>")
 
     out_file_name = in_file.split("_")[0] + "_HitTable.txt"
     fw = open(Path(wd) / out_file_name, "w")
     fw.write(
-        "query_acc.ver\tsubject_acc.ver\thit_id\thit_def\t%_identity\talignment_length\tgap_opens\tq_start\tq_end\ts_start\ts_end\tevalue\tbit_score\n")
+        "query_acc.ver\tsubject_acc.ver\thit_id\thit_def\t%_identity\talignment_length\tgap_opens\tq_start\tq_end\ts_start\ts_end\tevalue\tbit_score\n"
+    )
     query = re.findall(find_query, xml)[0]
     hits = re.findall(find_hit, xml)
     # print("Hits number: %d" % len(hits))
@@ -53,7 +54,9 @@ def parse_xml_by_re(wd, in_file):
                     multi_def = hit_def[i].split(" ", 1)[1]
                     # print(multi_id+" "+multi_def)
                     if len(multi_id.split("|")) == 5:
-                        columns0.append(multi_id.split("|")[-2] + "\t" + multi_id + "\t" + multi_def)
+                        columns0.append(
+                            multi_id.split("|")[-2] + "\t" + multi_id + "\t" + multi_def
+                        )
                 i += 1
                 # print(i)
         hsps = re.findall(find_hsp, hit)
@@ -67,7 +70,25 @@ def parse_xml_by_re(wd, in_file):
             s_end = re.findall(find_s_end, hsp)[0]
             evalue = re.findall(find_evalue, hsp)[0]
             bit_score = re.findall(find_bit_score, hsp)[0]
-            columns1 = identity + "\t" + align_len + "\t" + gaps + "\t" + q_start + "\t" + q_end + "\t" + s_start + "\t" + s_end + "\t" + evalue + "\t" + bit_score
+            columns1 = (
+                identity
+                + "\t"
+                + align_len
+                + "\t"
+                + gaps
+                + "\t"
+                + q_start
+                + "\t"
+                + q_end
+                + "\t"
+                + s_start
+                + "\t"
+                + s_end
+                + "\t"
+                + evalue
+                + "\t"
+                + bit_score
+            )
             for columns in columns0:
                 fw.write(query + "\t" + columns + "\t" + columns1 + "\n")
     fw.close()
@@ -77,26 +98,41 @@ def parse_xml_by_re(wd, in_file):
 
 def join_group(group, allowed_length):
     # hit with the highest bit score is kept as the start of merging
-    group = group.sort_values(by=["bit_score", "alignment_length", "%_identity"], ascending=[False, False, False])
+    group = group.sort_values(
+        by=["bit_score", "alignment_length", "%_identity"],
+        ascending=[False, False, False],
+    )
     # delete hits with different direction from the highest bit-score hit
     group = group[group["q_strand"] == group.iloc[0]["q_strand"]]
     group = group[group["s_strand"] == group.iloc[0]["s_strand"]]
     # delete hits with questionable relative position of query fragment and subject fragment
     if len(group) > 1:
         group = group[
-            (group["q_start"] - group.iloc[0]["q_start"] > 0) == (group["q_end"] - group.iloc[0]["q_end"] > 0)]
+            (group["q_start"] - group.iloc[0]["q_start"] > 0)
+            == (group["q_end"] - group.iloc[0]["q_end"] > 0)
+        ]
         group = group[
-            (group["s_start"] - group.iloc[0]["s_start"] > 0) == (group["s_end"] - group.iloc[0]["s_end"] > 0)]
+            (group["s_start"] - group.iloc[0]["s_start"] > 0)
+            == (group["s_end"] - group.iloc[0]["s_end"] > 0)
+        ]
         group = group[
-            (group["q_start"] - group.iloc[0]["q_start"] < 0) == (group["q_end"] - group.iloc[0]["q_end"] < 0)]
+            (group["q_start"] - group.iloc[0]["q_start"] < 0)
+            == (group["q_end"] - group.iloc[0]["q_end"] < 0)
+        ]
         group = group[
-            (group["s_start"] - group.iloc[0]["s_start"] < 0) == (group["s_end"] - group.iloc[0]["s_end"] < 0)]
+            (group["s_start"] - group.iloc[0]["s_start"] < 0)
+            == (group["s_end"] - group.iloc[0]["s_end"] < 0)
+        ]
     # todo: query 和 subject 位置错位
     if len(group) > 1:
         group = group[
-            (group["s_start"] - group.iloc[0]["s_start"] > 0) == (group["q_start"] - group.iloc[0]["q_start"] > 0)]
+            (group["s_start"] - group.iloc[0]["s_start"] > 0)
+            == (group["q_start"] - group.iloc[0]["q_start"] > 0)
+        ]
         group = group[
-            (group["s_start"] - group.iloc[0]["s_start"] < 0) == (group["q_start"] - group.iloc[0]["q_start"] < 0)]
+            (group["s_start"] - group.iloc[0]["s_start"] < 0)
+            == (group["q_start"] - group.iloc[0]["q_start"] < 0)
+        ]
 
     if group.iloc[0]["s_strand"]:
         s_min = group.iloc[0]["s_start"]
@@ -105,7 +141,9 @@ def join_group(group, allowed_length):
         q_max = group.iloc[0]["q_end"]
         j = 1
         while s_max - s_min + 1 <= allowed_length and j < len(group):
-            if group.iloc[j]["s_start"] < s_min:  # and group.iloc[j]["q_start"] < q_min:
+            if (
+                group.iloc[j]["s_start"] < s_min
+            ):  # and group.iloc[j]["q_start"] < q_min:
                 s_minnew = group.iloc[j]["s_start"]
                 q_minnew = group.iloc[j]["q_start"]
             else:
@@ -117,7 +155,9 @@ def join_group(group, allowed_length):
             else:
                 s_maxnew = s_max
                 q_maxnew = q_max
-            if s_maxnew - s_minnew + 1 <= allowed_length:  # todo: joined length will not exceed max length?
+            if (
+                s_maxnew - s_minnew + 1 <= allowed_length
+            ):  # todo: joined length will not exceed max length?
                 s_min = s_minnew
                 s_max = s_maxnew
                 q_min = q_minnew
@@ -135,7 +175,9 @@ def join_group(group, allowed_length):
         q_min = group.iloc[0]["q_start"]
         j = 1
         while s_max - s_min + 1 <= allowed_length and j < len(group) - 1:
-            if group.iloc[j]["s_start"] > s_max:  # and group.iloc[j]["q_start"] > q_max:
+            if (
+                group.iloc[j]["s_start"] > s_max
+            ):  # and group.iloc[j]["q_start"] > q_max:
                 s_maxnew = group.iloc[j]["s_start"]
                 q_maxnew = group.iloc[j]["q_end"]
             else:
@@ -162,7 +204,17 @@ def join_group(group, allowed_length):
     sum_hits_score = sum(group["bit_score"])
     q_strand = group.iloc[0]["q_strand"]
     s_strand = group.iloc[0]["s_strand"]
-    return s_start, s_end, q_start, q_end, hits_num, sum_hits_alignlen, sum_hits_score, q_strand, s_strand
+    return (
+        s_start,
+        s_end,
+        q_start,
+        q_end,
+        hits_num,
+        sum_hits_alignlen,
+        sum_hits_score,
+        q_strand,
+        s_strand,
+    )
 
 
 def join_hits(df, maxlen, qreflen):
@@ -176,8 +228,9 @@ def join_hits(df, maxlen, qreflen):
     allowed_length = qreflen * 1.05
     if allowed_length > maxlen:
         allowed_length = maxlen
-    df[["alignment_length", "bit_score", "q_start", "q_end", "s_start", "s_end"]] = \
-        df[["alignment_length", "bit_score", "q_start", "q_end", "s_start", "s_end"]].apply(pd.to_numeric)
+    df[["alignment_length", "bit_score", "q_start", "q_end", "s_start", "s_end"]] = df[
+        ["alignment_length", "bit_score", "q_start", "q_end", "s_start", "s_end"]
+    ].apply(pd.to_numeric)
     df["q_strand"] = (df["q_end"] - df["q_start"]) > 0
     df["s_strand"] = (df["s_end"] - df["s_start"]) > 0
     df["hits_num"] = 1
@@ -194,8 +247,17 @@ def join_hits(df, maxlen, qreflen):
     for i, (name, group) in enumerate(groups):
         df1.iloc[i] = group.iloc[0]  # faster than append
         if len(group) > 1:
-            s_start, s_end, q_start, q_end, hits_num, sum_hits_alignlen, sum_hits_score, q_strand, s_strand = \
-                join_group(group, allowed_length)
+            (
+                s_start,
+                s_end,
+                q_start,
+                q_end,
+                hits_num,
+                sum_hits_alignlen,
+                sum_hits_score,
+                q_strand,
+                s_strand,
+            ) = join_group(group, allowed_length)
             df1.iloc[i]["s_start"] = s_start
             df1.iloc[i]["s_end"] = s_end
             df1.iloc[i]["q_start"] = q_start
@@ -209,7 +271,9 @@ def join_hits(df, maxlen, qreflen):
 
 
 def select_hits(df):
-    df[["sum_hits_alignlen", "sum_hits_score"]] = df[["sum_hits_alignlen", "sum_hits_score"]].apply(pd.to_numeric)
+    df[["sum_hits_alignlen", "sum_hits_score"]] = df[
+        ["sum_hits_alignlen", "sum_hits_score"]
+    ].apply(pd.to_numeric)
     groups = df.groupby(df["subject_acc.ver"])
     mat = np.zeros((len(groups), df.shape[1]), dtype=str)
     df1 = pd.DataFrame(mat, columns=df.columns, dtype=str)
@@ -219,7 +283,9 @@ def select_hits(df):
         if len(group) == 1:
             df1.iloc[i] = group.iloc[0]  # faster than append
         else:
-            group = group.sort_values(by=["sum_hits_score", "sum_hits_alignlen"], ascending=[False, False])
+            group = group.sort_values(
+                by=["sum_hits_score", "sum_hits_alignlen"], ascending=[False, False]
+            )
             df1.iloc[i] = group.iloc[0]
         i += 1
     return df1
@@ -233,18 +299,26 @@ def hits_parse_join_select_main(wd, max_len):
             try:
                 print("Parsing %s..." % file, end="")
                 time0 = datetime.now()
-                parse_xml_by_re(wd, file)  # save results as HitTable and delete xml files
+                parse_xml_by_re(
+                    wd, file
+                )  # save results as HitTable and delete xml files
                 time1 = datetime.now()
                 print("Running time: %s Seconds" % (time1 - time0))
             except Exception as result:
                 print(result)
     # join hits with the same accession in each query
     file_list = [f.name for f in Path(wd).iterdir()]
-    hit_tables = [x.split("_")[0] for x in file_list if x.split("_")[-1] == "HitTable.txt"]
-    joined_hit_tables = [x.split("_")[0] for x in file_list if x.split("_")[-1] == "joined.txt"]
+    hit_tables = [
+        x.split("_")[0] for x in file_list if x.split("_")[-1] == "HitTable.txt"
+    ]
+    joined_hit_tables = [
+        x.split("_")[0] for x in file_list if x.split("_")[-1] == "joined.txt"
+    ]
     not_joined_hit_tables = set(hit_tables) - set(joined_hit_tables)
     if "blast_summary.txt" in file_list:
-        sum_table = pd.read_table(Path(wd) / "blast_summary.txt", sep='\t', engine='python')
+        sum_table = pd.read_table(
+            Path(wd) / "blast_summary.txt", sep="\t", engine="python"
+        )
     else:
         print("Cound not find blast_summary.txt")
         return
@@ -253,10 +327,14 @@ def hits_parse_join_select_main(wd, max_len):
         try:
             print("Joining %s..." % file, end="")
             time0 = datetime.now()
-            hit_table = pd.read_table(Path(wd) / file, sep='\t', engine='python')
-            query_ref_len = sum_table[sum_table["RID"] == file.split("_")[0]].iloc[0]["Sequence_length"]
+            hit_table = pd.read_table(Path(wd) / file, sep="\t", engine="python")
+            query_ref_len = sum_table[sum_table["RID"] == file.split("_")[0]].iloc[0][
+                "Sequence_length"
+            ]
             hit_table_merged = join_hits(hit_table, max_len, query_ref_len)
-            hit_table_merged.to_csv(Path(wd) / (file.split("_")[0] + "_joined.txt"), index=False, sep="\t")
+            hit_table_merged.to_csv(
+                Path(wd) / (file.split("_")[0] + "_joined.txt"), index=False, sep="\t"
+            )
             time1 = datetime.now()
             print("Running time: %s Seconds" % (time1 - time0))
         except Exception as result:
@@ -269,7 +347,7 @@ def hits_parse_join_select_main(wd, max_len):
         hit_tables = []
         for file in file_list:
             if file.split("_")[-1] == "joined.txt":
-                hit_table = pd.read_table(Path(wd) / file, sep='\t', engine='python')
+                hit_table = pd.read_table(Path(wd) / file, sep="\t", engine="python")
                 hit_tables.append(hit_table)
         hit_tables = pd.concat(hit_tables)  # hit_tables.shape
         print("Selecting hits...", end="")
@@ -280,5 +358,7 @@ def hits_parse_join_select_main(wd, max_len):
         print("Running time: %s Seconds" % (time1 - time0))
 
     else:
-        hits_selected = pd.read_table(Path(wd) / "hits_selected.txt", sep='\t', engine='python')
+        hits_selected = pd.read_table(
+            Path(wd) / "hits_selected.txt", sep="\t", engine="python"
+        )
     return hits_selected

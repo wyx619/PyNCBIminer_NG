@@ -16,7 +16,7 @@ def check_inpath_validity(path):
     False if path is NOT valid"""
     if not isinstance(path, str):  # invalid input: value type
         return False
-    if path.endswith('.lnk'):
+    if path.endswith(".lnk"):
         return False  # do nothing with shortcut files
     # if path.endswith('.result'):  # any folder or file endswith .result will not be loaded
     #     return False
@@ -36,7 +36,7 @@ def check_outpath_validity(path):
     False if path is NOT valid"""
     if not isinstance(path, str):
         return False
-    if path.endswith('.lnk'):
+    if path.endswith(".lnk"):
         return False  # do nothing with shortcut files
     path_obj = Path(path)
     if not path_obj.exists():  # invalid input: no such path
@@ -74,7 +74,7 @@ def get_file_handles(in_path):
     Parameters
     - in_path - the input file(s) and folder(s). could be a list or a string.
     -------
-    Returns 
+    Returns
     - file_handles - all file handles in a list"""
     # STEP 1: if in_path is not a list, then make it a list
     if not isinstance(in_path, list):
@@ -92,12 +92,14 @@ def get_file_handles(in_path):
             file_handles.append(file_path)
         # substep 2 : if an element is a folder, get files directly in the folder
         else:  # is a folder
-            file_handles += [str(file) for file in file_path_obj.iterdir()
-                             if (file.is_file()
-                                 and not file.name.endswith('.lnk'))]  # exclude shortcut
+            file_handles += [
+                str(file)
+                for file in file_path_obj.iterdir()
+                if (file.is_file() and not file.name.endswith(".lnk"))
+            ]  # exclude shortcut
 
     # STEP 3: replace reverse slash, remove duplicates and sort
-    file_handles = list(map(lambda x: x.replace('\\', '/'), file_handles))
+    file_handles = list(map(lambda x: x.replace("\\", "/"), file_handles))
     for handle in file_handles:
         abs_handles.setdefault(str(Path(handle).absolute()), [])
         abs_handles[str(Path(handle).absolute())].append(handle)
@@ -109,12 +111,14 @@ def get_file_handles(in_path):
                 file_handles.append(handle)
                 break
     file_handles.sort()
-    file_handles = [x for x in file_handles if x.split(".")[-1] in ["fasta", "fas", "fa"]]
+    file_handles = [
+        x for x in file_handles if x.split(".")[-1] in ["fasta", "fas", "fa"]
+    ]
 
     return file_handles
 
 
-def filter_by_length(in_path, out_path='./'):
+def filter_by_length(in_path, out_path="./"):
     """filter fasta file(s) to keep only the longest sequence for each taxon
     When multiple files are input, do filtering for each file.
     ----------
@@ -122,7 +126,7 @@ def filter_by_length(in_path, out_path='./'):
     - in_path - the input file(s) and folder(s). could be a list or a string.
     - out_path - destination folder of output, where log files and result will be written.
     -------
-    Returns 
+    Returns
     -written_lengths - a list of number of sequences written (for each file)"""
     # STEP 1: get ready: check paths and create folders, make list of inputs
     file_handles = get_file_handles(in_path)
@@ -130,44 +134,48 @@ def filter_by_length(in_path, out_path='./'):
         return []  # write nothing if output folder is invalid
     written_lengths = []  # to store the number of records written, returned value
 
-    # STEP 2: for each file in the list, for each taxon, 
+    # STEP 2: for each file in the list, for each taxon,
     # keep information of records with the longest sequence using dictionary
     for in_file in file_handles:
         longest_records = {}
-        record_iter = SeqIO.parse(in_file, 'fasta')
+        record_iter = SeqIO.parse(in_file, "fasta")
         for record in record_iter:
-            if len(record.description.split('|')) == 1:
+            if len(record.description.split("|")) == 1:
                 taxon_name = record.description
             else:
-                taxon_name = record.description.split('|')[1]
-            longest_records.setdefault(taxon_name, SeqRecord.SeqRecord(''))
+                taxon_name = record.description.split("|")[1]
+            longest_records.setdefault(taxon_name, SeqRecord.SeqRecord(""))
             if len(record.seq) > len(longest_records[taxon_name].seq):
                 longest_records[taxon_name] = record
 
         # STEP 3: write a csv file to store the detailed information of kept records
-        temp_output_folder = Path(out_path) / 'filtered.result'
+        temp_output_folder = Path(out_path) / "filtered.result"
         create_folder(temp_output_folder)
-        cols = ['taxon name', 'description']
+        cols = ["taxon name", "description"]
         logs = []  # kept records, used to create a dataframe and write to csv
-        for key, value in longest_records.items():  # key:taxon_name, value:record itself
+        for (
+            key,
+            value,
+        ) in longest_records.items():  # key:taxon_name, value:record itself
             logs.append([key, value.description])
         df = pd.DataFrame(logs, columns=cols)
-        df.to_csv(temp_output_folder / (Path(in_file).stem + '_kept_records.csv'),
-                  index=False)
+        df.to_csv(
+            temp_output_folder / (Path(in_file).stem + "_kept_records.csv"), index=False
+        )
 
-        # STEP 4: write a fasta file to store only name and sequence of kept records  
+        # STEP 4: write a fasta file to store only name and sequence of kept records
         out_file = temp_output_folder / Path(in_file).name
         for taxon_name in longest_records.keys():  # avoid unwanted output
-            longest_records[taxon_name].name = ''
+            longest_records[taxon_name].name = ""
             longest_records[taxon_name].id = taxon_name.strip()
-            longest_records[taxon_name].description = ''
-        written_lengths.append(SeqIO.write(longest_records.values(), out_file, 'fasta'))
+            longest_records[taxon_name].description = ""
+        written_lengths.append(SeqIO.write(longest_records.values(), out_file, "fasta"))
 
     return written_lengths  # if no file is written, return value is an empty list
 
 
-def fas2phy(in_path, out_path='./'):
-    """ convert fasta file to phylip file.
+def fas2phy(in_path, out_path="./"):
+    """convert fasta file to phylip file.
     When multiple files are input, do transformation for each file.
     (If a fasta is an unaligned collection of sequences, nothing will be done.
     If a fasta is an empty fasta, write an empty file accordingly.)
@@ -184,14 +192,14 @@ def fas2phy(in_path, out_path='./'):
     file_handles = get_file_handles(in_path)
     if not check_outpath_validity(out_path):
         return []  # write nothing if output folder is invalid
-    out_path = Path(out_path) / 'phylip.result'
+    out_path = Path(out_path) / "phylip.result"
     create_folder(out_path)
     written_results = []  # to store the pair [species_number, sequence_length]
 
     # STEP 1: read and get length of the longest name, species number and sequence length.
     # and also checking whether all sequences are of the same length
     for in_file in file_handles:
-        record_iter = SeqIO.parse(in_file, 'fasta')
+        record_iter = SeqIO.parse(in_file, "fasta")
         aligned = True
         len_longest_name = 0
         species_number = 0
@@ -202,7 +210,9 @@ def fas2phy(in_path, out_path='./'):
             taxon_length = len(record.seq)
             if species_number == 0:  # initiate sequence length
                 sequence_length = taxon_length
-            if taxon_length != sequence_length:  # phylip requires sequences in same length
+            if (
+                taxon_length != sequence_length
+            ):  # phylip requires sequences in same length
                 aligned = False
                 break
                 # raise Exception('Invalid sequence length: ', str(in_file))
@@ -214,33 +224,39 @@ def fas2phy(in_path, out_path='./'):
         if not aligned:  # fasta is not aligned, cannot transform to phylip, so skip
             continue
         illegal_characters = ["\t", "\n", " ", ":", ",", ")", "(", ";", "]", "[", "'"]
-        filename = Path(in_file).stem + '.phy'
-        fptr = open(out_path / filename, 'w')
-        fptr.write(f' {species_number}  {sequence_length}' + '\n')  # header
-        record_iter = SeqIO.parse(in_file, 'fasta')
-        name_room = len_longest_name + 1  # room for each taxon's name and following spaces
+        filename = Path(in_file).stem + ".phy"
+        fptr = open(out_path / filename, "w")
+        fptr.write(f" {species_number}  {sequence_length}" + "\n")  # header
+        record_iter = SeqIO.parse(in_file, "fasta")
+        name_room = (
+            len_longest_name + 1
+        )  # room for each taxon's name and following spaces
         for record in record_iter:
             taxon_name = record.description
             taxon_seq = str(record.seq)
 
             # replace illegal characters in phylip by underlines if necessary.
             if any(substring in taxon_name for substring in illegal_characters):
-                illegals = [substring for substring in taxon_name
-                            if substring in illegal_characters]
+                illegals = [
+                    substring
+                    for substring in taxon_name
+                    if substring in illegal_characters
+                ]
                 for char in illegals:
-                    taxon_name = taxon_name.replace(char, '_')
+                    taxon_name = taxon_name.replace(char, "_")
                 # to avoid gathering '_' in taxon name
-                taxon_name = '_'.join([part for part in taxon_name.split('_') if part != '']) \
-                    .strip()
+                taxon_name = "_".join(
+                    [part for part in taxon_name.split("_") if part != ""]
+                ).strip()
 
-            space = ' ' * (name_room - len(taxon_name))
-            fptr.write(taxon_name + space + taxon_seq + '\n')
+            space = " " * (name_room - len(taxon_name))
+            fptr.write(taxon_name + space + taxon_seq + "\n")
         fptr.close()
         written_results.append([species_number, sequence_length])
     return written_results  # pair [species_number, sequence_length]
 
 
-def taxon_completion(in_path, out_path='./'):
+def taxon_completion(in_path, out_path="./"):
     """Complete fasta files where there are missing records
     ----------
     Parameters
@@ -254,7 +270,7 @@ def taxon_completion(in_path, out_path='./'):
     file_handles = get_file_handles(in_path)
     if not check_outpath_validity(out_path):
         return {}  # write nothing if output folder is invalid
-    out_path = Path(out_path) / 'completion.result'
+    out_path = Path(out_path) / "completion.result"
     create_folder(out_path)
     present_records = {}  # to store the missing taxon for each gene
     missing_records = {}  # the '-'-completed taxa
@@ -264,7 +280,7 @@ def taxon_completion(in_path, out_path='./'):
     total_taxa = []
     for in_file in file_handles:
         file_basename = Path(in_file).stem
-        record_iter = SeqIO.parse(in_file, 'fasta')
+        record_iter = SeqIO.parse(in_file, "fasta")
         recorded_length = list(set([len(record.seq) for record in record_iter]))
         if len(recorded_length) == 1:  # aligned or same-length sequences:
             sequence_lengths.setdefault(file_basename, recorded_length[0])
@@ -272,7 +288,7 @@ def taxon_completion(in_path, out_path='./'):
             sequence_lengths.setdefault(file_basename, 0)
         else:  # not 0/1 means differ in length,
             sequence_lengths.setdefault(file_basename, -1)
-        record_iter = SeqIO.parse(in_file, 'fasta')
+        record_iter = SeqIO.parse(in_file, "fasta")
         recorded_taxa = [record.description for record in record_iter]
         present_records.setdefault(file_basename, recorded_taxa)  # recorded taxa
         total_taxa += recorded_taxa
@@ -292,13 +308,14 @@ def taxon_completion(in_path, out_path='./'):
     for in_file in file_handles:
         file_basename = Path(in_file).stem
         recorded_taxa = present_records[file_basename]
-        missing_records.setdefault(file_basename,
-                                   [taxon for taxon in total_taxa if taxon not in recorded_taxa])
+        missing_records.setdefault(
+            file_basename, [taxon for taxon in total_taxa if taxon not in recorded_taxa]
+        )
         unrecorded_taxa = missing_records[file_basename]
         recorded_length = sequence_lengths[file_basename]
         # condition 1: if file is aligned, then add equivalent amount of - to keep them aligned
         if recorded_length > 0:
-            f = open(out_path / Path(in_file).name, 'a')
+            f = open(out_path / Path(in_file).name, "a")
             for taxon in unrecorded_taxa:
                 f.write(f"\n>{taxon}\n{'-' * recorded_length}")
             f.close()
@@ -312,13 +329,13 @@ def taxon_completion(in_path, out_path='./'):
                 pass  # 原意是跳过本次循环，但 finally 中不能 continue，改为空语句
         # condition 3: if file is not aligned, then for each gap, only three - will be added
         else:
-            f = open(out_path / Path(in_file).name, 'a')
+            f = open(out_path / Path(in_file).name, "a")
             for taxon in unrecorded_taxa:
                 f.write(f"\n>{taxon}\n{'-' * 3}")
             f.close()
 
     # STEP 4: write added records to log file
-    f = open(out_path / 'completion.log', 'w')
+    f = open(out_path / "completion.log", "w")
     f.write("Appended taxon for each fasta file are listed below:\n")
     for key, value in missing_records.items():
         value.sort()  # order the result
@@ -328,7 +345,7 @@ def taxon_completion(in_path, out_path='./'):
     return missing_records  # {marker: [missing taxa]}
 
 
-def concat(in_path, out_path='./', filename='concat.fasta'):
+def concat(in_path, out_path="./", filename="concat.fasta"):
     """
     Concatenate different fasta files according to taxon name,
         to link sequences from different files together.
@@ -339,22 +356,22 @@ def concat(in_path, out_path='./', filename='concat.fasta'):
     - out_path - destination folder of output, where log files and result will be written.
     - filename - the name of concatenated file and the file name in provided cfg file
     -------
-    Returns 
+    Returns
     - marker_record - the start and end position of each marker"""
     # STEP 0: check validity of in_path and out_path, get legal input handles
     file_handles = get_file_handles(in_path)
     if not check_outpath_validity(out_path):
         return {}  # write nothing if output folder is invalid
-    out_path = Path(out_path) / 'concat.result'
+    out_path = Path(out_path) / "concat.result"
     create_folder(out_path)
 
     # STEP 1: check whether there is a 'marker gap' for all taxa and whether same length
     # substep 1: collect all taxa from input files
     all_taxa = []
     for in_file in file_handles:
-        record_iter = SeqIO.parse(in_file, 'fasta')
+        record_iter = SeqIO.parse(in_file, "fasta")
         all_taxa += [record.description for record in record_iter]
-        record_iter = SeqIO.parse(in_file, 'fasta')
+        record_iter = SeqIO.parse(in_file, "fasta")
         gene_length = [len(record.seq) for record in record_iter]
         if len(list(set(gene_length))) > 1:
             return {}  # markers with same length required
@@ -362,7 +379,7 @@ def concat(in_path, out_path='./', filename='concat.fasta'):
     # substep2: test missing taxon
     all_taxa = list(set(all_taxa))
     for in_file in file_handles:
-        record_iter = SeqIO.parse(in_file, 'fasta')
+        record_iter = SeqIO.parse(in_file, "fasta")
         num_of_taxa = len([record for record in record_iter])
         if len(all_taxa) != num_of_taxa:
             return {}  # cannot concat when there is missing taxon
@@ -371,23 +388,26 @@ def concat(in_path, out_path='./', filename='concat.fasta'):
     concat_result = {}  # {record.description: record}
     marker_record = {}  # {marker: position} where position: [start, end]
     for in_file in file_handles:
-        marker_record.setdefault('total_length', 0)
+        marker_record.setdefault("total_length", 0)
         marker_name = Path(in_file).stem
         marker_record.setdefault(marker_name, [])
-        record_iter = SeqIO.parse(in_file, 'fasta')
+        record_iter = SeqIO.parse(in_file, "fasta")
         for record in record_iter:
-            concat_result.setdefault(record.description,
-                                     SeqRecord.SeqRecord('', id=record.id,
-                                                         description=''))
+            concat_result.setdefault(
+                record.description,
+                SeqRecord.SeqRecord("", id=record.id, description=""),
+            )
             concat_result[record.description].seq += record.seq
             if marker_record[marker_name] == []:
                 length = len(record.seq)
-                marker_record[marker_name] = [marker_record['total_length'] + 1,
-                                              marker_record['total_length'] + length]
-                marker_record['total_length'] += length
-    del marker_record['total_length']
+                marker_record[marker_name] = [
+                    marker_record["total_length"] + 1,
+                    marker_record["total_length"] + length,
+                ]
+                marker_record["total_length"] += length
+    del marker_record["total_length"]
 
-    SeqIO.write(concat_result.values(), out_path / filename, 'fasta')
+    SeqIO.write(concat_result.values(), out_path / filename, "fasta")
 
     # STEP 3: prepare log and cfg file to record gene positions
     cfg_filename = Path(filename).stem
@@ -417,9 +437,9 @@ search = greedy;"""
         if value == []:
             continue
         for i in range(3):
-            body += fr"{key}_pos{i + 1} = {i + value[0]}-{value[1]}\3;" + "\n"
+            body += rf"{key}_pos{i + 1} = {i + value[0]}-{value[1]}\3;" + "\n"
     cfg = header + body + tail
-    f = open(out_path / f'{cfg_filename}.cfg', 'w')
+    f = open(out_path / f"{cfg_filename}.cfg", "w")
     f.write(cfg)
     f.close()
     return marker_record
