@@ -37,6 +37,8 @@ def install_mafft():
     with zipfile.ZipFile(file_path, "r") as zip:
         zip.extractall(mafft_dir)
     print("Installation finished.")
+    file_path.unlink()  # Delete zip file
+    print("Zip file deleted.")
 
 
 def install_trimal():
@@ -60,3 +62,5 @@ def install_trimal():
     with zipfile.ZipFile(file_path, "r") as zip:
         zip.extractall(trimal_dir)
     print("Installation finished.")
+    file_path.unlink()  # Delete zip file
+    print("Zip file deleted.")

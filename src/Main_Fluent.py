@@ -103,7 +103,7 @@ class LogWidget(CardWidget):
         self.textEdit = TextEdit(self)
         self.textEdit.setReadOnly(True)
         self.textEdit.setPlaceholderText(
-            "Welcome to PyNCBIminer! Output will appear here..."
+            "Welcome to PyNCBIminer-NG! Output will appear here..."
         )
 
         self.vBoxLayout.addWidget(self.headerLabel)
@@ -819,7 +819,7 @@ class AboutInterface(QWidget):
         h3 = QHBoxLayout(card_about)
         h3.setContentsMargins(15, 10, 15, 10)
 
-        h3.addWidget(BodyLabel("About PyNCBIminer"))
+        h3.addWidget(BodyLabel("About PyNCBIminer-NG"))
         btn_about = PushButton("Show Info", card_about)
         btn_about.clicked.connect(main_window.show_about)
         h3.addWidget(btn_about)
@@ -877,7 +877,7 @@ class MainWindow(FluentWindow):
     def __init__(self):
         super().__init__()
         self.is_closing = False
-        self.setWindowTitle("PyNCBIminer")
+        self.setWindowTitle("PyNCBIminer-NG")
         self.setWindowIcon(QIcon(get_resource_path("icons/app_icon.ico")))
         self.navigationInterface.setExpandWidth(250)
 
@@ -1175,9 +1175,9 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     # 设置全局字体
 
-    app.setApplicationName("PyNCBIminer")
-    app.setOrganizationName("PyNCBIminer")
-    app.setApplicationDisplayName("PyNCBIminer")
+    app.setApplicationName("PyNCBIminer-NG")
+    app.setOrganizationName("Sichuan University")
+    app.setApplicationDisplayName("PyNCBIminer-NG")
     setTheme(Theme.AUTO)
 
     w = MainWindow()

@@ -583,10 +583,18 @@ class BackendController(QObject):
         thread.start()
 
     def run_install_mafft(self):
-        self.emit_log("Install MAFFT triggered")
+        from install_dependencies import install_mafft
+        self.emit_log("Installing MAFFT...")
+        thread = threading.Thread(target=install_mafft)
+        thread.daemon = True
+        thread.start()
 
     def run_install_trimal(self):
-        self.emit_log("Install trimAl triggered")
+        from install_dependencies import install_trimal
+        self.emit_log("Installing trimAl...")
+        thread = threading.Thread(target=install_trimal)
+        thread.daemon = True
+        thread.start()
 
     def show_about(self, parent_window):
         InfoBar.info(
