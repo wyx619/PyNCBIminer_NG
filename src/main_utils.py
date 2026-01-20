@@ -93,7 +93,7 @@ class BackendController(QObject):
 
         taxonomy = retrieval_interface.tax_edit.toPlainText().strip()
         if taxonomy == "":
-            self.emit_log("Please input your target groups.")
+            self.emit_log("Please input your target groups.", "WARNING")
             return
 
         organisms = [x for x in taxonomy.splitlines() if len(x) > 0]
@@ -167,13 +167,13 @@ class BackendController(QObject):
             try:
                 Path(wd).mkdir(parents=True, exist_ok=True)
             except Exception as e:
-                self.emit_log(f"Error creating working directory: {e}")
+                self.emit_log(f"Error creating working directory: {e}", "ERROR")
                 return
 
         try:
             pass  # max_len = int(retrieval_interface.max_len.text().strip())
         except ValueError as e:
-            self.emit_log(f"Value Error: {e}")
+            self.emit_log(f"Value Error: {e}", "ERROR")
             return
 
         (Path(wd) / "parameters" / "ref_seq").mkdir(parents=True, exist_ok=True)
@@ -197,25 +197,25 @@ class BackendController(QObject):
         # check if working directory exists
         wd = retrieval_interface.wd_edit.text().strip()
         if not Path(wd).exists():
-            self.emit_log("Working directory does not exist, please submit new BLAST.")
+            self.emit_log("Working directory does not exist, please submit new BLAST.", "WARNING")
             return
         if not (Path(wd) / "parameters").exists():
-            self.emit_log("Can't find parameters directory, please submit new BLAST.")
+            self.emit_log("Can't find parameters directory, please submit new BLAST.", "WARNING")
             return
         if not (Path(wd) / "tmp_files").exists():
-            self.emit_log("Can't find tmp_files directory, please submit new BLAST.")
+            self.emit_log("Can't find tmp_files directory, please submit new BLAST.", "WARNING")
             return
         if not (Path(wd) / "results").exists():
-            self.emit_log("Can't find results directory, please submit new BLAST.")
+            self.emit_log("Can't find results directory, please submit new BLAST.", "WARNING")
             return
 
         # read BLAST parameters in blast_parameters.txt file
         parameters_files = [f.name for f in (Path(wd) / "parameters").iterdir()]
         if "blast_parameters.txt" not in parameters_files:
-            self.emit_log("Can't find BLAST parameters, please submit new BLAST.")
+            self.emit_log("Can't find BLAST parameters, please submit new BLAST.", "WARNING")
             return
         if "initial_queries.fasta" not in parameters_files:
-            self.emit_log("Can't find initial queries, please submit new BLAST.")
+            self.emit_log("Can't find initial queries, please submit new BLAST.", "WARNING")
             return
         else:
             retrieval_interface.init_queries.clear()
@@ -385,7 +385,7 @@ class BackendController(QObject):
             len_thr = int(construction_interface.len_thresh.text().strip())
             cons = construction_interface.combo_consensus.currentText() == "True"
         except ValueError as e:
-            self.emit_log(f"Value Error: {e}")
+            self.emit_log(f"Value Error: {e}", "ERROR")
             return
 
         action = 0
@@ -400,7 +400,7 @@ class BackendController(QObject):
             action = 2  # reduce only
 
         if action == 0:
-            self.emit_log("Please select an option")
+            self.emit_log("Please select an option", "WARNING")
             return
 
         self.emit_log("Running Filter...")
@@ -417,10 +417,10 @@ class BackendController(QObject):
         out_path = construction_interface.align_out.text().strip()
 
         if not in_path:
-            self.emit_log("Please set input path")
+            self.emit_log("Please set input path", "WARNING")
             return
         if not out_path:
-            self.emit_log("Please set output path")
+            self.emit_log("Please set output path", "WARNING")
             return
 
         if not Path(out_path).exists():
