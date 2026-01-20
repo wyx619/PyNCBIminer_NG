@@ -405,7 +405,7 @@ def concat(in_path, out_path="./", filename="concat.fasta"):
                     marker_record["total_length"] + length,
                 ]
                 marker_record["total_length"] += length
-    del marker_record["total_length"]
+    marker_record.pop("total_length", None)
 
     SeqIO.write(concat_result.values(), out_path / filename, "fasta")
 
