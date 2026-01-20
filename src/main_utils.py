@@ -21,27 +21,50 @@ def get_writable_path(relative_path):
 
 class BackendController(QObject):
     log_signal = Signal(str)
+    infobar_signal = Signal(str, str)  # level, message
+    count_signal = Signal(int)  # search results count
 
     def __init__(self):
         super().__init__()
 
     def emit_log(self, message, level="INFO"):
-        self.log_signal.emit(f"[{level}] {message}")
+        self.log_signal.emit(f"[{level}] {message}\n")
+        self.infobar_signal.emit(level, message)
 
     def save_settings(self, retrieval_interface, parent_window):
-        target_region = retrieval_interface.combo_region.currentText()
+        # Use new_region_edit if it has text, otherwise use combo box
+        new_region = retrieval_interface.new_region_edit.text().strip()
+        if new_region:
+            target_region = new_region
+        else:
+            target_region = retrieval_interface.combo_region.currentText()
+        
         if target_region.strip() == "":
             InfoBar.warning(
-                title="Error", content="Please input region name.", parent=parent_window
+                title="Warning", 
+                content="Please input region name.", 
+                parent=parent_window,
+                position=InfoBarPosition.TOP,
+                duration=5000
             )
             return
 
+        # Determine save location: same as where it was loaded from
         blast_params_dir = Path(get_writable_path("blast_parameters"))
-        blast_params_dir.mkdir(parents=True, exist_ok=True)
+        default_params_dir = Path(get_resource_path("blast_parameters"))
+        custom_params_file = blast_params_dir / Path(target_region + ".txt")
+        default_params_file = default_params_dir / Path(target_region + ".txt")
+        
+        # Save to the same location it was loaded from
+        if custom_params_file.exists():
+            params_file = custom_params_file
+            blast_params_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            params_file = default_params_file
 
-        key_annotations = retrieval_interface.key_anno.text().strip().replace("; ", "|")
+        key_annotations = retrieval_interface.key_anno.toPlainText().strip().replace("; ", "|")
 
-        with open(blast_params_dir / Path(target_region + ".txt"), "w") as fw:
+        with open(params_file, "w") as fw:
             fw.write(f"target_region\t{target_region}\n")
             fw.write(
                 f"entrez_qualifier\t{retrieval_interface.entrez_qualifier.toPlainText().strip()}\n"
@@ -68,18 +91,27 @@ class BackendController(QObject):
                 )
 
         initial_queries = retrieval_interface.init_queries.toPlainText().strip()
+        
+        # Save initial_queries to the same location as loaded from
         initial_queries_dir = Path(get_writable_path("initial_queries"))
-        initial_queries_dir.mkdir(parents=True, exist_ok=True)
-        target_region_dir = initial_queries_dir / Path(target_region)
-        target_region_dir.mkdir(parents=True, exist_ok=True)
+        custom_queries_dir = initial_queries_dir / Path(target_region)
+        default_queries_dir = Path(get_resource_path("initial_queries")) / Path(target_region)
+        
+        if custom_queries_dir.exists():
+            queries_dir = custom_queries_dir
+        else:
+            queries_dir = default_queries_dir
+        
+        queries_dir.mkdir(parents=True, exist_ok=True)
 
-        with open(target_region_dir / Path(target_region + ".fasta"), "w") as fw:
+        with open(queries_dir / Path(target_region + ".fasta"), "w") as fw:
             fw.write(initial_queries)
 
         if retrieval_interface.combo_region.findText(target_region) == -1:
             retrieval_interface.combo_region.addItem(target_region)
 
         retrieval_interface.combo_region.setCurrentText(target_region)
+        retrieval_interface.new_region_edit.clear()  # Clear the new region input
         retrieval_interface.btn_save_settings.setEnabled(False)
         retrieval_interface.btn_set_region.setEnabled(True)
         InfoBar.success(
@@ -92,13 +124,21 @@ class BackendController(QObject):
         from my_entrez import entrez_count, entrez_summary
 
         taxonomy = retrieval_interface.tax_edit.toPlainText().strip()
+        email = retrieval_interface.email_edit.text().strip()
+        qualifier = retrieval_interface.entrez_qualifier.toPlainText().strip()
+        
         if taxonomy == "":
             self.emit_log("Please input your target groups.", "WARNING")
+        if email == "":
+            self.emit_log("Please input your email address.", "WARNING")
+        if qualifier == "":
+            self.emit_log("Please input your Entrez qualifier.", "WARNING")
+        
+        if taxonomy == "" or email == "" or qualifier == "":
             return
-
+        
         organisms = [x for x in taxonomy.splitlines() if len(x) > 0]
-        email = retrieval_interface.email_edit.text().strip()
-
+        
         date_from_obj = retrieval_interface.date_from.date
         date_to_obj = retrieval_interface.date_to.date
 
@@ -122,9 +162,7 @@ class BackendController(QObject):
             )
             return
 
-        qualifier = retrieval_interface.entrez_qualifier.toPlainText().strip()
-
-        self.emit_log("Starting ESearch...")
+        self.emit_log("Starting Entrez Search...")
 
         if retrieval_interface.chk_summary.isChecked():
             target_region_list = [
@@ -152,16 +190,35 @@ class BackendController(QObject):
                 args=(email, organisms, target_region_dict, d_from, d_to),
             )
         else:
+            def count_callback(count):
+                self.count_signal.emit(count)
+            
             thread = threading.Thread(
-                target=entrez_count, args=(email, organisms, qualifier, d_from, d_to)
+                target=entrez_count, args=(email, organisms, qualifier, d_from, d_to, count_callback)
             )
 
         thread.daemon = True
         thread.start()
 
     def submit_new_blast(self, retrieval_interface):
-        self.emit_log("Submitting New BLAST...")
+        taxonomy = retrieval_interface.tax_edit.toPlainText().strip()
+        email = retrieval_interface.email_edit.text().strip()
+        qualifier = retrieval_interface.entrez_qualifier.toPlainText().strip()
         wd = retrieval_interface.wd_edit.text().strip()
+        
+        if taxonomy == "":
+            self.emit_log("Please input your target groups.", "WARNING")
+        if email == "":
+            self.emit_log("Please input your email address.", "WARNING")
+        if qualifier == "":
+            self.emit_log("Please input your Entrez qualifier.", "WARNING")
+        if wd == "":
+            self.emit_log("Please input your working directory path.", "WARNING")
+        
+        if taxonomy == "" or email == "" or qualifier == "" or wd == "":
+            return
+        
+        self.emit_log("Submitting New BLAST...")
 
         if not wd or not Path(wd).exists():
             try:
@@ -190,12 +247,16 @@ class BackendController(QObject):
         :return:
         """
         from iterated_blast import iterated_blast_main
-
+        # check if working directory path is empty
+        wd = retrieval_interface.wd_edit.text().strip()
+        if wd == "":
+            self.emit_log("Please input your working directory path.", "WARNING")
+            return
+        
         print_line("*")
         self.emit_log("Loading previous job...")
-
+        
         # check if working directory exists
-        wd = retrieval_interface.wd_edit.text().strip()
         if not Path(wd).exists():
             self.emit_log("Working directory does not exist, please submit new BLAST.", "WARNING")
             return
@@ -381,6 +442,13 @@ class BackendController(QObject):
         in_path = construction_interface.filter_in.text().strip()
         out_path = construction_interface.filter_out.text().strip() or in_path
 
+        if not in_path:
+            self.emit_log("Please set input path", "WARNING")
+            return
+        if not Path(in_path).exists():
+            self.emit_log(f"Input path does not exist: {in_path}", "WARNING")
+            return
+
         try:
             len_thr = int(construction_interface.len_thresh.text().strip())
             cons = construction_interface.combo_consensus.currentText() == "True"
@@ -404,8 +472,12 @@ class BackendController(QObject):
             return
 
         self.emit_log("Running Filter...")
+        
+        def emit_callback(message, level="INFO"):
+            self.emit_log(message, level)
+        
         thread = threading.Thread(
-            target=call_miner_filter, args=(in_path, out_path, action, cons, len_thr)
+            target=call_miner_filter, args=(in_path, out_path, action, cons, len_thr, emit_callback)
         )
         thread.daemon = True
         thread.start()
@@ -418,6 +490,9 @@ class BackendController(QObject):
 
         if not in_path:
             self.emit_log("Please set input path", "WARNING")
+            return
+        if not Path(in_path).exists():
+            self.emit_log(f"Input path does not exist: {in_path}", "WARNING")
             return
         if not out_path:
             self.emit_log("Please set output path", "WARNING")
@@ -447,6 +522,17 @@ class BackendController(QObject):
 
         in_path = construction_interface.trim_in.text().strip()
         out_path = construction_interface.trim_out.text().strip()
+
+        if not in_path:
+            self.emit_log("Please set input path", "WARNING")
+            return
+        if not Path(in_path).exists():
+            self.emit_log(f"Input path does not exist: {in_path}", "WARNING")
+            return
+        if not out_path:
+            self.emit_log("Please set output path", "WARNING")
+            return
+
         if not Path(out_path).exists():
             Path(out_path).mkdir(exist_ok=True)
 
@@ -478,8 +564,18 @@ class BackendController(QObject):
     def run_concatenation(self, construction_interface):
         from my_concatenation import my_concatenation
 
-        in_p = construction_interface.concat_in.text()
-        out_p = construction_interface.concat_out.text()
+        in_p = construction_interface.concat_in.text().strip()
+        out_p = construction_interface.concat_out.text().strip()
+
+        if not in_p:
+            self.emit_log("Please set input path", "WARNING")
+            return
+        if not Path(in_p).exists():
+            self.emit_log(f"Input path does not exist: {in_p}", "WARNING")
+            return
+        if not out_p:
+            self.emit_log("Please set output path", "WARNING")
+            return
 
         self.emit_log("Running Concatenation...")
         thread = threading.Thread(target=my_concatenation, args=(in_p, out_p))

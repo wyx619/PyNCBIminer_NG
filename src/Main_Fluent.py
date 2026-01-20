@@ -171,13 +171,42 @@ class RetrievalInterface(SingleDirectionScrollArea):
         reg_layout = QHBoxLayout(self.region_card)
         reg_layout.setContentsMargins(15, 10, 15, 10)
         self.combo_region = ComboBox(self.region_card)
-        self.combo_region.addItems(
-            ["", "ITS", "rbcL", "matK", "trnL-trnF", "psbA-trnH", "ndhF", "rpoB"]
-        )
+        self.combo_region.setMaxVisibleItems(6)
+        
+        # Dynamically load all available markers from blast_parameters directory
+        blast_params_dir = Path(get_writable_path("blast_parameters"))
+        default_params_dir = Path(get_resource_path("blast_parameters"))
+        
+        marker_set = set()
+        marker_set.add("")  # Add empty option
+        
+        # Load from custom directory
+        if blast_params_dir.exists():
+            for f in blast_params_dir.iterdir():
+                if f.is_file() and f.suffix == ".txt":
+                    marker_set.add(f.stem)
+        
+        # Load from default directory
+        if default_params_dir.exists():
+            for f in default_params_dir.iterdir():
+                if f.is_file() and f.suffix == ".txt":
+                    marker_set.add(f.stem)
+        
+        # Sort markers (empty first, then alphabetical)
+        markers = sorted(marker_set, key=lambda x: (x != "", x))
+        self.combo_region.addItems(markers)
+        
+        # New region input (only enabled when combo is empty)
+        self.new_region_edit = LineEdit(self.region_card)
+        self.new_region_edit.setPlaceholderText("Enter new region name")
+        self.new_region_edit.setEnabled(False)
+        self.new_region_edit.setFixedWidth(180)
+        
         self.btn_set_region = PrimaryPushButton("Set Region", self.region_card)
         self.btn_save_settings = PushButton("Save Settings", self.region_card)
         reg_layout.addWidget(BodyLabel("Target Region:"))
         reg_layout.addWidget(self.combo_region)
+        reg_layout.addWidget(self.new_region_edit)
         reg_layout.addWidget(self.btn_set_region)
         reg_layout.addWidget(self.btn_save_settings)
         self.basic_group.addSettingCard(self.region_card)
@@ -344,7 +373,6 @@ class RetrievalInterface(SingleDirectionScrollArea):
     def clear_date_from(self):
         self.date_from.setDate(QDate())
         self.date_from_cleared = True
-        self.clear_date_to()  # 同时清除另一个
 
     def clear_date_to(self):
         self.date_to.setDate(QDate())
@@ -807,6 +835,45 @@ class MainWindow(FluentWindow):
     def outputWritten(self, text):
         self.log_widget.append_text(text)
 
+    @Slot(str, str)
+    def show_infobar(self, level, message):
+        if level == "ERROR":
+            InfoBar.error(
+                title=level,
+                content=message,
+                parent=self,
+                position=InfoBarPosition.TOP,
+                duration=5000,
+            )
+        elif level == "WARNING":
+            InfoBar.warning(
+                title=level,
+                content=message,
+                parent=self,
+                position=InfoBarPosition.TOP,
+                duration=5000,
+            )
+        else:
+            InfoBar.info(
+                title=level,
+                content=message,
+                parent=self,
+                position=InfoBarPosition.TOP,
+                duration=5000,
+            )
+
+    @Slot(int)
+    def handle_count(self, count):
+        message = f"Entrez search results count: {count}"
+        self.log_widget.append_text(f"[INFO] {message}")
+        InfoBar.success(
+            title="SUCCESS",
+            content=message,
+            parent=self,
+            position=InfoBarPosition.TOP,
+            duration=5000,
+        )
+
     def __init__(self):
         super().__init__()
         self.is_closing = False
@@ -832,6 +899,8 @@ class MainWindow(FluentWindow):
         # Initialize Backend Controller
         self.backend = BackendController()
         self.backend.log_signal.connect(self.outputWritten)
+        self.backend.infobar_signal.connect(self.show_infobar)
+        self.backend.count_signal.connect(self.handle_count)
 
         # Define Interfaces
         self.retrieval_interface = RetrievalInterface(self)
@@ -919,7 +988,9 @@ class MainWindow(FluentWindow):
     def connect_logic(self):
         # Retrieval
         ri = self.retrieval_interface
+        ri.combo_region.currentIndexChanged.connect(self.on_region_combo_changed)
         ri.combo_region.currentIndexChanged.connect(self.select_target_region)
+        ri.new_region_edit.textChanged.connect(self.on_new_region_changed)
         ri.btn_set_region.clicked.connect(self.set_target_region)
         ri.btn_save_settings.clicked.connect(self.save_settings)
         ri.btn_esearch.clicked.connect(self.my_esearch)
@@ -940,12 +1011,27 @@ class MainWindow(FluentWindow):
 
         # Initial UI State
         ri.btn_set_region.setEnabled(False)
+        ri.new_region_edit.setEnabled(True)  # Initially enabled since combo is empty
         self.set_marker_summary(0)  # Init state
         self.set_reduce_threshold(0)  # Init state
         self.select_tri_method()
 
     # --- Logic Methods (Adapted from original) ---
-
+    
+    def on_region_combo_changed(self):
+        ri = self.retrieval_interface
+        target_region = ri.combo_region.currentText()
+        # Enable new_region_edit only when combo box is empty
+        ri.new_region_edit.setEnabled(target_region == "")
+        if target_region != "":
+            ri.new_region_edit.clear()
+    
+    def on_new_region_changed(self):
+        ri = self.retrieval_interface
+        # When typing in new_region_edit, clear combo box selection
+        if ri.new_region_edit.text().strip():
+            ri.combo_region.setCurrentIndex(0)
+    
     def select_target_region(self):
         ri = self.retrieval_interface
         target_region = ri.combo_region.currentText()
@@ -958,7 +1044,13 @@ class MainWindow(FluentWindow):
 
     def set_target_region(self):
         ri = self.retrieval_interface
-        target_region = ri.combo_region.currentText()
+        # Use new_region_edit if it has text, otherwise use combo box
+        new_region = ri.new_region_edit.text().strip()
+        if new_region:
+            target_region = new_region
+        else:
+            target_region = ri.combo_region.currentText()
+        
         if target_region == "":
             return
 
@@ -972,15 +1064,6 @@ class MainWindow(FluentWindow):
             params_file = Path(get_resource_path("blast_parameters")) / Path(
                 target_region + ".txt"
             )
-
-        if not params_file.exists():
-            InfoBar.warning(
-                title="Error",
-                content=f"Parameter file for {target_region} not found.",
-                parent=self,
-                position=InfoBarPosition.TOP,
-            )
-            return
 
         with open(params_file, "r") as fr:
             parameters = fr.read().splitlines()
@@ -1028,6 +1111,7 @@ class MainWindow(FluentWindow):
             content=f"Loaded parameters for {target_region}",
             parent=self,
             position=InfoBarPosition.TOP,
+            duration=5000,
         )
 
     def save_settings(self):

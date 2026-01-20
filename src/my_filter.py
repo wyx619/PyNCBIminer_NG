@@ -106,15 +106,21 @@ def put_filtered_seq_together(wd_list, out_path):
     print("All filtered sequences are into ‘filtered_seqs’ folder")
 
 
-def call_miner_filter(in_path, out_path, action, consensus_value, len_shresh):
+def call_miner_filter(in_path, out_path, action, consensus_value, len_shresh, emit_log_callback=None):
     """
     Call miner_filter, and modify input and output file names, using one thread.
     :param in_path: working directory of one marker or the parent directory of multiple working directories
     :param action: 1-control extension, 2-reduce dataset, 3-control extension, then reduce dataset
     :param len_shresh:
-    :param max_num:
+    :param emit_log_callback: optional callback function for emitting logs
     :return:
     """
+    
+    def emit_log(message, level="WARNING"):
+        if emit_log_callback:
+            emit_log_callback(message, level)
+        else:
+            print(f"[{level}] {message}")
     # check in_path
     dir_list = [
         f.name for f in Path(in_path).iterdir() if (Path(in_path) / f.name).is_dir()
@@ -138,8 +144,13 @@ def call_miner_filter(in_path, out_path, action, consensus_value, len_shresh):
     if action == 1:  # control extension
         for wd in wd_list:
             print("Control extension: %s" % wd)
+            try:
+                my_miner_filter = Miner_filter(wd, out_path)
+            except FileNotFoundError as e:
+                print(f"[WARNING] {e}")
+                emit_log(f"Results directory not found. Please run 'Submit New BLAST' first.", "WARNING")
+                continue
             t0 = datetime.now()
-            my_miner_filter = Miner_filter(wd, out_path)
             my_miner_filter.control_extension(gappyness_threshold=0.5)
             t1 = datetime.now()
             print("Running time: %s seconds" % (t1 - t0))
@@ -147,8 +158,13 @@ def call_miner_filter(in_path, out_path, action, consensus_value, len_shresh):
         for wd in wd_list:
             rename_results(wd)
             print("Reduce dataset: %s" % wd)
+            try:
+                my_miner_filter = Miner_filter(wd, out_path)
+            except FileNotFoundError as e:
+                print(f"[WARNING] {e}")
+                emit_log(f"Results directory not found. Please run 'Submit New BLAST' first.", "WARNING")
+                continue
             t0 = datetime.now()
-            my_miner_filter = Miner_filter(wd, out_path)
             my_miner_filter.reduce_dataset(
                 consensus_value=consensus_value,  # for consensus calculation
                 subsp=True,
@@ -167,8 +183,13 @@ def call_miner_filter(in_path, out_path, action, consensus_value, len_shresh):
         combine_keep_records(wd_list, out_path)
     elif action == 3:  # control extension, then reduce dataset
         for wd in wd_list:
-            my_miner_filter = Miner_filter(wd, out_path)
             print("Control extension: %s" % wd)
+            try:
+                my_miner_filter = Miner_filter(wd, out_path)
+            except FileNotFoundError as e:
+                print(f"[WARNING] {e}")
+                emit_log(f"Results directory not found. Please run 'Submit New BLAST' first.", "WARNING")
+                continue
             t0 = datetime.now()
             my_miner_filter.control_extension(gappyness_threshold=0.5)
             t1 = datetime.now()
@@ -177,6 +198,12 @@ def call_miner_filter(in_path, out_path, action, consensus_value, len_shresh):
             rename_results(wd)
 
             print("Reduce dataset: %s" % wd)
+            try:
+                my_miner_filter = Miner_filter(wd, out_path)
+            except FileNotFoundError as e:
+                print(f"[WARNING] {e}")
+                emit_log(f"Results directory not found. Please run 'Submit New BLAST' first.", "WARNING")
+                continue
             my_miner_filter.reduce_dataset(
                 consensus_value=consensus_value,  # for consensus calculation
                 subsp=True,

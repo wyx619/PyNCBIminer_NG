@@ -72,6 +72,12 @@ class Miner_filter:
             in_path
         )  # usually the output folder (working directory) of the "retrived sequences"
         self.__out_path = Path(out_path)
+
+        # Check if results directory exists
+        results_path = self.__out_path / "results"
+        if not results_path.exists():
+            raise FileNotFoundError(f"Results directory not found: {results_path}")
+
         self.__tmp_path = self.__out_path / "tmp_files"
         self.__log_path = self.__out_path
         self.__logger = MessageLogger(self.__log_path)

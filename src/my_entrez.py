@@ -47,12 +47,13 @@ def format_entrez_query(organisms, entrez_qualifier="", date_from="", date_to=""
 
 @func_set_timeout(60)
 def entrez_count(
-    entrez_email, organisms, entrez_qualifier="", date_from="", date_to=""
+    entrez_email, organisms, entrez_qualifier="", date_from="", date_to="", callback=None
 ):
     """
     send entrez query to NCBI and get the entrez search results count
     :param entrez_query: the entrez query
     :param entrez_email: the user's email address
+    :param callback: optional callback function to receive the count
     :return: entrez search results count
     """
     if len(entrez_email) == 0:
@@ -72,8 +73,11 @@ def entrez_count(
     print("Entrez query: %s" % entrez_query)
     handle = Entrez.esearch(db="nucleotide", term=entrez_query)
     record = Entrez.read(handle)
-    print("Entrez search results count: %s" % record["Count"])
-    return int(record["Count"])
+    count = int(record["Count"])
+    print("Entrez search results count: %s" % count)
+    if callback:
+        callback(count)
+    return count
 
 
 def entrez_summary(
