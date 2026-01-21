@@ -3,9 +3,31 @@ from pathlib import Path
 from Bio import SeqIO, SeqRecord
 from format_wizard import check_outpath_validity, get_file_handles, create_folder
 from datetime import datetime
-from run_command import run_command
+
 import os
 import shutil
+import subprocess
+import sys
+
+
+def _run_silent(command):
+    """静默执行命令，不输出任何内容到控制台"""
+    if sys.platform == "win32":
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = subprocess.SW_HIDE
+        creationflags = subprocess.CREATE_NO_WINDOW
+        subprocess.run(
+            command,
+            shell=True,
+            startupinfo=startupinfo,
+            creationflags=creationflags,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+        )
+    else:
+        subprocess.run(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def get_trimal_path():
@@ -41,6 +63,7 @@ def trimal(
     additional_params="",
     pure_command_mode=False,
     pure_command="",
+    progress_callback=None,
 ):
     """
     call trimal to trim a set of aligned sequences
@@ -58,70 +81,72 @@ def trimal(
     - additional_params - additional parameters in the form of command
     - pure_command_mode - if True, only run commands in the textbox, one command per line
     - pure_command - run only if pure_command_mode is True, replace the GUI operations
+    - progress_callback - optional callback function(message) to report progress
     -------
     Returns
     - file_handles - the valid input files if not in pure command mode
     - commands - the commands in pure command mode
+    - total_time - total running time in seconds
     [] if path invalid"""
     # STEP 0: if pure command, then only execute input command
     if pure_command_mode:
         pure_command = pure_command.split("\n")
         for command in pure_command:
-            run_command(command)
+            _run_silent(command)
         return pure_command
 
     # STEP 1: check path validity and get file handles
     file_handles = get_file_handles(in_path)
     if len(file_handles) == 0:
         print("Could not find any fasta file in the input.")
-        return
+        return [], None
     if not check_outpath_validity(out_path):
-        return []
+        return [], None
 
     # STEP 2: get parameters and call trimal
+    total_time = 0.0
     for in_file in file_handles:
         print("Trimming %s..." % in_file)
+        if progress_callback:
+            progress_callback(f"Trimming {Path(in_file).name}...")
         t0 = datetime.now()
         basename = Path(in_file).name
         out_file = Path(out_path) / f"trim_{basename}"
-        out_file = out_file.resolve()
-        print(f"Input file: {in_file}")
-        print(f"Output file: {out_file}")
+        in_file_str = str(Path(in_file))
+        out_file_str = str(out_file)
+        print(f"Input file: {in_file_str}")
+        print(f"Output file: {out_file_str}")
 
         trimal_exe = get_trimal_path()
         print(f"Using trimal: {trimal_exe}")
 
-        command = [f"{trimal_exe} -in {in_file} -out {out_file}"]
+        command_parts = [
+            f'"{trimal_exe}"',
+            f'-in "{in_file_str}"',
+            f'-out "{out_file_str}"',
+        ]
 
         if htmlout:
             html_folder = Path(out_path) / "htmlout"
             create_folder(html_folder)
             html_out_file = html_folder / (Path(basename).stem + ".html")
-            command.append(f"-htmlout {html_out_file}")
+            command_parts.append(f'-htmlout "{html_out_file}"')
 
         if implement_methods:
-            command.append(f"-{implement_methods}")
+            command_parts.append(f"-{implement_methods}")
         if gt:
-            command.append(f"-gt {gt}")
+            command_parts.append(f"-gt {gt}")
         if st:
-            command.append(f"-st {st}")
+            command_parts.append(f"-st {st}")
         if ct:
-            command.append(f"-ct {ct}")
+            print(f"WARNING: -ct option is not compatible with -in input method, skipping ct={ct}")
         if cons:
-            command.append(f"-cons {cons}")
+            command_parts.append(f"-cons {cons}")
 
-        command.append(additional_params)
-        command = " ".join(command)
-        result = run_command(command)
+        command_parts.append(additional_params)
+        command = " ".join(command_parts)
+        _run_silent(command)
 
-        # Check if trimal command succeeded
-        if result.returncode != 0:
-            print(f"trimal command failed with return code {result.returncode}")
-            if result.stderr:
-                print(f"Error output: {result.stderr.decode('utf-8', errors='ignore')}")
-            continue
-
-        # Check if output file was created
         if not out_file.exists():
             print(f"Output file not created: {out_file}")
             continue
@@ -141,6 +166,8 @@ def trimal(
             ]
             SeqIO.write(records, out_file, "fasta")
         t1 = datetime.now()
-        print("Running time: %s seconds" % (t1 - t0))
+        elapsed = (t1 - t0).total_seconds()
+        total_time += elapsed
+        print(" trimal Running time: %s seconds" % elapsed)
 
-    return file_handles
+    return file_handles, total_time

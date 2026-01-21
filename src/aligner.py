@@ -241,7 +241,7 @@ class Aligner:
         if len(list(SeqIO.parse(mafft_in, "fasta"))) == 1:
             shutil.copyfile(mafft_in, mafft_out)
         else:
-            command = f"mafft --retree 2 --thread -1 --reorder {mafft_in} > {mafft_out}"
+            command = f"mafft --quiet --retree 2 --thread -1 --reorder {mafft_in} > {mafft_out}"
             run_command(command)
 
     def set_in_path(self, in_file):
@@ -417,9 +417,7 @@ class Aligner:
         mafft_in = self.temp_folder / "long_consensus_group.fasta"
         mafft_out = self.temp_folder / "aligned_long_consensus_group.fasta"
         if len(list(SeqIO.parse(mafft_in, "fasta"))) > 1:
-            command = (
-                f"mafft --maxiterate 100 --thread -1 --reorder {mafft_in} > {mafft_out}"
-            )
+            command = f"mafft --quiet --maxiterate 100 --thread -1 --reorder {mafft_in} > {mafft_out}"
             run_command(command)
         else:
             shutil.copyfile(mafft_in, mafft_out)
@@ -472,14 +470,14 @@ class Aligner:
         mafft_out = Path(self.out_path) / Path(self.in_file).name
 
         if mafft_add_other.is_file():
-            command = f"mafft --maxiterate 100 --thread -1 --reorder --add {mafft_add_other} {mafft_in} > {mafft_tmp}"
+            command = f"mafft --quiet --maxiterate 100 --thread -1 --reorder --add {mafft_add_other} {mafft_in} > {mafft_tmp}"
             run_command(command)
 
         if mafft_add_short.is_file():
             if mafft_tmp.is_file():
-                command = f"mafft --maxiterate 100 --thread -1 --reorder --addfragments {mafft_add_short} {mafft_tmp} > {mafft_out}"
+                command = f"mafft --quiet --maxiterate 100 --thread -1 --reorder --addfragments {mafft_add_short} {mafft_tmp} > {mafft_out}"
             else:
-                command = f"mafft --maxiterate 100 --thread -1 --reorder --addfragments {mafft_add_short} {mafft_in} > {mafft_out}"
+                command = f"mafft --quiet --maxiterate 100 --thread -1 --reorder --addfragments {mafft_add_short} {mafft_in} > {mafft_out}"
             run_command(command)
 
         if not mafft_out.is_file():

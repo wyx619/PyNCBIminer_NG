@@ -4,8 +4,8 @@ from Bio.Seq import Seq
 import numpy as np
 from pathlib import Path
 import shutil
-from run_command import run_command
 from sequence_indexer import Sequence_indexer
+from call_mafft2 import mafft
 
 
 class nt_Calculator:
@@ -582,15 +582,24 @@ class nt_Calculator:
         ## TODO: parllelize
 
         if method == "alignment":
-            ## STEP 1: preparation
             try:
                 basename = Path(in_path).name
                 out_filename = str(Path(out_path) / ("distance_matrix_" + basename))
-                if fast:
-                    command = f"mafft --retree 1 {in_path} > {out_filename}"
-                else:
-                    command = f"mafft --auto {in_path} > {out_filename}"
-                run_command(command)
+                mafft_out_path = str(out_path)
+
+                mafft(
+                    in_path=str(in_path),
+                    out_path=mafft_out_path,
+                    algorithm="retree 1" if fast else "auto",
+                    reorder=True,
+                )
+
+                msa_output = Path(mafft_out_path) / f"msa_{basename}"
+                if msa_output.exists():
+                    if Path(out_filename).exists():
+                        Path(out_filename).unlink()
+                    msa_output.rename(out_filename)
+
                 records = list(SeqIO.parse(out_filename, "fasta"))
             except Exception:
                 records = in_path
@@ -763,11 +772,22 @@ class nt_Calculator:
             record.seq = sequence
 
         ## substep 2: write into unaligned file
-        out_path = record_path.replace("_msa.fasta", ".fasta")
+        out_path = record_path.parent / (record_path.name.replace("_msa.fasta", ".fasta"))
         SeqIO.write(record_iter, out_path, "fasta")
 
         ## substep 3: write into msa file
-        run_command(f"mafft --auto --reorder {out_path} > {record_path}")
+        mafft(
+            in_path=str(out_path),
+            out_path=str(record_path.parent),
+            algorithm="auto",
+            reorder=True,
+        )
+
+        msa_output_path = record_path.parent / f"msa_{out_path.name}"
+        if msa_output_path.exists():
+            if record_path.exists():
+                record_path.unlink()
+            msa_output_path.rename(record_path)
 
         return remove_ends
 

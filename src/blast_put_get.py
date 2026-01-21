@@ -123,6 +123,8 @@ def put_blast(
     if (Path(wd) / Path(table)).exists():
         sum_table = pd.read_table(Path(wd) / Path(table), sep="\t", engine="python")
         sum_table.loc[sum_table["RID"].isna(), "RID"] = ""
+        sum_table["Status"] = sum_table["Status"].astype(str)
+        sum_table["Query"] = sum_table["Query"].astype(str)
     else:
         # queries = AlignIO.read(Path(queries_path), "fasta")
         # sum_mat = np.zeros((len(queries), 14), dtype=str)
@@ -269,6 +271,9 @@ def get_blast(
     # new website: https://ncbi.github.io/blast-cloud/dev/api.html (2023/06/12)
 
     sum_table = pd.read_table(Path(wd) / Path(table), sep="\t", engine="python")
+    sum_table["Message_get"] = sum_table["Message_get"].astype(str)
+    sum_table["Status"] = sum_table["Status"].astype(str)
+    sum_table["Query"] = sum_table["Query"].astype(str)
 
     for index in sum_table.index:
         rid = sum_table.loc[index, "RID"]

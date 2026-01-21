@@ -13,21 +13,18 @@ import shutil
 
 def get_mafft_path():
     """Get path to mafft executable"""
-    # Try to find mafft in common locations
-    mafft_dir = Path.cwd() / "mafft"
+    project_root = Path(__file__).parent.parent
+    mafft_dir = project_root / "mafft"
 
     if mafft_dir.exists():
-        # Recursively search for mafft executable
         for root, dirs, files in os.walk(mafft_dir):
             for file in files:
                 if file.lower() in ["mafft.exe", "mafft.bat", "mafft"]:
                     return str(Path(root) / file)
 
-    # Check if it's in PATH
     if shutil.which("mafft"):
         return "mafft"
 
-    # If not found, return "mafft" and let's error show
     return "mafft"
 
 
@@ -92,12 +89,12 @@ def mafft_add(in_path, in_file, out_path, cmd_str):
 
         # add fragments first
         run_command(
-            "%s --auto --addfragments %s %s > %s" % (cmd_str[1], file2, msa1, msa2)
+            "%s --quiet --auto --addfragments %s %s > %s" % (cmd_str[1], file2, msa1, msa2)
         )  # FFT - NS - 2(Fast but rough)
         if msa2.stat().st_size == 0:
-            run_command("%s --auto --add %s %s > %s" % (cmd_str[1], file2, msa1, msa2))
+            run_command("%s --quiet --auto --add %s %s > %s" % (cmd_str[1], file2, msa1, msa2))
         run_command(
-            "%s --auto --add %s %s > %s" % (cmd_str[2], file3, msa2, msa3)
+            "%s --quiet --auto --add %s %s > %s" % (cmd_str[2], file3, msa2, msa3)
         )  # Multi-INS-fragment
 
         file1.unlink()
@@ -128,6 +125,7 @@ def mafft(
     additional_params="",
     pure_command_mode=False,
     pure_command="",
+    progress_callback=None,
 ):
     """
     call mafft to do multiple sequence alignment
@@ -144,10 +142,12 @@ def mafft(
     - additional_params - additional parameters in the form of command
     - pure_command_mode - if True, only run commands in the textbox, one command per line
     - pure_command - run only if pure_command_mode is True, replace the GUI operations
+    - progress_callback - optional callback function(message) to report progress
     -------
     Returns
     - file_handles - the valid input files if not in pure command mode
     - commands - the commands in pure command mode
+    - total_time - total running time in seconds
     [] if path invalid"""
     # STEP 0: if pure command, then only execute input command
     if pure_command_mode:
@@ -188,8 +188,9 @@ def mafft(
     file_list = [x for x in file_list if Path(x).suffix in [".fasta", ".fas", ".fa"]]
     if len(file_list) == 0:
         print("Could not find any fasta file in the input.")
-        return
+        return [], None
 
+    total_time = 0.0
     if algorithm == "auto":
         for file in file_list:
             t0 = datetime.now()
@@ -198,9 +199,13 @@ def mafft(
             command = f"{mafft_exe} --quiet --auto --thread {thread} {'--reorder' * reorder} {additional_params} {in_file} > {out_file}"
             # print(command)
             print("Aligning %s..." % in_file)
+            if progress_callback:
+                progress_callback(f"Aligning {file}...")
             run_command(command)
             t1 = datetime.now()
-            print("Running time: %s seconds" % (t1 - t0))
+            elapsed = (t1 - t0).total_seconds()
+            total_time += elapsed
+            print("MAFFT Running time: %s seconds" % elapsed)
     else:
         command1 = f"{mafft_exe} --quiet --localpair --maxiterate 1000 --thread {thread} {'--reorder' * reorder} {additional_params}"
         command2 = f"{mafft_exe} --quiet --thread {thread} {'--reorder' * reorder} {additional_params}"
@@ -211,6 +216,8 @@ def mafft(
             t0 = datetime.now()
             mafft_add(in_path, file, out_path, cmd_str)
             t1 = datetime.now()
-            print("Running time: %s seconds" % (t1 - t0))
+            elapsed = (t1 - t0).total_seconds()
+            total_time += elapsed
+            print("MAFFT Running time: %s seconds" % elapsed)
 
-    return file_handles
+    return file_handles, total_time

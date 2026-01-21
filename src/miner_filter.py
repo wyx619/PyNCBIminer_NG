@@ -10,8 +10,9 @@ import time
 from functional import create_folder
 from message_logger import MessageLogger
 from nt_calculator import nt_Calculator
+from call_mafft2 import mafft
 
-from run_command import run_command
+
 
 
 class Miner_filter:
@@ -465,6 +466,12 @@ class Miner_filter:
                 matching_filename = files[i]
                 return matching_filename
 
+        raise FileNotFoundError(
+            f"No valid input fasta file found in {path}. "
+            f"Expected one of: {files[: file_range + 1]}. "
+            f"Found: {existing_files}"
+        )
+
     ## ===========================================================================================================
     ## ================================== for <func> reduce_dataset ==============================================
     def __get_info_csv(self):
@@ -530,8 +537,17 @@ class Miner_filter:
                 continue
             SeqIO.write(records, records_path, "fasta")
 
-            command = f"mafft --auto --thread -1 --reorder {records_path} > {msa_path}"
-            run_command(command)
+            mafft(
+                in_path=str(records_path),
+                out_path=str(tmp_path),
+                algorithm="auto",
+                thread=-1,
+                reorder=True,
+            )
+
+            msa_output_path = tmp_path / f"msa_{taxon}.fasta"
+            if msa_output_path.exists():
+                msa_output_path.rename(msa_path)
 
             self.__remove_long_insertion(taxon, length_threshold, taxa_threshold)
 
@@ -618,17 +634,21 @@ class Miner_filter:
                         )
                     )
                     curr_taxon = organism
-                aligned_record = [
+                matching_records = [
                     record
                     for record in aligned_record_iter
                     if record.description.split("|")[0].split(":")[0] == subject_acc_ver
-                ][0]
-                consensus_value = self.__nt_calculator.calculate_PI(
-                    aligned_record,
-                    self.__taxa_consensus_dict[organism],
-                    [0, len(aligned_record)],
-                    [0, len(aligned_record)],
-                )
+                ]
+                if matching_records:
+                    aligned_record = matching_records[0]
+                    consensus_value = self.__nt_calculator.calculate_PI(
+                        aligned_record,
+                        self.__taxa_consensus_dict[organism],
+                        [0, len(aligned_record)],
+                        [0, len(aligned_record)],
+                    )
+                else:
+                    consensus_value = -1
 
             else:
                 consensus_value = -1
@@ -1041,7 +1061,6 @@ class Miner_filter:
         Parameters
         - add_threshold - files contain seqs less than this number will use --add (refer to another MSA)
         """
-        from call_mafft2 import mafft
         from functional import create_folder
         import shutil
         from Bio import SeqIO
@@ -1068,8 +1087,7 @@ class Miner_filter:
 
             if record_count > add_threshold:
                 mafft(
-                    in_path=str(in_path),
-                    in_file=file,
+                    in_path=str(file_abs_path),
                     out_path=str(out_path),
                     algorithm="auto",
                     thread=-1,
@@ -1275,6 +1293,7 @@ class Miner_filter:
             else:
                 new_records.append(record)
 
-        self.__logger.write_message("Extension control finished.")
+        self.__logger.write_success("Extension control finished.")
         new_records.sort(key=lambda x: x.description)
         SeqIO.write(new_records, out_path / "blast_results_controlled.fasta", "fasta")
+        self.__logger.write_success("Alignment control finished. See blast_results_controlled.fasta for details.")

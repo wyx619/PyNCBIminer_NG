@@ -9,7 +9,7 @@ import numpy as np
 from pathlib import Path
 from math import ceil
 from Bio import SeqIO
-
+import threading
 from main_utils import print_line, get_query_accession
 from my_entrez import format_entrez_query
 from seq_check_download import check_annotation, seq_check_download_main
@@ -93,7 +93,11 @@ def iterated_blast_main(
     date_to,
     entrez_email,
     blast_round=1,
+    stop_flag=None,
 ):
+    if stop_flag is None:
+        stop_flag = threading.Event()
+
     blast_round = 1  # to correct error in combining blast results.
     print("Start BLAST iteration...")
     entrez_query = format_entrez_query(
@@ -139,6 +143,10 @@ def iterated_blast_main(
         del blast_results
 
     while True:
+        if stop_flag.is_set():
+            print("BLAST iteration stopped by user.")
+            return
+
         print_line("*")
         print("BLAST round %d" % blast_round)
         if blast_round == 1:

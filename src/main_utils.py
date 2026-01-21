@@ -26,6 +26,8 @@ class BackendController(QObject):
 
     def __init__(self):
         super().__init__()
+        self.blast_thread = None
+        self.stop_flag = threading.Event()
 
     def emit_log(self, message, level="INFO"):
         self.log_signal.emit(f"[{level}] {message}\n")
@@ -38,14 +40,14 @@ class BackendController(QObject):
             target_region = new_region
         else:
             target_region = retrieval_interface.combo_region.currentText()
-        
+
         if target_region.strip() == "":
             InfoBar.warning(
-                title="Warning", 
-                content="Please input region name.", 
+                title="Warning",
+                content="Please input region name.",
                 parent=parent_window,
                 position=InfoBarPosition.TOP,
-                duration=5000
+                duration=5000,
             )
             return
 
@@ -54,7 +56,7 @@ class BackendController(QObject):
         default_params_dir = Path(get_resource_path("blast_parameters"))
         custom_params_file = blast_params_dir / Path(target_region + ".txt")
         default_params_file = default_params_dir / Path(target_region + ".txt")
-        
+
         # Save to the same location it was loaded from
         if custom_params_file.exists():
             params_file = custom_params_file
@@ -62,7 +64,9 @@ class BackendController(QObject):
         else:
             params_file = default_params_file
 
-        key_annotations = retrieval_interface.key_anno.toPlainText().strip().replace("; ", "|")
+        key_annotations = (
+            retrieval_interface.key_anno.toPlainText().strip().replace("; ", "|")
+        )
 
         with open(params_file, "w") as fw:
             fw.write(f"target_region\t{target_region}\n")
@@ -91,17 +95,19 @@ class BackendController(QObject):
                 )
 
         initial_queries = retrieval_interface.init_queries.toPlainText().strip()
-        
+
         # Save initial_queries to the same location as loaded from
         initial_queries_dir = Path(get_writable_path("initial_queries"))
         custom_queries_dir = initial_queries_dir / Path(target_region)
-        default_queries_dir = Path(get_resource_path("initial_queries")) / Path(target_region)
-        
+        default_queries_dir = Path(get_resource_path("initial_queries")) / Path(
+            target_region
+        )
+
         if custom_queries_dir.exists():
             queries_dir = custom_queries_dir
         else:
             queries_dir = default_queries_dir
-        
+
         queries_dir.mkdir(parents=True, exist_ok=True)
 
         with open(queries_dir / Path(target_region + ".fasta"), "w") as fw:
@@ -126,19 +132,19 @@ class BackendController(QObject):
         taxonomy = retrieval_interface.tax_edit.toPlainText().strip()
         email = retrieval_interface.email_edit.text().strip()
         qualifier = retrieval_interface.entrez_qualifier.toPlainText().strip()
-        
+
         if taxonomy == "":
             self.emit_log("Please input your target groups.", "WARNING")
         if email == "":
             self.emit_log("Please input your email address.", "WARNING")
         if qualifier == "":
             self.emit_log("Please input your Entrez qualifier.", "WARNING")
-        
+
         if taxonomy == "" or email == "" or qualifier == "":
             return
-        
+
         organisms = [x for x in taxonomy.splitlines() if len(x) > 0]
-        
+
         date_from_obj = retrieval_interface.date_from.date
         date_to_obj = retrieval_interface.date_to.date
 
@@ -190,22 +196,58 @@ class BackendController(QObject):
                 args=(email, organisms, target_region_dict, d_from, d_to),
             )
         else:
+
             def count_callback(count):
                 self.count_signal.emit(count)
-            
+
             thread = threading.Thread(
-                target=entrez_count, args=(email, organisms, qualifier, d_from, d_to, count_callback)
+                target=entrez_count,
+                args=(email, organisms, qualifier, d_from, d_to, count_callback),
             )
 
         thread.daemon = True
         thread.start()
 
-    def submit_new_blast(self, retrieval_interface):
+    def submit_new_blast(self, retrieval_interface, parent_window=None):
+        from my_entrez import entrez_count
+        from iterated_blast import iterated_blast_main
+
+        print_line("*")
+        self.emit_log("Submitting New BLAST...")
+
+        # read the current text of BLAST parameters
+        target_region = retrieval_interface.combo_region.currentText()
         taxonomy = retrieval_interface.tax_edit.toPlainText().strip()
-        email = retrieval_interface.email_edit.text().strip()
         qualifier = retrieval_interface.entrez_qualifier.toPlainText().strip()
+        email = retrieval_interface.email_edit.text().strip()
+        max_length = retrieval_interface.max_len.text().strip()
+        key_annotations = retrieval_interface.key_anno.toPlainText().strip()
+        exclude_sources = retrieval_interface.excl_source.toPlainText().strip()
+        expect_value = retrieval_interface.expect_val.text().strip()
+        gap_costs = retrieval_interface.gap_costs.text().strip()
+        word_size = retrieval_interface.word_size.text().strip()
+        nucl_reward = retrieval_interface.nucl_reward.text().strip()
+        nucl_penalty = retrieval_interface.nucl_penalty.text().strip()
+        initial_queries = retrieval_interface.init_queries.toPlainText().strip()
         wd = retrieval_interface.wd_edit.text().strip()
+        date_from_qdate = retrieval_interface.date_from.date
+        date_to_qdate = retrieval_interface.date_to.date
         
+        if not date_from_qdate.isValid():
+            date_from = ""
+        else:
+            date_from = date_from_qdate.toString("yyyy/MM/dd")
+        
+        if not date_to_qdate.isValid():
+            date_to = ""
+        else:
+            date_to = date_to_qdate.toString("yyyy/MM/dd")
+        
+        if date_from and not date_to:
+            today = QDate.currentDate()
+            date_to = today.toString("yyyy/MM/dd")
+
+        # validation
         if taxonomy == "":
             self.emit_log("Please input your target groups.", "WARNING")
         if email == "":
@@ -214,31 +256,159 @@ class BackendController(QObject):
             self.emit_log("Please input your Entrez qualifier.", "WARNING")
         if wd == "":
             self.emit_log("Please input your working directory path.", "WARNING")
-        
-        if taxonomy == "" or email == "" or qualifier == "" or wd == "":
+        if not date_from and date_to:
+            self.emit_log("Please set date_from when date_to is specified.", "WARNING")
+        if taxonomy == "" or email == "" or qualifier == "" or wd == "" or (not date_from and date_to):
             return
-        
-        self.emit_log("Submitting New BLAST...")
 
-        if not wd or not Path(wd).exists():
-            try:
-                Path(wd).mkdir(parents=True, exist_ok=True)
-            except Exception as e:
-                self.emit_log(f"Error creating working directory: {e}", "ERROR")
-                return
-
+        # max_length: positive integer
         try:
-            pass  # max_len = int(retrieval_interface.max_len.text().strip())
-        except ValueError as e:
-            self.emit_log(f"Value Error: {e}", "ERROR")
+            max_length = int(max_length)
+            if max_length < 0:
+                self.emit_log("max_length needs to be a positive integer.", "WARNING")
+                return
+        except ValueError:
+            self.emit_log(f"Invalid value for max_length: {max_length}.", "WARNING")
             return
 
+        # word_size: positive integer
+        try:
+            word_size = int(word_size)
+            if word_size < 0:
+                self.emit_log("word_size needs to be a positive integer.", "WARNING")
+                return
+        except ValueError:
+            self.emit_log(f"Invalid value for word_size: {word_size}.", "WARNING")
+            return
+
+        # expect_value: nonnegative number
+        try:
+            expect_value = float(expect_value)
+            if expect_value < 0:
+                self.emit_log("expect_value needs to be a nonnegative number.", "WARNING")
+                return
+        except ValueError:
+            self.emit_log(f"Invalid value for expect_value: {expect_value}.", "WARNING")
+            return
+
+        # nucl_reward: nonnegative integer
+        try:
+            nucl_reward = int(nucl_reward)
+            if nucl_reward < 0:
+                self.emit_log("nucl_reward needs to be a nonnegative integer.", "WARNING")
+                return
+        except ValueError:
+            self.emit_log(f"Invalid value for nucl_reward: {nucl_reward}.", "WARNING")
+            return
+
+        # nucl_penalty: nonpositive integer
+        try:
+            nucl_penalty = int(nucl_penalty)
+            if nucl_penalty > 0:
+                self.emit_log("nucl_penalty needs to be a nonpositive integer.", "WARNING")
+                return
+        except ValueError:
+            self.emit_log(f"Invalid value for nucl_penalty: {nucl_penalty}.", "WARNING")
+            return
+
+        # gap_costs: two positive integers separated by a space
+        try:
+            gap_costs_list = gap_costs.split(" ")
+            if len(gap_costs_list) != 2:
+                raise ValueError()
+            cost0 = int(gap_costs_list[0])
+            cost1 = int(gap_costs_list[1])
+            if cost0 < 0 or cost1 < 0:
+                raise ValueError()
+        except (ValueError, IndexError):
+            self.emit_log(f"Invalid value for gap_costs: {gap_costs}.", "WARNING")
+            return
+
+        # initial_queries validation
+        if len(initial_queries) == 0:
+            self.emit_log("Please add initial queries!", "WARNING")
+            return
+
+        # create directories
+        if not Path(wd).exists():
+            Path(wd).mkdir(parents=True, exist_ok=True)
+        (Path(wd) / "parameters").mkdir(parents=True, exist_ok=True)
         (Path(wd) / "parameters" / "ref_seq").mkdir(parents=True, exist_ok=True)
         (Path(wd) / "parameters" / "ref_msa").mkdir(parents=True, exist_ok=True)
         (Path(wd) / "tmp_files").mkdir(exist_ok=True)
-        (Path(wd) / "results").mkdir(exist_ok=True)
+        (Path(wd) / "results").mkdir(parents=True, exist_ok=True)
 
-        self.emit_log("BLAST thread started (mock).")
+        # get entrez count
+        print(f"DEBUG submit_new_blast: date_from='{date_from}', date_to='{date_to}'")
+        organisms = taxonomy.splitlines()
+        organisms = [x for x in organisms if len(x) > 0]
+        count = entrez_count(email, organisms, qualifier, date_from, date_to)
+
+        # save BLAST parameters
+        with open(Path(wd) / "parameters" / "blast_parameters.txt", "w") as fw:
+            fw.write("target_region\t" + target_region + "\n")
+            fw.write("taxonomy\t" + taxonomy.replace("\n", "|") + "\n")
+            fw.write("entrez_qualifier\t" + qualifier + "\n")
+            fw.write("date_from\t" + date_from + "\n")
+            fw.write("date_to\t" + date_to + "\n")
+            fw.write("entrez_email\t" + email + "\n")
+            fw.write("entrez_count\t" + str(count) + "\n")
+            fw.write("max_length\t" + str(max_length) + "\n")
+            fw.write("key_annotations\t" + key_annotations.replace("\n", "|") + "\n")
+            fw.write("exclude_sources\t" + exclude_sources.replace("\n", "|") + "\n")
+            fw.write("expect_value\t" + str(expect_value) + "\n")
+            fw.write("gap_costs\t" + gap_costs + "\n")
+            fw.write("word_size\t" + str(word_size) + "\n")
+            fw.write("nucl_reward\t" + str(nucl_reward) + "\n")
+            fw.write("nucl_penalty\t" + str(nucl_penalty) + "\n")
+
+        # save initial queries
+        with open(Path(wd) / "parameters" / "initial_queries.fasta", "w") as fw:
+            fw.write(initial_queries)
+
+        key_annotations_list = [x for x in key_annotations.splitlines() if len(x) > 0]
+        exclude_sources_list = [x for x in exclude_sources.splitlines() if len(x) > 0]
+        ref_number = 5
+
+        # start BLAST thread
+        thread = threading.Thread(
+            target=iterated_blast_main,
+            args=(
+                wd,
+                organisms,
+                count,
+                expect_value,
+                gap_costs,
+                word_size,
+                nucl_reward,
+                nucl_penalty,
+                max_length,
+                key_annotations_list,
+                exclude_sources_list,
+                ref_number,
+                date_from,
+                date_to,
+                email,
+                self.stop_flag,
+            ),
+        )
+        self.blast_thread = thread
+        self.stop_flag.clear()
+        thread.daemon = True
+        thread.start()
+
+        retrieval_interface.btn_submit_blast.setEnabled(False)
+        retrieval_interface.btn_load_job.setEnabled(False)
+        retrieval_interface.btn_stop.setEnabled(True)
+
+        if parent_window:
+            InfoBar.success(
+                title="Success",
+                content="New blast submitted!",
+                parent=parent_window,
+                position=InfoBarPosition.TOP,
+                duration=5000,
+            )
 
     def load_previous_job(self, retrieval_interface, parent_window):
         """
@@ -247,36 +417,49 @@ class BackendController(QObject):
         :return:
         """
         from iterated_blast import iterated_blast_main
+
         # check if working directory path is empty
         wd = retrieval_interface.wd_edit.text().strip()
         if wd == "":
             self.emit_log("Please input your working directory path.", "WARNING")
             return
-        
+
         print_line("*")
         self.emit_log("Loading previous job...")
-        
+
         # check if working directory exists
         if not Path(wd).exists():
-            self.emit_log("Working directory does not exist, please submit new BLAST.", "WARNING")
+            self.emit_log(
+                "Working directory does not exist, please submit new BLAST.", "WARNING"
+            )
             return
         if not (Path(wd) / "parameters").exists():
-            self.emit_log("Can't find parameters directory, please submit new BLAST.", "WARNING")
+            self.emit_log(
+                "Can't find parameters directory, please submit new BLAST.", "WARNING"
+            )
             return
         if not (Path(wd) / "tmp_files").exists():
-            self.emit_log("Can't find tmp_files directory, please submit new BLAST.", "WARNING")
+            self.emit_log(
+                "Can't find tmp_files directory, please submit new BLAST.", "WARNING"
+            )
             return
         if not (Path(wd) / "results").exists():
-            self.emit_log("Can't find results directory, please submit new BLAST.", "WARNING")
+            self.emit_log(
+                "Can't find results directory, please submit new BLAST.", "WARNING"
+            )
             return
 
         # read BLAST parameters in blast_parameters.txt file
         parameters_files = [f.name for f in (Path(wd) / "parameters").iterdir()]
         if "blast_parameters.txt" not in parameters_files:
-            self.emit_log("Can't find BLAST parameters, please submit new BLAST.", "WARNING")
+            self.emit_log(
+                "Can't find BLAST parameters, please submit new BLAST.", "WARNING"
+            )
             return
         if "initial_queries.fasta" not in parameters_files:
-            self.emit_log("Can't find initial queries, please submit new BLAST.", "WARNING")
+            self.emit_log(
+                "Can't find initial queries, please submit new BLAST.", "WARNING"
+            )
             return
         else:
             retrieval_interface.init_queries.clear()
@@ -390,19 +573,36 @@ class BackendController(QObject):
                 date_to,
                 entrez_email,
                 blast_round,
+                self.stop_flag,
             ),
         )
+        self.blast_thread = thread
+        self.stop_flag.clear()
         thread.daemon = True
         thread.start()
 
         retrieval_interface.btn_submit_blast.setEnabled(False)
         retrieval_interface.btn_load_job.setEnabled(False)
+        retrieval_interface.btn_stop.setEnabled(True)
         InfoBar.success(
             title="Success",
             content="Previous job loaded!",
             parent=parent_window,
             position=InfoBarPosition.TOP,
         )
+
+    def stop_blast(self, retrieval_interface):
+        """Stop the BLAST process and reset UI state"""
+        self.stop_flag.set()
+
+        if self.blast_thread and self.blast_thread.is_alive():
+            self.blast_thread = None
+
+        retrieval_interface.btn_submit_blast.setEnabled(True)
+        retrieval_interface.btn_load_job.setEnabled(True)
+        retrieval_interface.btn_stop.setEnabled(False)
+
+        self.emit_log("BLAST process stopped.", "WARNING")
 
     def set_marker_summary(self, retrieval_interface, state):
         is_checked = (
@@ -433,7 +633,7 @@ class BackendController(QObject):
         is_user = "user defined" in method
         construction_interface.trim_gt.setEnabled(is_user)
         construction_interface.trim_st.setEnabled(is_user)
-        construction_interface.trim_ct.setEnabled(is_user)
+        construction_interface.trim_ct.setEnabled(False)
         construction_interface.trim_con.setEnabled(is_user)
 
     def run_filtering(self, construction_interface):
@@ -448,6 +648,9 @@ class BackendController(QObject):
         if not Path(in_path).exists():
             self.emit_log(f"Input path does not exist: {in_path}", "WARNING")
             return
+
+        if not Path(out_path).exists():
+            Path(out_path).mkdir(parents=True, exist_ok=True)
 
         try:
             len_thr = int(construction_interface.len_thresh.text().strip())
@@ -472,12 +675,13 @@ class BackendController(QObject):
             return
 
         self.emit_log("Running Filter...")
-        
+
         def emit_callback(message, level="INFO"):
             self.emit_log(message, level)
-        
+
         thread = threading.Thread(
-            target=call_miner_filter, args=(in_path, out_path, action, cons, len_thr, emit_callback)
+            target=call_miner_filter,
+            args=(in_path, out_path, action, cons, len_thr, emit_callback),
         )
         thread.daemon = True
         thread.start()
@@ -508,11 +712,29 @@ class BackendController(QObject):
             thread_num = -1
         reorder = construction_interface.align_reorder.currentText() == "True"
 
-        self.emit_log(f"Running MAFFT... Output: {out_path}/msa_*.fasta")
-        thread = threading.Thread(
-            target=mafft,
-            args=(in_path, out_path, "", "", algo, thread_num, reorder, "", False, ""),
-        )
+        def emit_callback(message, level="INFO"):
+            self.emit_log(message, level)
+
+        self.emit_log(f"Running MAFFT...")
+
+        def run_mafft_thread():
+            _, total_time = mafft(
+                in_path,
+                out_path,
+                "",
+                "",
+                algo,
+                thread_num,
+                reorder,
+                "",
+                False,
+                "",
+                emit_callback,
+            )
+            if total_time is not None:
+                self.emit_log(f"MAFFT completed in {total_time:.2f} seconds", "SUCCESS")
+
+        thread = threading.Thread(target=run_mafft_thread)
         thread.daemon = True
         thread.start()
 
@@ -530,8 +752,12 @@ class BackendController(QObject):
             self.emit_log(f"Input path does not exist: {in_path}", "WARNING")
             return
         if not out_path:
-            self.emit_log("Please set output path", "WARNING")
-            return
+            if Path(in_path).is_file():
+                out_path = str(Path(in_path).parent)
+                self.emit_log(f"Using input file's directory as output: {out_path}", "INFO")
+            else:
+                out_path = in_path
+                self.emit_log("Using input directory as output", "INFO")
 
         if not Path(out_path).exists():
             Path(out_path).mkdir(exist_ok=True)
@@ -539,25 +765,40 @@ class BackendController(QObject):
         met = construction_interface.combo_trim_method.currentText().split(" ")[0]
         if met == "user":
             met = ""
+        
+        gt_val = construction_interface.trim_gt.text()
+        st_val = construction_interface.trim_st.text()
+        ct_val = construction_interface.trim_ct.text()
+        con_val = construction_interface.trim_con.text()
+        
+
+        def emit_callback(message, level="INFO"):
+            self.emit_log(message, level)
 
         self.emit_log("Running trimAl...")
-        thread = threading.Thread(
-            target=trimal,
-            args=(
+
+        def run_trimal_thread():
+            _, total_time = trimal(
                 in_path,
                 out_path,
                 True,
                 False,
                 met,
-                construction_interface.trim_gt.text(),
-                construction_interface.trim_st.text(),
-                construction_interface.trim_ct.text(),
-                construction_interface.trim_con.text(),
+                gt_val,
+                st_val,
+                ct_val,
+                con_val,
                 "",
                 False,
                 "",
-            ),
-        )
+                emit_callback,
+            )
+            if total_time is not None:
+                self.emit_log(
+                    f"trimAl completed in {total_time:.2f} seconds", "SUCCESS"
+                )
+
+        thread = threading.Thread(target=run_trimal_thread)
         thread.daemon = True
         thread.start()
 
@@ -577,6 +818,9 @@ class BackendController(QObject):
             self.emit_log("Please set output path", "WARNING")
             return
 
+        if not Path(out_p).exists():
+            Path(out_p).mkdir(parents=True, exist_ok=True)
+
         self.emit_log("Running Concatenation...")
         thread = threading.Thread(target=my_concatenation, args=(in_p, out_p))
         thread.daemon = True
@@ -584,6 +828,7 @@ class BackendController(QObject):
 
     def run_install_mafft(self):
         from install_dependencies import install_mafft
+
         self.emit_log("Installing MAFFT...")
         thread = threading.Thread(target=install_mafft)
         thread.daemon = True
@@ -591,6 +836,7 @@ class BackendController(QObject):
 
     def run_install_trimal(self):
         from install_dependencies import install_trimal
+
         self.emit_log("Installing trimAl...")
         thread = threading.Thread(target=install_trimal)
         thread.daemon = True

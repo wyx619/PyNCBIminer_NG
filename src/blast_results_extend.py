@@ -9,7 +9,7 @@ import pandas as pd
 from math import floor
 from Bio import SeqIO
 from main_utils import get_query_accession
-from run_command import run_command
+from call_mafft2 import mafft
 
 
 def add_all_queries2(wd):
@@ -34,18 +34,11 @@ def add_all_queries2(wd):
         Path(wd) / Path("parameters") / Path("ref_msa") / Path("msa_queries_1.fasta")
     )
     if not msa_path.exists() or msa_path.stat().st_size == 0:
-        run_command(
-            r"mafft --localpair --maxiterate 1000 %s > %s"
-            % (
-                Path(wd)
-                / Path("parameters")
-                / Path("ref_seq")
-                / Path("queries_1.fasta"),
-                Path(wd)
-                / Path("parameters")
-                / Path("ref_msa")
-                / Path("msa_queries_1.fasta"),
-            )
+        mafft(
+            in_path=str(Path(wd) / Path("parameters") / Path("ref_seq") / Path("queries_1.fasta")),
+            out_path=str(Path(wd) / Path("parameters") / Path("ref_msa")),
+            algorithm="localpair",
+            additional_params="--maxiterate 1000",
         )
 
     if len(queries_file_list) > 1:
@@ -55,37 +48,19 @@ def add_all_queries2(wd):
         )
         if not ref_msa_path.exists() or ref_msa_path.stat().st_size == 0:
             for n in range(2, len(queries_file_list) + 1):
-                if n == 2:
-                    mafft_cmd = r"mafft --multipair --addfragments %s %s > %s" % (
-                        Path(wd)
-                        / Path("parameters")
-                        / Path("ref_seq")
-                        / Path("queries_2.fasta"),
-                        Path(wd)
-                        / Path("parameters")
-                        / Path("ref_msa")
-                        / Path("msa_queries_1.fasta"),
-                        Path(wd)
-                        / Path("parameters")
-                        / Path("ref_msa")
-                        / Path("msa_queries_1_to_2.fasta"),
-                    )
-                else:
-                    mafft_cmd = r"mafft --multipair --addfragments %s %s > %s" % (
-                        Path(wd)
-                        / Path("parameters")
-                        / Path("ref_seq")
-                        / Path("queries_%d.fasta" % n),
-                        Path(wd)
-                        / Path("parameters")
-                        / Path("ref_msa")
-                        / Path("msa_queries_1_to_%d.fasta" % (n - 1)),
-                        Path(wd)
-                        / Path("parameters")
-                        / Path("ref_msa")
-                        / Path("msa_queries_1_to_%d.fasta" % n),
-                    )
-                run_command(mafft_cmd)
+                queries_file = Path(wd) / Path("parameters") / Path("ref_seq") / Path("queries_%d.fasta" % n)
+                prev_msa = Path(wd) / Path("parameters") / Path("ref_msa") / Path("msa_queries_1_to_%d.fasta" % (n - 1))
+                out_msa = Path(wd) / Path("parameters") / Path("ref_msa") / Path("msa_queries_1_to_%d.fasta" % n)
+
+                print("Aligning %s with mafft..." % queries_file.name)
+                mafft(
+                    in_path=str(queries_file),
+                    out_path=str(out_msa.parent),
+                    add_choice="addfragments",
+                    add_path=str(prev_msa),
+                    algorithm="auto",
+                    thread=-1,
+                )
 
     else:
         ref_msa_file = "msa_queries_1.fasta"

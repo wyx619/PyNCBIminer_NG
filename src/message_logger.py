@@ -161,6 +161,22 @@ class MessageLogger:
         log_file.write(message + "\n")
         log_file.close()
 
+    def write_success(self, message, mode="a"):
+        """write success message into the log file
+        ----------
+        Parameters
+        - message - the message to be written into the log file
+        - mode - the mode opening the file, "a" for append, "w" for write, and so on
+            Default: "a"
+        """
+        print(f"[SUCCESS] {message}")
+        try:
+            log_file = open(self.__log_file, mode)
+        except Exception:
+            log_file = open(self.__log_file, "w")
+        log_file.write("[SUCCESS] " + message + "\n")
+        log_file.close()
+
     def clear_error(self):
         """clear all error messages stored in the error list"""
         self.__error_messages = []

@@ -6,6 +6,7 @@
 
 import urllib.error
 import func_timeout.exceptions
+import shutil
 from func_timeout import func_set_timeout
 from Bio import Entrez
 from pathlib import Path
@@ -13,7 +14,6 @@ from datetime import datetime
 from Bio import SeqIO
 import pandas as pd
 from main_utils import get_query_accession
-from run_command import run_command
 
 
 @func_set_timeout(600)
@@ -34,21 +34,19 @@ def my_efetch(accession, strand, seq_start, seq_stop):
 
 
 def filter_duplicate_key(wd, file):
+    tmp_file = Path(wd) / Path("tmp_" + file)
     if (Path(wd) / Path(file)).stat().st_size > 0:
-        run_command(
-            "copy %s %s"
-            % (str(Path(wd) / Path(file)), str(Path(wd) / Path("tmp_" + file)))
-        )
+        shutil.copy2(Path(wd) / Path(file), tmp_file)
     key_list = []
     with open(Path(wd) / Path(file), "w") as fw:
-        for record in SeqIO.parse(Path(wd) / Path("tmp_" + file), "fasta"):
+        for record in SeqIO.parse(tmp_file, "fasta"):
             if record.description not in key_list:
                 fw.write(">" + record.description + "\n")
                 fw.write(str(record.seq) + "\n")
                 key_list.append(record.description)
             else:
                 print("Filtered duplicate sequence: %s" % record.description)
-    run_command("del %s" % str(Path(wd) / Path("tmp_" + file)))
+    tmp_file.unlink(missing_ok=True)
 
 
 def check_annotation(feature_list, key_annotations, exclude_sources):

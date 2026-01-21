@@ -172,36 +172,36 @@ class RetrievalInterface(SingleDirectionScrollArea):
         reg_layout.setContentsMargins(15, 10, 15, 10)
         self.combo_region = ComboBox(self.region_card)
         self.combo_region.setMaxVisibleItems(6)
-        
+
         # Dynamically load all available markers from blast_parameters directory
         blast_params_dir = Path(get_writable_path("blast_parameters"))
         default_params_dir = Path(get_resource_path("blast_parameters"))
-        
+
         marker_set = set()
         marker_set.add("")  # Add empty option
-        
+
         # Load from custom directory
         if blast_params_dir.exists():
             for f in blast_params_dir.iterdir():
                 if f.is_file() and f.suffix == ".txt":
                     marker_set.add(f.stem)
-        
+
         # Load from default directory
         if default_params_dir.exists():
             for f in default_params_dir.iterdir():
                 if f.is_file() and f.suffix == ".txt":
                     marker_set.add(f.stem)
-        
+
         # Sort markers (empty first, then alphabetical)
         markers = sorted(marker_set, key=lambda x: (x != "", x))
         self.combo_region.addItems(markers)
-        
+
         # New region input (only enabled when combo is empty)
         self.new_region_edit = LineEdit(self.region_card)
         self.new_region_edit.setPlaceholderText("Enter new region name")
         self.new_region_edit.setEnabled(False)
         self.new_region_edit.setFixedWidth(180)
-        
+
         self.btn_set_region = PrimaryPushButton("Set Region", self.region_card)
         self.btn_save_settings = PushButton("Save Settings", self.region_card)
         reg_layout.addWidget(BodyLabel("Target Region:"))
@@ -289,6 +289,7 @@ class RetrievalInterface(SingleDirectionScrollArea):
         # Initial Queries (Fasta) - Full width
         adv_layout.addWidget(BodyLabel("Initial Queries (Fasta):"))
         self.init_queries = PlainTextEdit()
+        self.init_queries.setPlaceholderText("Paste sequences in fasta format here")
         self.init_queries.setFixedHeight(200)
         adv_layout.addWidget(self.init_queries)
 
@@ -299,13 +300,13 @@ class RetrievalInterface(SingleDirectionScrollArea):
 
         # Left column: Key Annotations, Exclude Sources
         self.key_anno = PlainTextEdit()
-        self.key_anno.setPlaceholderText("Key Annotations")
+        self.key_anno.setPlaceholderText("Separated by semicolons")
         self.key_anno.setFixedHeight(60)
         col1.addWidget(BodyLabel("Key Annotations:"))
         col1.addWidget(self.key_anno)
 
         self.excl_source = PlainTextEdit()
-        self.excl_source.setPlaceholderText("Exclude Sources")
+        self.excl_source.setPlaceholderText("One keyword per line")
         self.excl_source.setFixedHeight(265)
         col1.addWidget(BodyLabel("Exclude Sources:"))
         col1.addWidget(self.excl_source)
@@ -313,11 +314,19 @@ class RetrievalInterface(SingleDirectionScrollArea):
 
         # Right column: Other parameters (evenly distributed)
         self.max_len = LineEdit()
+        self.max_len.setPlaceholderText("Integer")
         self.word_size = LineEdit()
+        self.word_size.setPlaceholderText("Positive integer")
         self.gap_costs = LineEdit()
+        self.gap_costs.setPlaceholderText(
+            "two positive integers separated  such as '11 1' "
+        )
         self.expect_val = LineEdit()
+        self.expect_val.setPlaceholderText("Nonnegative number")
         self.nucl_reward = LineEdit()
+        self.nucl_reward.setPlaceholderText("Nonnegative number")
         self.nucl_penalty = LineEdit()
+        self.nucl_penalty.setPlaceholderText("Nonpositive integer")
 
         col2.addWidget(BodyLabel("Max Length:"))
         col2.addWidget(self.max_len)
@@ -346,11 +355,18 @@ class RetrievalInterface(SingleDirectionScrollArea):
         self.btn_submit_blast.setIcon(FIF.PLAY)
         self.btn_load_job = PushButton("Load Previous Job", self)
         self.btn_load_job.setIcon(FIF.HISTORY)
+        self.btn_stop = PushButton("Stop", self)
+        self.btn_stop.setIcon(FIF.CLOSE)
+        self.btn_stop.setEnabled(False)
 
         btn_row = QHBoxLayout()
         btn_row.addWidget(self.btn_submit_blast)
         btn_row.addWidget(self.btn_load_job)
         self.vBoxLayout.addLayout(btn_row)
+
+        stop_row = QHBoxLayout()
+        stop_row.addWidget(self.btn_stop)
+        self.vBoxLayout.addLayout(stop_row)
 
         self.vBoxLayout.addStretch(1)
 
@@ -476,6 +492,9 @@ class ConstructionInterface(QWidget):
         l_paths.setContentsMargins(15, 10, 15, 10)
 
         self.filter_in = LineEdit()
+        self.filter_in.setPlaceholderText(
+            "One working directory or the parent directory of multiple working directories"
+        )
         btn_in = PushButton("Browse")
         btn_in.clicked.connect(lambda: self.browse_dir(self.filter_in))
         h1 = QHBoxLayout()
@@ -484,6 +503,7 @@ class ConstructionInterface(QWidget):
         h1.addWidget(btn_in)
 
         self.filter_out = LineEdit()
+        self.filter_out.setPlaceholderText("The same as input path by default")
         btn_out = PushButton("Browse")
         btn_out.clicked.connect(lambda: self.browse_dir(self.filter_out))
         h2 = QHBoxLayout()
@@ -524,6 +544,7 @@ class ConstructionInterface(QWidget):
         l_paths.addLayout(row_rb)
 
         self.align_in = LineEdit()
+        self.align_in.setPlaceholderText("Input file or directory")
         btn_in = PushButton("Browse")
         btn_in.clicked.connect(
             lambda: self.browse_file_or_dir(
@@ -532,6 +553,9 @@ class ConstructionInterface(QWidget):
         )
 
         self.align_out = LineEdit()
+        self.align_out.setPlaceholderText(
+            "one folder to save the aligned fasta files, create a new one if does not exists"
+        )
         btn_out = PushButton("Browse")
         btn_out.clicked.connect(lambda: self.browse_dir(self.align_out))
 
@@ -555,7 +579,12 @@ class ConstructionInterface(QWidget):
         self.align_thread = LineEdit()
         self.align_thread.setText("-1")
         self.align_algo = ComboBox()
-        self.align_algo.addItems(["auto", "add"])
+        self.align_algo.addItems(
+            [
+                "auto(depends on datasize)",
+                "add(use long sequences as backbone to align fragment sequences)",
+            ]
+        )
         self.align_reorder = ComboBox()
         self.align_reorder.addItems(["True", "False"])
 
@@ -595,6 +624,9 @@ class ConstructionInterface(QWidget):
         l_io.addLayout(row_rb)
 
         self.trim_in = LineEdit()
+        self.trim_in.setPlaceholderText(
+            "the path of one fasta file or the folder path that contains multiple fasta files"
+        )
         btn_in = PushButton("Browse")
         btn_in.clicked.connect(
             lambda: self.browse_file_or_dir(
@@ -602,6 +634,9 @@ class ConstructionInterface(QWidget):
             )
         )
         self.trim_out = LineEdit()
+        self.trim_out.setPlaceholderText(
+            "one folder to save the trimmed fasta files, create a new one if does not exists"
+        )
         btn_out = PushButton("Browse")
         btn_out.clicked.connect(lambda: self.browse_dir(self.trim_out))
 
@@ -624,16 +659,26 @@ class ConstructionInterface(QWidget):
         l_met.setContentsMargins(15, 10, 15, 10)
         self.combo_trim_method = ComboBox()
         self.combo_trim_method.addItems(
-            ["automated1", "gappyout", "strict", "strictplus", "user defined method"]
+            [
+                "automated1 (heuristic selection based on similarity statistics)",
+                "gappyout (uses information based on gaps' distribution)",
+                'strict (automatic selection on "strict" mode)',
+                'strictplus (automatic selection on "strictplus" mode)',
+                "user defined method (set thresholds of non gap, similarity, consistency...)",
+            ]
         )
         l_met.addWidget(BodyLabel("Trimming Method:"))
         l_met.addWidget(self.combo_trim_method)
 
         grid = QHBoxLayout()
         self.trim_gt = LineEdit()
+        self.trim_gt.setPlaceholderText("1 - (fraction of sequences with a gap allowed)")
         self.trim_st = LineEdit()
+        self.trim_st.setPlaceholderText("Minimum average similarity allowed")
         self.trim_ct = LineEdit()
+        self.trim_ct.setPlaceholderText("Minimum consistency value allowed")
         self.trim_con = LineEdit()
+        self.trim_con.setPlaceholderText("Minimum percentage of the positions in the original alignment to conserve")
 
         c1 = QVBoxLayout()
         c1.addWidget(BodyLabel("Non-gap Threshold (0-1):"))
@@ -671,10 +716,16 @@ class ConstructionInterface(QWidget):
         concat_layout.setContentsMargins(15, 10, 15, 10)
 
         self.concat_in = LineEdit()
+        self.concat_in.setPlaceholderText(
+            "the folder path that contains multiple fasta files"
+        )
         btn_in = PushButton("Browse")
         btn_in.clicked.connect(lambda: self.browse_dir(self.concat_in))
 
         self.concat_out = LineEdit()
+        self.concat_out.setPlaceholderText(
+            "one folder to save the concatenation results, create a new one if does not exists"
+        )
         btn_out = PushButton("Browse")
         btn_out.clicked.connect(lambda: self.browse_dir(self.concat_out))
 
@@ -853,6 +904,14 @@ class MainWindow(FluentWindow):
                 position=InfoBarPosition.TOP,
                 duration=5000,
             )
+        elif level == "SUCCESS":
+            InfoBar.success(
+                title=level,
+                content=message,
+                parent=self,
+                position=InfoBarPosition.TOP,
+                duration=5000,
+            )
         else:
             InfoBar.info(
                 title=level,
@@ -864,7 +923,7 @@ class MainWindow(FluentWindow):
 
     @Slot(int)
     def handle_count(self, count):
-        message = f"Entrez search results count: {count}"
+        message = f"Entrez search results count: {count}\n"
         self.log_widget.append_text(f"[INFO] {message}")
         InfoBar.success(
             title="SUCCESS",
@@ -996,6 +1055,7 @@ class MainWindow(FluentWindow):
         ri.btn_esearch.clicked.connect(self.my_esearch)
         ri.btn_submit_blast.clicked.connect(self.submit_new_blast)
         ri.btn_load_job.clicked.connect(self.load_previous_job)
+        ri.btn_stop.clicked.connect(self.stop_blast)
         ri.chk_summary.stateChanged.connect(self.set_marker_summary)
 
         # Construction
@@ -1017,7 +1077,7 @@ class MainWindow(FluentWindow):
         self.select_tri_method()
 
     # --- Logic Methods (Adapted from original) ---
-    
+
     def on_region_combo_changed(self):
         ri = self.retrieval_interface
         target_region = ri.combo_region.currentText()
@@ -1025,13 +1085,13 @@ class MainWindow(FluentWindow):
         ri.new_region_edit.setEnabled(target_region == "")
         if target_region != "":
             ri.new_region_edit.clear()
-    
+
     def on_new_region_changed(self):
         ri = self.retrieval_interface
         # When typing in new_region_edit, clear combo box selection
         if ri.new_region_edit.text().strip():
             ri.combo_region.setCurrentIndex(0)
-    
+
     def select_target_region(self):
         ri = self.retrieval_interface
         target_region = ri.combo_region.currentText()
@@ -1050,7 +1110,7 @@ class MainWindow(FluentWindow):
             target_region = new_region
         else:
             target_region = ri.combo_region.currentText()
-        
+
         if target_region == "":
             return
 
@@ -1121,10 +1181,13 @@ class MainWindow(FluentWindow):
         self.backend.my_esearch(self.retrieval_interface)
 
     def submit_new_blast(self):
-        self.backend.submit_new_blast(self.retrieval_interface)
+        self.backend.submit_new_blast(self.retrieval_interface, self)
 
     def load_previous_job(self):
         self.backend.load_previous_job(self.retrieval_interface, self)
+
+    def stop_blast(self):
+        self.backend.stop_blast(self.retrieval_interface)
 
     def set_marker_summary(self, state):
         self.backend.set_marker_summary(self.retrieval_interface, state)

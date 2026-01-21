@@ -4,7 +4,6 @@
 # @File:select_new_queries.py
 # @Software:PyCharm
 
-from run_command import run_command
 import networkx as nx
 import pandas as pd
 import numpy as np
@@ -15,6 +14,8 @@ from scipy.sparse import csr_matrix
 from Bio import SeqIO
 from main_utils import print_line, get_query_accession
 from seq_check_download import seq_check_download_main
+from call_mafft2 import mafft
+import shutil
 
 # 导入markov_clustering模块
 import markov_clustering as mc
@@ -60,14 +61,33 @@ def cluster_queries(wd, ref_list=None):
                 print("remove the sequences with too high or too low bit-score")
                 high_score = group["sum_hits_score"].quantile(0.75)
                 low_score = group["sum_hits_score"].quantile(0.25)
-                group = group[group["sum_hits_score"] <= high_score]
-                group = group[group["sum_hits_score"] >= low_score]  # 228 -> 173
+                group_filtered = group[group["sum_hits_score"] <= high_score]
+                group_filtered = group_filtered[
+                    group_filtered["sum_hits_score"] >= low_score
+                ]  # 228 -> 173
 
-                if len(group) > 1000:
+                if len(group_filtered) < 3:
+                    print(
+                        "After bit-score filtering, only %d sequences left. Selecting one randomly..."
+                        % len(group_filtered)
+                    )
+                    if len(group_filtered) > 0:
+                        index_list.append(
+                            np.random.choice(group_filtered.index, 1, replace=False)[0]
+                        )
+                    else:
+                        index_list.append(
+                            np.random.choice(group.index, 1, replace=False)[0]
+                        )
+                    continue
+
+                if len(group_filtered) > 1000:
                     print("Selecting 1000 sequences randomly...")
-                    group = group.loc[
-                        np.random.choice(group.index, 1000, replace=False)
+                    group = group_filtered.loc[
+                        np.random.choice(group_filtered.index, 1000, replace=False)
                     ]
+                else:
+                    group = group_filtered
                 time0 = datetime.now()
                 print("Extracting positions...", end="")
                 positions = {
@@ -86,48 +106,60 @@ def cluster_queries(wd, ref_list=None):
                 matrix = nx.to_scipy_sparse_array(network)
                 time3 = datetime.now()
                 print("running time: %s Seconds" % (time3 - time2))
-                print("Running MCL...", end="")
-                result = mc.run_mcl(matrix)
-                time4 = datetime.now()
-                print("running time: %s Seconds" % (time4 - time3))
-                print("Getting clusters...", end="")
-                # todo: what if get no cluster
-                clusters = mc.get_clusters(result)
-                time5 = datetime.now()
-                print("running time: %s Seconds" % (time5 - time4))
-                print("Total running time: %s Seconds" % (time5 - time0))
-                # block=True
-                print("get %d clusters" % len(clusters))
-                # mc.draw_graph(matrix, clusters, pos=positions, node_size=10, with_labels=False, edge_color="silver")
 
-                # # the cluster results are reordered in group, the indices are different from the original df
-                # print("Selecting one sequence randomly from each cluster...")
-                # for (i, cluster) in enumerate(clusters):
-                #     indices = group.iloc[list(cluster)].index
-                #     # print(i, cluster)  # tuple
-                #     # print(indices)
-                #
-                #     df.loc[indices, "qcluster"] = i
-                #     index_list.append(random.choice(indices, 1, replace=False)[0])
-                # df.to_csv(Path(wd) / Path("hits_selected_clusters.csv"), index=False, sep=",")
-
-                # print("Selecting the sequence with the highest bit-score from each cluster...")
-                print(
-                    "Selecting the sequence with the longest align length from each cluster..."
-                )
-                for i, cluster in enumerate(clusters):
-                    print("cluster %d, %d sequences" % (i, len(cluster)))
-                    indices = group.iloc[list(cluster)].index
-                    df.loc[indices, "qcluster"] = i
-                    # todo: select one seq with highest bit-score?
-                    index_list.append(
-                        df.loc[indices]
-                        .sort_values(
-                            by=["sum_hits_alignlen", "sum_hits_score"],
-                            ascending=[False, True],
-                        )
-                        .index[0]
+                if matrix.shape[0] < 2 or matrix.shape[1] < 2:
+                    print(
+                        "Network matrix too small (%s). Selecting one sequence randomly..."
+                        % str(matrix.shape)
                     )
+                    index_list.append(
+                        np.random.choice(group.index, 1, replace=False)[0]
+                    )
+                    continue
+
+                print("Running MCL...", end="")
+                try:
+                    result = mc.run_mcl(matrix)
+                    time4 = datetime.now()
+                    print("running time: %s Seconds" % (time4 - time3))
+                    print("Getting clusters...", end="")
+                    clusters = mc.get_clusters(result)
+                    time5 = datetime.now()
+                    print("running time: %s Seconds" % (time5 - time4))
+                    print("Total running time: %s Seconds" % (time5 - time0))
+                    print("get %d clusters" % len(clusters))
+
+                    if len(clusters) == 0:
+                        print(
+                            "MCL returned no clusters. Selecting one sequence randomly..."
+                        )
+                        index_list.append(
+                            np.random.choice(group.index, 1, replace=False)[0]
+                        )
+                        continue
+
+                    print(
+                        "Selecting the sequence with the longest align length from each cluster..."
+                    )
+                    for i, cluster in enumerate(clusters):
+                        print("cluster %d, %d sequences" % (i, len(cluster)))
+                        indices = group.iloc[list(cluster)].index
+                        df.loc[indices, "qcluster"] = i
+                        index_list.append(
+                            df.loc[indices]
+                            .sort_values(
+                                by=["sum_hits_alignlen", "sum_hits_score"],
+                                ascending=[False, True],
+                            )
+                            .index[0]
+                        )
+                except Exception as e:
+                    print("MCL clustering failed: %s" % str(e))
+                    print("Selecting one sequence randomly as fallback...")
+                    index_list.append(
+                        np.random.choice(group.index, 1, replace=False)[0]
+                    )
+                    continue
 
                 df.to_csv(
                     Path(wd) / Path("hits_selected_clusters.txt"), index=False, sep="\t"
@@ -302,11 +334,12 @@ def cluster_sequences_main(wd, fasta_file=r"hits_clustered_filtered.fasta"):
                 % n_seq
             )
             return seq_clustered
-        mafft_cmd = "mafft --localpair --maxiterate 1000 %s > %s" % (
-            Path(wd) / Path(fasta_file),
-            Path(wd) / Path("msa_" + fasta_file),
+        mafft(
+            in_path=str(Path(wd) / Path(fasta_file)),
+            out_path=str(Path(wd)),
+            algorithm="localpair",
+            additional_params="--maxiterate 1000",
         )
-        run_command(mafft_cmd)
 
     if (Path(wd) / Path("msa_" + fasta_file)).stat().st_size > 0:
         seq_distance = p_distance(wd, "msa_" + fasta_file)
@@ -343,11 +376,12 @@ def cluster_sequences(wd, fasta_file=r"hits_clustered_filtered.fasta"):
                 % n_seq
             )
             return seq_clustered
-        mafft_cmd = "mafft --localpair --maxiterate 1000 %s > %s" % (
-            Path(wd) / Path(fasta_file),
-            Path(wd) / Path("msa_" + fasta_file),
+        mafft(
+            in_path=str(Path(wd) / Path(fasta_file)),
+            out_path=str(Path(wd)),
+            algorithm="localpair",
+            additional_params="--maxiterate 1000",
         )
-        run_command(mafft_cmd)
     else:
         return None
 
@@ -589,15 +623,12 @@ def select_new_queries_main(
     if not (
         Path(wd) / "parameters" / "ref_seq" / ("queries_%d.fasta" % blast_round)
     ).exists():
-        run_command(
-            "copy %s %s"
-            % (
-                Path(tmp_wd) / Path("new_queries.fasta"),
-                Path(wd)
-                / Path("parameters")
-                / Path("ref_seq")
-                / Path("queries_%d.fasta" % blast_round),
-            )
+        shutil.copy2(
+            Path(tmp_wd) / Path("new_queries.fasta"),
+            Path(wd)
+            / Path("parameters")
+            / Path("ref_seq")
+            / Path("queries_%d.fasta" % blast_round),
         )
 
     # extend hits After BLAST iteration.
