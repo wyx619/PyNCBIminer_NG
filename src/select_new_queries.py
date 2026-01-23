@@ -341,11 +341,11 @@ def cluster_sequences_main(wd, fasta_file=r"hits_clustered_filtered.fasta"):
             additional_params="--maxiterate 1000",
         )
 
-    if (Path(wd) / Path("msa_" + fasta_file)).stat().st_size > 0:
-        seq_distance = p_distance(wd, "msa_" + fasta_file)
+    if (Path(wd) / Path(fasta_file)).stat().st_size > 0:
+        seq_distance = p_distance(wd, fasta_file)
         # todo: what if no return
         seq_distance.to_csv(
-            Path(wd) / Path(Path("msa_" + fasta_file).stem + "_distance.txt"),
+            Path(wd) / Path(Path(fasta_file).stem + "_distance.txt"),
             index=True,
             sep="\t",
         )
@@ -385,11 +385,11 @@ def cluster_sequences(wd, fasta_file=r"hits_clustered_filtered.fasta"):
     else:
         return None
 
-    if (Path(wd) / ("msa_" + fasta_file)).stat().st_size > 0:
-        seq_distance = p_distance(wd, "msa_" + fasta_file)
+    if (Path(wd) / Path(fasta_file)).stat().st_size > 0:
+        seq_distance = p_distance(wd, fasta_file)
         # todo: what if no return
         seq_distance.to_csv(
-            Path(wd) / Path(Path("msa_" + fasta_file).stem + "_distance.txt"),
+            Path(wd) / Path(Path(fasta_file).stem + "_distance.txt"),
             index=True,
             sep="\t",
         )
@@ -608,7 +608,7 @@ def select_new_queries_main(
 
     blast_round += 1
     if "new_queries_info.txt" not in file_list:
-        new_quereis_num = select_new_queries(wd, tmp_wd, blast_round, ref_number)
+        new_quereis_num = select_new_queries(tmp_wd, blast_round, ref_number)
         # todo: new ref seqs need to be more than 2???
         if new_quereis_num < 1:
             print("Cannot find more new reference. Stop iteration.")

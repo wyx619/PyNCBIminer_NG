@@ -354,7 +354,7 @@ class BackendController(QObject):
             fw.write("entrez_email\t" + email + "\n")
             fw.write("entrez_count\t" + str(count) + "\n")
             fw.write("max_length\t" + str(max_length) + "\n")
-            fw.write("key_annotations\t" + key_annotations.replace("\n", "|") + "\n")
+            fw.write("key_annotations\t" + key_annotations.replace("\n", "|").replace(";", "|") + "\n")
             fw.write("exclude_sources\t" + exclude_sources.replace("\n", "|") + "\n")
             fw.write("expect_value\t" + str(expect_value) + "\n")
             fw.write("gap_costs\t" + gap_costs + "\n")
@@ -366,7 +366,7 @@ class BackendController(QObject):
         with open(Path(wd) / "parameters" / "initial_queries.fasta", "w") as fw:
             fw.write(initial_queries)
 
-        key_annotations_list = [x for x in key_annotations.splitlines() if len(x) > 0]
+        key_annotations_list = [x.strip() for x in key_annotations.replace(";", "|").replace(",", "|").split("|") if len(x.strip()) > 0]
         exclude_sources_list = [x for x in exclude_sources.splitlines() if len(x) > 0]
         ref_number = 5
 
@@ -389,6 +389,7 @@ class BackendController(QObject):
                 date_from,
                 date_to,
                 email,
+                qualifier,
                 self.stop_flag,
             ),
         )
@@ -536,7 +537,7 @@ class BackendController(QObject):
 
         organisms = taxonomy.split("|")
         organisms = [x for x in organisms if len(x) > 0]
-        key_annotations_list = key_annotations.split("|")
+        key_annotations_list = key_annotations.replace(";", "|").replace(",", "|").split("|")
         key_annotations_list = [x for x in key_annotations_list if len(x) > 0]
         exclude_sources_list = exclude_sources.split("|")
         exclude_sources_list = [x for x in exclude_sources_list if len(x) > 0]
@@ -572,6 +573,7 @@ class BackendController(QObject):
                 date_from,
                 date_to,
                 entrez_email,
+                entrez_qualifier,
                 blast_round,
                 self.stop_flag,
             ),
@@ -718,21 +720,29 @@ class BackendController(QObject):
         self.emit_log(f"Running MAFFT...")
 
         def run_mafft_thread():
-            _, total_time = mafft(
-                in_path,
-                out_path,
-                "",
-                "",
-                algo,
-                thread_num,
-                reorder,
-                "",
-                False,
-                "",
-                emit_callback,
-            )
-            if total_time is not None:
-                self.emit_log(f"MAFFT completed in {total_time:.2f} seconds", "SUCCESS")
+            import tempfile
+            import shutil
+
+            with tempfile.TemporaryDirectory() as temp_dir:
+                _, total_time = mafft(
+                    in_path,
+                    temp_dir,
+                    "",
+                    "",
+                    algo,
+                    thread_num,
+                    reorder,
+                    "",
+                    False,
+                    "",
+                    emit_callback,
+                )
+                if total_time is not None:
+                    self.emit_log(f"MAFFT completed in {total_time:.2f} seconds", "SUCCESS")
+                    for file in Path(temp_dir).glob("*.fasta"):
+                        new_name = "msa_" + file.name
+                        shutil.move(str(file), Path(out_path) / new_name)
+                        self.emit_log(f"Output: {new_name}", "INFO")
 
         thread = threading.Thread(target=run_mafft_thread)
         thread.daemon = True

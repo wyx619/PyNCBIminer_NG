@@ -545,7 +545,7 @@ class Miner_filter:
                 reorder=True,
             )
 
-            msa_output_path = tmp_path / f"msa_{taxon}.fasta"
+            msa_output_path = tmp_path / f"{taxon}.fasta"
             if msa_output_path.exists():
                 msa_output_path.rename(msa_path)
 

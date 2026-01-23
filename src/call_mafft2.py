@@ -75,9 +75,9 @@ def mafft_add(in_path, in_file, out_path, cmd_str):
         fw2.close()
         fw3.close()
 
-        msa1 = Path(out_path) / Path("msa1_" + in_file)
-        msa2 = Path(out_path) / Path("msa2_" + in_file)
-        msa3 = Path(out_path) / Path("msa_" + in_file)
+        msa1 = Path(out_path) / Path(in_file)
+        msa2 = Path(out_path) / Path(in_file)
+        msa3 = Path(out_path) / Path(in_file)
 
         # run_command("mafft --localpair --maxiterate 1000 %s > %s" % (file1, msa1))
         # run_command("mafft --auto --add %s %s > %s" % (file2, msa1, msa2))  # FFT - NS - 2(Fast but rough)
@@ -109,7 +109,7 @@ def mafft_add(in_path, in_file, out_path, cmd_str):
             % (
                 cmd_str[0],
                 Path(in_path) / Path(in_file),
-                Path(out_path) / Path("msa_" + in_file),
+                Path(out_path) / Path(in_file),
             )
         )
 
@@ -191,11 +191,25 @@ def mafft(
         return [], None
 
     total_time = 0.0
-    if algorithm == "auto":
+    if add_choice:
         for file in file_list:
             t0 = datetime.now()
             in_file = str(Path(in_path) / file)
-            out_file = str(Path(out_path) / ("msa_" + file))
+            out_file = str(Path(out_path) / file)
+            command = f"{mafft_exe} --quiet --{algorithm} --{add_choice} {add_path} --thread {thread} {'--reorder' * reorder} {additional_params} {in_file} > {out_file}"
+            print("Aligning %s..." % in_file)
+            if progress_callback:
+                progress_callback(f"Aligning {file}...")
+            run_command(command)
+            t1 = datetime.now()
+            elapsed = (t1 - t0).total_seconds()
+            total_time += elapsed
+            print("MAFFT Running time: %s seconds" % elapsed)
+    elif algorithm == "auto":
+        for file in file_list:
+            t0 = datetime.now()
+            in_file = str(Path(in_path) / file)
+            out_file = str(Path(out_path) / file)
             command = f"{mafft_exe} --quiet --auto --thread {thread} {'--reorder' * reorder} {additional_params} {in_file} > {out_file}"
             # print(command)
             print("Aligning %s..." % in_file)

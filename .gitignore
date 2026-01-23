@@ -22,4 +22,6 @@ htmlout/
 dist_fluent/
 config/
 faba - 副本/
+faba_right/
+tests/
 

@@ -54,6 +54,8 @@ def check_annotation(feature_list, key_annotations, exclude_sources):
         for feature in feature_list:
             if feature.find(exclude_source) >= 0:
                 return False
+    if not key_annotations:
+        return True
     for key_annotation in key_annotations:
         for feature in feature_list:
             if feature.find(key_annotation) >= 0:

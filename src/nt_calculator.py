@@ -594,7 +594,7 @@ class nt_Calculator:
                     reorder=True,
                 )
 
-                msa_output = Path(mafft_out_path) / f"msa_{basename}"
+                msa_output = Path(mafft_out_path) / basename
                 if msa_output.exists():
                     if Path(out_filename).exists():
                         Path(out_filename).unlink()
@@ -783,7 +783,7 @@ class nt_Calculator:
             reorder=True,
         )
 
-        msa_output_path = record_path.parent / f"msa_{out_path.name}"
+        msa_output_path = record_path.parent / out_path.name
         if msa_output_path.exists():
             if record_path.exists():
                 record_path.unlink()

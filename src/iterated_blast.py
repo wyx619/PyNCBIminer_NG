@@ -54,7 +54,7 @@ def combine_iterated_blast(wd, blast_round, tmp_df, key_annotations, exclude_sou
 
             new_df = tmp_df[tmp_df["subject_acc.ver"].isin(new_acc_set)]
 
-            df = pd.concat([df, new_df])
+            df = pd.concat([df, new_df], ignore_index=True)
             df.to_csv(
                 Path(wd) / Path("results") / Path("blast_results.txt"),
                 index=False,
@@ -92,6 +92,7 @@ def iterated_blast_main(
     date_from,
     date_to,
     entrez_email,
+    entrez_qualifier="",
     blast_round=1,
     stop_flag=None,
 ):
@@ -224,6 +225,8 @@ def iterated_blast_main(
             "Sequence",
             "Sequence_length",
             "blast_round",
+            "Missing_left",
+            "Missing_right",
         ]
         sum_mat = np.zeros((len(queries), len(column_list)), dtype=str)
         sum_table = pd.DataFrame(sum_mat, columns=column_list, dtype=str)
@@ -234,6 +237,8 @@ def iterated_blast_main(
             sum_table.loc[i, "Sequence"] = str(queries[key].seq.upper())
             sum_table.loc[i, "Sequence_length"] = len(sum_table.loc[i, "Sequence"])
             sum_table.loc[i, "blast_round"] = blast_round
+            sum_table.loc[i, "Missing_left"] = ""
+            sum_table.loc[i, "Missing_right"] = ""
         if not (Path(wd) / Path("parameters") / Path("all_queries_info.txt")).exists():
             sum_table.to_csv(
                 Path(wd) / Path("parameters") / Path("all_queries_info.txt"),
@@ -246,7 +251,7 @@ def iterated_blast_main(
                 Path(wd) / Path("parameters") / Path("all_queries_info.txt"), sep="\t"
             )
             if blast_round not in set(all_queries["blast_round"]):
-                all_queries = pd.concat([all_queries, sum_table])
+                all_queries = pd.concat([all_queries, sum_table], ignore_index=True)
                 all_queries.to_csv(
                     Path(wd) / Path("parameters") / Path("all_queries_info.txt"),
                     index=False,

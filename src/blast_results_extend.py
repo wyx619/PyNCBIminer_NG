@@ -17,8 +17,8 @@ def add_all_queries2(wd):
         "Aligning all reference sequences to calculate the missing length on the left and right side..."
     )
     ref_seq_path = Path(wd) / "parameters" / "ref_seq"
-    # 2. 使用 Path 对象的 .iterdir() 方法，并将结果转换为列表
-    queries_file_list = list(ref_seq_path.iterdir())
+    # 2. 使用 Path 对象的 .iterdir() 方法，并将结果转换为列表，只保留.fasta文件
+    queries_file_list = sorted([f for f in ref_seq_path.iterdir() if f.suffix == ".fasta"])
     # todo: think about only 1 round of blast
     if len(queries_file_list) == 0:
         print("Could not find query sequences in the parameters folder.")
@@ -46,11 +46,29 @@ def add_all_queries2(wd):
         ref_msa_path = (
             Path(wd) / Path("parameters") / Path("ref_msa") / Path(ref_msa_file)
         )
+        print(f"Expected MSA file: {ref_msa_file}")
+        print(f"MSA file exists: {ref_msa_path.exists()}")
+        if ref_msa_path.exists():
+            print(f"MSA file size: {ref_msa_path.stat().st_size}")
         if not ref_msa_path.exists() or ref_msa_path.stat().st_size == 0:
             for n in range(2, len(queries_file_list) + 1):
                 queries_file = Path(wd) / Path("parameters") / Path("ref_seq") / Path("queries_%d.fasta" % n)
-                prev_msa = Path(wd) / Path("parameters") / Path("ref_msa") / Path("msa_queries_1_to_%d.fasta" % (n - 1))
+                if n == 2:
+                    prev_msa = Path(wd) / Path("parameters") / Path("ref_msa") / Path("msa_queries_1.fasta")
+                else:
+                    prev_msa = Path(wd) / Path("parameters") / Path("ref_msa") / Path("msa_queries_1_to_%d.fasta" % (n - 1))
                 out_msa = Path(wd) / Path("parameters") / Path("ref_msa") / Path("msa_queries_1_to_%d.fasta" % n)
+
+                print(f"Processing queries_{n}.fasta")
+                print(f"  queries_file exists: {queries_file.exists()}")
+                print(f"  prev_msa: {prev_msa.name}")
+                print(f"  prev_msa exists: {prev_msa.exists()}")
+                if not queries_file.exists():
+                    print(f"  Skipping queries_{n}.fasta (file not found)")
+                    continue
+                if not prev_msa.exists():
+                    print(f"  Skipping queries_{n}.fasta (previous MSA not found)")
+                    continue
 
                 print("Aligning %s with mafft..." % queries_file.name)
                 mafft(
@@ -61,6 +79,17 @@ def add_all_queries2(wd):
                     algorithm="auto",
                     thread=-1,
                 )
+                
+                generated_msa = Path(out_msa.parent) / queries_file.name
+                print(f"  generated_msa: {generated_msa.name}")
+                print(f"  generated_msa exists: {generated_msa.exists()}")
+                if generated_msa.exists():
+                    print(f"  Renaming {generated_msa.name} to {out_msa.name}")
+                    generated_msa.rename(out_msa)
+                
+                print(f"  out_msa exists after alignment: {out_msa.exists()}")
+                if out_msa.exists():
+                    print(f"  out_msa size: {out_msa.stat().st_size}")
 
     else:
         ref_msa_file = "msa_queries_1.fasta"
@@ -148,14 +177,15 @@ def calculate_missing_length(wd, ref_msa_file):
         Path(wd) / Path("parameters") / Path("all_queries_info.txt"), sep="\t"
     )
     all_queries_info.index = all_queries_info["ID"]
-    all_queries_info["Missing_left"] = 0
-    all_queries_info["Missing_right"] = 0
     for key in seq_dict.keys():
-        seq = seq_dict[key].seq.upper()
-        left = [seq.find("A"), seq.find("T"), seq.find("C"), seq.find("G")]
-        right = [seq.rfind("A"), seq.rfind("T"), seq.rfind("C"), seq.rfind("G")]
-        all_queries_info.loc[key, "Missing_left"] = min(left)
-        all_queries_info.loc[key, "Missing_right"] = len(seq) - max(right) - 1
+        if key in all_queries_info.index:
+            seq = seq_dict[key].seq.upper()
+            left = [seq.find("A"), seq.find("T"), seq.find("C"), seq.find("G")]
+            right = [seq.rfind("A"), seq.rfind("T"), seq.rfind("C"), seq.rfind("G")]
+            all_queries_info.loc[key, "Missing_left"] = min(left)
+            all_queries_info.loc[key, "Missing_right"] = len(seq) - max(right) - 1
+        else:
+            print(f"Warning: {key} not found in all_queries_info.txt, skipping...")
     all_queries_info.to_csv(
         Path(wd) / Path("parameters") / Path("all_queries_info.txt"),
         sep="\t",
