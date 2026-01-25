@@ -6,7 +6,7 @@ from scipy.cluster.hierarchy import linkage, fcluster
 from scipy.spatial.distance import pdist
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics import silhouette_score
-from run_command import run_command
+from functional import run_command
 
 import sys
 

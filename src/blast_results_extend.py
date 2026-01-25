@@ -10,6 +10,8 @@ from math import floor
 from Bio import SeqIO
 from main_utils import get_query_accession
 from call_mafft2 import mafft
+import tempfile
+import shutil
 
 
 def add_all_queries2(wd):
@@ -40,12 +42,14 @@ def add_all_queries2(wd):
             algorithm="localpair",
             additional_params="--maxiterate 1000",
         )
+        generated_msa = Path(wd) / Path("parameters") / Path("ref_msa") / Path("queries_1.fasta")
+        if generated_msa.exists():
+            generated_msa.rename(msa_path)
 
     if len(queries_file_list) > 1:
         ref_msa_file = "msa_queries_1_to_%d.fasta" % len(queries_file_list)
-        ref_msa_path = (
-            Path(wd) / Path("parameters") / Path("ref_msa") / Path(ref_msa_file)
-        )
+        ref_msa_dir = Path(wd) / Path("parameters") / Path("ref_msa")
+        ref_msa_path = ref_msa_dir / ref_msa_file
         print(f"Expected MSA file: {ref_msa_file}")
         print(f"MSA file exists: {ref_msa_path.exists()}")
         if ref_msa_path.exists():
@@ -71,21 +75,22 @@ def add_all_queries2(wd):
                     continue
 
                 print("Aligning %s with mafft..." % queries_file.name)
-                mafft(
-                    in_path=str(queries_file),
-                    out_path=str(out_msa.parent),
-                    add_choice="addfragments",
-                    add_path=str(prev_msa),
-                    algorithm="auto",
-                    thread=-1,
-                )
-                
-                generated_msa = Path(out_msa.parent) / queries_file.name
-                print(f"  generated_msa: {generated_msa.name}")
-                print(f"  generated_msa exists: {generated_msa.exists()}")
-                if generated_msa.exists():
-                    print(f"  Renaming {generated_msa.name} to {out_msa.name}")
-                    generated_msa.rename(out_msa)
+                with tempfile.TemporaryDirectory(dir=ref_msa_dir) as tmp_dir:
+                    mafft(
+                        in_path=str(prev_msa),
+                        out_path=tmp_dir,
+                        add_choice="addfragments",
+                        add_path=str(queries_file),
+                        algorithm="multipair",
+                        thread=-1,
+                    )
+                    
+                    generated_msa = Path(tmp_dir) / prev_msa.name
+                    if generated_msa.exists() and generated_msa.stat().st_size > 0:
+                        shutil.copy(generated_msa, out_msa)
+                        print(f"  Generated: {out_msa.name}")
+                    else:
+                        print(f"  ERROR: Alignment failed for {queries_file.name}")
                 
                 print(f"  out_msa exists after alignment: {out_msa.exists()}")
                 if out_msa.exists():

@@ -672,13 +672,17 @@ class ConstructionInterface(QWidget):
 
         grid = QHBoxLayout()
         self.trim_gt = LineEdit()
-        self.trim_gt.setPlaceholderText("1 - (fraction of sequences with a gap allowed)")
+        self.trim_gt.setPlaceholderText(
+            "1 - (fraction of sequences with a gap allowed)"
+        )
         self.trim_st = LineEdit()
         self.trim_st.setPlaceholderText("Minimum average similarity allowed")
         self.trim_ct = LineEdit()
         self.trim_ct.setPlaceholderText("Minimum consistency value allowed")
         self.trim_con = LineEdit()
-        self.trim_con.setPlaceholderText("Minimum percentage of the positions in the original alignment to conserve")
+        self.trim_con.setPlaceholderText(
+            "Minimum percentage of the positions in the original alignment to conserve"
+        )
 
         c1 = QVBoxLayout()
         c1.addWidget(BodyLabel("Non-gap Threshold (0-1):"))
@@ -814,6 +818,17 @@ class DependenciesInterface(QWidget):
         btn_trim.clicked.connect(main_window.run_install_trimal)
         h2.addWidget(btn_trim)
         grp.addSettingCard(card_trim)
+
+        # Install PGA
+        card_pga = CardWidget()
+        card_pga.setFixedHeight(80)
+        h3 = QHBoxLayout(card_pga)
+        h3.setContentsMargins(15, 10, 15, 10)
+        h3.addWidget(BodyLabel("Install PGA dependency"))
+        btn_pga = PushButton("Install", card_pga)
+        btn_pga.clicked.connect(main_window.run_install_pga)
+        h3.addWidget(btn_pga)
+        grp.addSettingCard(card_pga)
 
         self.vBoxLayout.addWidget(grp)
 
@@ -1215,6 +1230,9 @@ class MainWindow(FluentWindow):
 
     def run_install_trimal(self):
         self.backend.run_install_trimal()
+
+    def run_install_pga(self):
+        self.backend.run_install_pga()
 
     def change_theme(self, index):
         if index == 0:

@@ -27,7 +27,9 @@ def _run_silent(command):
             stdin=subprocess.DEVNULL,
         )
     else:
-        subprocess.run(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(
+            command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
 
 
 def get_trimal_path():
@@ -132,19 +134,29 @@ def trimal(
             html_out_file = html_folder / (Path(basename).stem + ".html")
             command_parts.append(f'-htmlout "{html_out_file}"')
 
+        automated_methods = ["automated1", "strict", "strictplus", "gappyout"]
+        is_automated = implement_methods in automated_methods
+
         if implement_methods:
             command_parts.append(f"-{implement_methods}")
-        if gt:
-            command_parts.append(f"-gt {gt}")
-        if st:
-            command_parts.append(f"-st {st}")
-        if ct:
-            print(f"WARNING: -ct option is not compatible with -in input method, skipping ct={ct}")
-        if cons:
-            command_parts.append(f"-cons {cons}")
+
+        if is_automated:
+            pass  # 自动化方法不传递手动阈值参数
+        else:
+            if gt:
+                command_parts.append(f"-gt {gt}")
+            if st:
+                command_parts.append(f"-st {st}")
+            if ct:
+                print(
+                    f"WARNING: -ct option is not compatible with -in input method, skipping ct={ct}"
+                )
+            if cons:
+                command_parts.append(f"-cons {cons}")
 
         command_parts.append(additional_params)
         command = " ".join(command_parts)
+        # print(f"DEBUG: Running trimal command: {command}")
         _run_silent(command)
 
         if not out_file.exists():

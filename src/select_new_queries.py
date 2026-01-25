@@ -107,10 +107,11 @@ def cluster_queries(wd, ref_list=None):
                 time3 = datetime.now()
                 print("running time: %s Seconds" % (time3 - time2))
 
-                if matrix.shape[0] < 2 or matrix.shape[1] < 2:
+                matrix_shape = matrix.shape if hasattr(matrix, 'shape') else (matrix.toarray().shape if hasattr(matrix, 'toarray') else (0, 0))
+                if matrix_shape[0] < 2 or matrix_shape[1] < 2:
                     print(
                         "Network matrix too small (%s). Selecting one sequence randomly..."
-                        % str(matrix.shape)
+                        % str(matrix_shape)
                     )
                     index_list.append(
                         np.random.choice(group.index, 1, replace=False)[0]
@@ -129,9 +130,9 @@ def cluster_queries(wd, ref_list=None):
                     print("Total running time: %s Seconds" % (time5 - time0))
                     print("get %d clusters" % len(clusters))
 
-                    if len(clusters) == 0:
+                    if len(clusters) == 0 or len(clusters[0]) == 0:
                         print(
-                            "MCL returned no clusters. Selecting one sequence randomly..."
+                            "MCL returned empty clusters. Selecting one sequence randomly..."
                         )
                         index_list.append(
                             np.random.choice(group.index, 1, replace=False)[0]
@@ -282,13 +283,27 @@ def p_distance(wd, in_file):
 def my_mcl(wd, df, table):
     # Nodes are considered adjacent if the distance between them is <= 0.3 units
     matrix = np.array(df)
+    
+    if matrix.ndim < 2 or matrix.shape[0] < 2 or matrix.shape[1] < 2:
+        print("Distance matrix too small for MCL clustering (%s). Skipping MCL..." % str(matrix.shape))
+        return None
+    
     matrix[matrix == 0] = 1
     adjacent = matrix <= 0.3
     matrix[adjacent] = 1
     matrix[~adjacent] = 0
     matrix = csr_matrix(matrix)
-    result = mc.run_mcl(matrix)  # run MCL with default parameters
-    clusters = mc.get_clusters(result)  # 4 clusters, 11 clusters
+    
+    try:
+        result = mc.run_mcl(matrix)
+        clusters = mc.get_clusters(result)
+    except Exception as e:
+        print("MCL clustering failed: %s" % str(e))
+        return None
+    
+    if len(clusters) == 0 or (len(clusters) > 0 and len(clusters[0]) == 0):
+        print("MCL returned empty clusters. Skipping MCL...")
+        return None
     # mc.draw_graph(matrix, clusters, node_size=10, with_labels=True, edge_color="silver")
 
     df1 = pd.read_table(Path(wd) / Path(table), sep="\t", engine="python")
@@ -351,6 +366,11 @@ def cluster_sequences_main(wd, fasta_file=r"hits_clustered_filtered.fasta"):
         )
         table = r"hits_clustered_filtered.txt"
         seq_clustered = my_mcl(wd, seq_distance, table)
+        if seq_clustered is None:
+            print("MCL clustering skipped. Using all filtered sequences.")
+            seq_clustered = pd.read_table(
+                Path(wd) / Path("hits_clustered_filtered.txt"), sep="\t"
+            )
         seq_clustered.to_csv(
             Path(wd) / Path("sequences_clustered.txt"), index=False, sep="\t"
         )
@@ -395,8 +415,20 @@ def cluster_sequences(wd, fasta_file=r"hits_clustered_filtered.fasta"):
         )
         table = r"hits_clustered_filtered.txt"
         # seq_clustered = my_mcl(wd, seq_distance, table)  # my_mcl(wd, df, table)
+        
+        matrix = np.array(seq_distance)
+        matrix_shape = matrix.shape
+        if matrix.ndim < 2 or matrix_shape[0] < 2 or matrix_shape[1] < 2:
+            print("Distance matrix too small for MCL (%s). Using all filtered sequences." % str(matrix_shape))
+            seq_clustered = pd.read_table(
+                Path(wd) / Path("hits_clustered_filtered.txt"), sep="\t"
+            )
+            seq_clustered.to_csv(
+                Path(wd) / Path("sequences_clustered.txt"), index=False, sep="\t"
+            )
+            return seq_clustered
+            
         try:
-            matrix = np.array(seq_distance)
             matrix[matrix == 0] = 1
             adjacent = matrix <= 0.3
             matrix[adjacent] = 1

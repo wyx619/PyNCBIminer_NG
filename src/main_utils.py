@@ -151,9 +151,9 @@ class BackendController(QObject):
         d_from = ""
         d_to = ""
 
-        if not retrieval_interface.date_from_cleared:
+        if not retrieval_interface.date_from_cleared and date_from_obj.isValid():
             d_from = date_from_obj.toString("yyyy/MM/dd")
-        if not retrieval_interface.date_to_cleared:
+        if not retrieval_interface.date_to_cleared and date_to_obj.isValid():
             d_to = date_to_obj.toString("yyyy/MM/dd")
 
         if d_from and not d_to:
@@ -232,17 +232,17 @@ class BackendController(QObject):
         wd = retrieval_interface.wd_edit.text().strip()
         date_from_qdate = retrieval_interface.date_from.date
         date_to_qdate = retrieval_interface.date_to.date
-        
-        if not date_from_qdate.isValid():
-            date_from = ""
-        else:
+
+        if not retrieval_interface.date_from_cleared and date_from_qdate.isValid():
             date_from = date_from_qdate.toString("yyyy/MM/dd")
-        
-        if not date_to_qdate.isValid():
-            date_to = ""
         else:
+            date_from = ""
+
+        if not retrieval_interface.date_to_cleared and date_to_qdate.isValid():
             date_to = date_to_qdate.toString("yyyy/MM/dd")
-        
+        else:
+            date_to = ""
+
         if date_from and not date_to:
             today = QDate.currentDate()
             date_to = today.toString("yyyy/MM/dd")
@@ -258,7 +258,13 @@ class BackendController(QObject):
             self.emit_log("Please input your working directory path.", "WARNING")
         if not date_from and date_to:
             self.emit_log("Please set date_from when date_to is specified.", "WARNING")
-        if taxonomy == "" or email == "" or qualifier == "" or wd == "" or (not date_from and date_to):
+        if (
+            taxonomy == ""
+            or email == ""
+            or qualifier == ""
+            or wd == ""
+            or (not date_from and date_to)
+        ):
             return
 
         # max_length: positive integer
@@ -285,7 +291,9 @@ class BackendController(QObject):
         try:
             expect_value = float(expect_value)
             if expect_value < 0:
-                self.emit_log("expect_value needs to be a nonnegative number.", "WARNING")
+                self.emit_log(
+                    "expect_value needs to be a nonnegative number.", "WARNING"
+                )
                 return
         except ValueError:
             self.emit_log(f"Invalid value for expect_value: {expect_value}.", "WARNING")
@@ -295,7 +303,9 @@ class BackendController(QObject):
         try:
             nucl_reward = int(nucl_reward)
             if nucl_reward < 0:
-                self.emit_log("nucl_reward needs to be a nonnegative integer.", "WARNING")
+                self.emit_log(
+                    "nucl_reward needs to be a nonnegative integer.", "WARNING"
+                )
                 return
         except ValueError:
             self.emit_log(f"Invalid value for nucl_reward: {nucl_reward}.", "WARNING")
@@ -305,7 +315,9 @@ class BackendController(QObject):
         try:
             nucl_penalty = int(nucl_penalty)
             if nucl_penalty > 0:
-                self.emit_log("nucl_penalty needs to be a nonpositive integer.", "WARNING")
+                self.emit_log(
+                    "nucl_penalty needs to be a nonpositive integer.", "WARNING"
+                )
                 return
         except ValueError:
             self.emit_log(f"Invalid value for nucl_penalty: {nucl_penalty}.", "WARNING")
@@ -354,7 +366,11 @@ class BackendController(QObject):
             fw.write("entrez_email\t" + email + "\n")
             fw.write("entrez_count\t" + str(count) + "\n")
             fw.write("max_length\t" + str(max_length) + "\n")
-            fw.write("key_annotations\t" + key_annotations.replace("\n", "|").replace(";", "|") + "\n")
+            fw.write(
+                "key_annotations\t"
+                + key_annotations.replace("\n", "|").replace(";", "|")
+                + "\n"
+            )
             fw.write("exclude_sources\t" + exclude_sources.replace("\n", "|") + "\n")
             fw.write("expect_value\t" + str(expect_value) + "\n")
             fw.write("gap_costs\t" + gap_costs + "\n")
@@ -366,7 +382,11 @@ class BackendController(QObject):
         with open(Path(wd) / "parameters" / "initial_queries.fasta", "w") as fw:
             fw.write(initial_queries)
 
-        key_annotations_list = [x.strip() for x in key_annotations.replace(";", "|").replace(",", "|").split("|") if len(x.strip()) > 0]
+        key_annotations_list = [
+            x.strip()
+            for x in key_annotations.replace(";", "|").replace(",", "|").split("|")
+            if len(x.strip()) > 0
+        ]
         exclude_sources_list = [x for x in exclude_sources.splitlines() if len(x) > 0]
         ref_number = 5
 
@@ -535,9 +555,14 @@ class BackendController(QObject):
         retrieval_interface.key_anno.setPlainText(key_annotations.replace("|", "; "))
         retrieval_interface.excl_source.setPlainText(exclude_sources.replace("|", "\n"))
 
+        date_from = retrieval_interface.date_from.date().toString("yyyy/MM/dd")
+        date_to = retrieval_interface.date_to.date().toString("yyyy/MM/dd")
+
         organisms = taxonomy.split("|")
         organisms = [x for x in organisms if len(x) > 0]
-        key_annotations_list = key_annotations.replace(";", "|").replace(",", "|").split("|")
+        key_annotations_list = (
+            key_annotations.replace(";", "|").replace(",", "|").split("|")
+        )
         key_annotations_list = [x for x in key_annotations_list if len(x) > 0]
         exclude_sources_list = exclude_sources.split("|")
         exclude_sources_list = [x for x in exclude_sources_list if len(x) > 0]
@@ -648,8 +673,8 @@ class BackendController(QObject):
             self.emit_log("Please set input path", "WARNING")
             return
         if not Path(in_path).exists():
-            self.emit_log(f"Input path does not exist: {in_path}", "WARNING")
-            return
+            Path(in_path).mkdir(parents=True, exist_ok=True)
+            self.emit_log(f"Created input directory: {in_path}", "INFO")
 
         if not Path(out_path).exists():
             Path(out_path).mkdir(parents=True, exist_ok=True)
@@ -698,8 +723,8 @@ class BackendController(QObject):
             self.emit_log("Please set input path", "WARNING")
             return
         if not Path(in_path).exists():
-            self.emit_log(f"Input path does not exist: {in_path}", "WARNING")
-            return
+            Path(in_path).mkdir(parents=True, exist_ok=True)
+            self.emit_log(f"Created input directory: {in_path}", "INFO")
         if not out_path:
             self.emit_log("Please set output path", "WARNING")
             return
@@ -717,7 +742,7 @@ class BackendController(QObject):
         def emit_callback(message, level="INFO"):
             self.emit_log(message, level)
 
-        self.emit_log(f"Running MAFFT...")
+        self.emit_log("Running MAFFT...")
 
         def run_mafft_thread():
             import tempfile
@@ -738,7 +763,9 @@ class BackendController(QObject):
                     emit_callback,
                 )
                 if total_time is not None:
-                    self.emit_log(f"MAFFT completed in {total_time:.2f} seconds", "SUCCESS")
+                    self.emit_log(
+                        f"MAFFT completed in {total_time:.2f} seconds", "SUCCESS"
+                    )
                     for file in Path(temp_dir).glob("*.fasta"):
                         new_name = "msa_" + file.name
                         shutil.move(str(file), Path(out_path) / new_name)
@@ -759,28 +786,29 @@ class BackendController(QObject):
             self.emit_log("Please set input path", "WARNING")
             return
         if not Path(in_path).exists():
-            self.emit_log(f"Input path does not exist: {in_path}", "WARNING")
-            return
+            Path(in_path).mkdir(parents=True, exist_ok=True)
+            self.emit_log(f"Created input directory: {in_path}", "INFO")
         if not out_path:
             if Path(in_path).is_file():
                 out_path = str(Path(in_path).parent)
-                self.emit_log(f"Using input file's directory as output: {out_path}", "INFO")
+                self.emit_log(
+                    f"Using input file's directory as output: {out_path}", "INFO"
+                )
             else:
                 out_path = in_path
                 self.emit_log("Using input directory as output", "INFO")
 
         if not Path(out_path).exists():
-            Path(out_path).mkdir(exist_ok=True)
+            Path(out_path).mkdir(parents=True, exist_ok=True)
 
         met = construction_interface.combo_trim_method.currentText().split(" ")[0]
         if met == "user":
             met = ""
-        
+
         gt_val = construction_interface.trim_gt.text()
         st_val = construction_interface.trim_st.text()
         ct_val = construction_interface.trim_ct.text()
         con_val = construction_interface.trim_con.text()
-        
 
         def emit_callback(message, level="INFO"):
             self.emit_log(message, level)
@@ -849,6 +877,14 @@ class BackendController(QObject):
 
         self.emit_log("Installing trimAl...")
         thread = threading.Thread(target=install_trimal)
+        thread.daemon = True
+        thread.start()
+
+    def run_install_pga(self):
+        from install_dependencies import install_pga
+
+        self.emit_log("Installing PGA...")
+        thread = threading.Thread(target=install_pga)
         thread.daemon = True
         thread.start()
 

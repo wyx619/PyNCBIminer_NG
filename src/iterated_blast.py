@@ -54,7 +54,8 @@ def combine_iterated_blast(wd, blast_round, tmp_df, key_annotations, exclude_sou
 
             new_df = tmp_df[tmp_df["subject_acc.ver"].isin(new_acc_set)]
 
-            df = pd.concat([df, new_df], ignore_index=True)
+            if not new_df.empty:
+                df = pd.concat([df, new_df], ignore_index=True)
             df.to_csv(
                 Path(wd) / Path("results") / Path("blast_results.txt"),
                 index=False,

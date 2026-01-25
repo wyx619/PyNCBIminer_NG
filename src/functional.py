@@ -1,7 +1,7 @@
 from pathlib import Path
 import time
-from message_logger import MessageLogger
-
+import subprocess
+import sys
 
 def check_inpath_validity(path):
     """check if an input path is valid (an existing path except shortcuts and .result files)
@@ -72,9 +72,6 @@ def get_file_handles(in_path):
     -------
     Returns
     - file_handles - all file handles in a list"""
-    # STEP 0: initialize a message logger
-    message_logger = MessageLogger()
-
     # STEP 1: if in_path is not a list, then make it a list
     if not isinstance(in_path, list):
         in_path = [in_path]
@@ -86,7 +83,7 @@ def get_file_handles(in_path):
         # if path is invalid, collect warning message
         if not check_inpath_validity(file_path):
             warning_message = f"{file_path} invalid, thus omitted."
-            message_logger.collect_warning(warning_message)
+            print(f"WARNING: {warning_message}")
             continue
 
         # substep 1 : if an element is a file, add the file to result
@@ -119,14 +116,14 @@ def get_file_handles(in_path):
         warning_message = (
             "Redundant input files detected, duplicates automatically removed"
         )
+        print(f"WARNING: {warning_message}")
 
     # if there are no paths kept, show error message, else show warning message
     if len(file_handles) == 0:
         error_message = "All input file(s) invalid, please check your input!"
-        message_logger.collect_error(error_message)
-        message_logger.print_error()
+        print(f"ERROR: {error_message}")
     else:
-        message_logger.print_warning()
+        pass
 
     file_handles.sort()
 
@@ -183,9 +180,6 @@ def get_checked_path(in_path, out_path, overwriting_check=True):
     Returns
     - file_handles - all file handles in a list (directly from <func> get_file_handles)
     """
-    # initialize message logger
-    message_logger = MessageLogger()
-
     # get all file handles, inside which input path validity is checked
     file_handles = get_file_handles(in_path)
     if file_handles == []:
@@ -194,18 +188,16 @@ def get_checked_path(in_path, out_path, overwriting_check=True):
     # check if output path is valid
     if not check_outpath_validity(out_path):
         error_message = "Output path invalid, please check your outout path!"
-        message_logger.collect_error(error_message)
-        message_logger.print_error()
-        message_logger.print_message("Operation aborted")
-        return []  # write nothing if output folder is invalid
+        print(f"ERROR: {error_message}")
+        print("Operation aborted")
+        return []
 
     # check if there is potential danger of overwriting original files
     if overwriting_check:
         if overwriting_potential(in_path, out_path):
             error_message = "Overwriting danger! Please set another output path."
-            message_logger.collect_error(error_message)
-            message_logger.print_error()
-            message_logger.print_message("Operation aborted")
+            print(f"ERROR: {error_message}")
+            print("Operation aborted")
             return []
 
     return file_handles
@@ -253,3 +245,46 @@ class Timer:
         with open(self.out_path, "a") as f:
             msg = f"{msg}: {time_consumed} seconds\n"
             f.write(msg)
+
+def run_command(command, shell=True, capture_output=False):
+    """
+    执行命令并隐藏命令行窗口（适用于 Windows）
+
+    Args:
+        command: 要执行的命令字符串
+        shell: 是否使用 shell 执行（默认为 True）
+        capture_output: 是否捕获输出（会影响 shell 重定向）
+
+    Returns:
+        subprocess.CompletedProcess 对象
+    """
+    if sys.platform == "win32":
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.dwFlags |= subprocess.STARTF_USESTDHANDLES
+        startupinfo.wShowWindow = subprocess.SW_HIDE
+        creationflags = subprocess.CREATE_NO_WINDOW
+
+        stdout_setting = subprocess.PIPE if capture_output else None
+        stderr_setting = subprocess.PIPE if capture_output else None
+
+        process = subprocess.Popen(
+            command,
+            shell=shell,
+            startupinfo=startupinfo,
+            creationflags=creationflags,
+            stdout=stdout_setting,
+            stderr=stderr_setting,
+            stdin=subprocess.DEVNULL,
+        )
+        stdout, stderr = process.communicate()
+
+        if stderr:
+            print(f"{stderr.decode('utf-8', errors='ignore')}")
+
+        return subprocess.CompletedProcess(
+            args=command, returncode=process.returncode, stdout=stdout, stderr=stderr
+        )
+    else:
+        capture = subprocess.PIPE if capture_output else False
+        return subprocess.run(command, shell=shell, capture_output=capture, text=False)

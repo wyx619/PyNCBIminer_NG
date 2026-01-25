@@ -6,7 +6,7 @@ from format_wizard import (
 from pathlib import Path
 from Bio import SeqIO
 from datetime import datetime
-from run_command import run_command
+from functional import run_command
 import os
 import shutil
 
@@ -235,3 +235,4 @@ def mafft(
             print("MAFFT Running time: %s seconds" % elapsed)
 
     return file_handles, total_time
+

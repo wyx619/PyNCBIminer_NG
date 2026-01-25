@@ -8,11 +8,8 @@ import re
 import time
 
 from functional import create_folder
-from message_logger import MessageLogger
 from nt_calculator import nt_Calculator
 from call_mafft2 import mafft
-
-
 
 
 class Miner_filter:
@@ -35,7 +32,6 @@ class Miner_filter:
         <attr> out_path - output path of this class, usually the output (working directory) of "retrived sequences"
         <attr> tmp_path - destination folder of temporary files
         <attr> log_path - destination folder of log files
-        <attr> logger - an instance of MessageLogger, to show or write log messages
         <attr> num_query - the number of sequences in the query
         <attr> quality_control_max_size_subset - the maximum size when spliting subsets
         <attr> <class> nt_calculator - some functions for pairwise identity calculation, etc.
@@ -81,7 +77,6 @@ class Miner_filter:
 
         self.__tmp_path = self.__out_path / "tmp_files"
         self.__log_path = self.__out_path
-        self.__logger = MessageLogger(self.__log_path)
         self.__num_query = 0  # the number of sequences in the query, initiated as 0
         self.__quality_control_max_size_subset = 0
         self.__nt_calculator = nt_Calculator()
@@ -918,7 +913,7 @@ class Miner_filter:
 
         # write log file
         msg = "in <func> save_selected_seqs:\n  Most qualified sequence for each taxon is saved to 'blast_results_filtered.fasta'"
-        self.__logger.write_message(msg)
+        print(f"INFO: {msg}")
 
     ## ===========================================================================================================
     ## ================================== for <func> control_extension ===========================================
@@ -993,7 +988,7 @@ class Miner_filter:
         for file_path in in_path.iterdir():
             if not file_path.is_file():
                 continue
-            file = file_path.name
+            # file = file_path.name
             genus = file_path.stem
 
             length_list = []
@@ -1130,14 +1125,12 @@ class Miner_filter:
             if reference is None:
                 reference = file_list[0]
                 warning_msg = f"In file {file}: there may be error in extension check because no other genus from the same family can be used as reference."
-                self.__logger.collect_warning(warning_msg)
+                print(f"WARNING: {warning_msg}")
 
             ref_aligned_path = out_path / f"{Path(reference).stem}_MSA.fasta"
 
             if not ref_aligned_path.exists():
-                self.__logger.collect_warning(
-                    f"Reference alignment not found for {file}"
-                )
+                print(f"WARNING: Reference alignment not found for {file}")
                 continue
 
             mafft(
@@ -1154,7 +1147,7 @@ class Miner_filter:
             if msa_file.exists():
                 shutil.move(str(msa_file), str(file_out_path))
 
-        self.__logger.write_warning()
+        pass
 
     def __remove_erroneous_extension(self, gappyness_threshold=0.5):
         """remove extension if the extension part is too gappy in the MSA (so-called errorneous ones)
@@ -1163,7 +1156,7 @@ class Miner_filter:
         - gappyness_threshold - if extension with gappyness more than this number will be removed/trimmed"""
         from functional import create_folder
 
-        self.__logger.write_message("Into removal.")
+        print("INFO: Into removal.")
         record_ids = []
 
         in_path = self.__in_path / "tmp_files" / "extension_control" / "subset_MSA"
@@ -1188,7 +1181,7 @@ class Miner_filter:
         for file_path in in_path.iterdir():
             if not file_path.is_file():
                 continue
-            self.__logger.write_message(f"Performing removal on {file_path.name}.")
+            print(f"INFO: Performing removal on {file_path.name}.")
             record_iter = SeqIO.parse(file_path, "fasta")
 
             for record in record_iter:
@@ -1293,7 +1286,9 @@ class Miner_filter:
             else:
                 new_records.append(record)
 
-        self.__logger.write_success("Extension control finished.")
+        print("[SUCCESS] Extension control finished.")
         new_records.sort(key=lambda x: x.description)
         SeqIO.write(new_records, out_path / "blast_results_controlled.fasta", "fasta")
-        self.__logger.write_success("Alignment control finished. See blast_results_controlled.fasta for details.")
+        print(
+            "[SUCCESS] Alignment control finished. See blast_results_controlled.fasta for details."
+        )

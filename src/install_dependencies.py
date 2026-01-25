@@ -64,3 +64,22 @@ def install_trimal():
     print("Installation finished.")
     file_path.unlink()  # Delete zip file
     print("Zip file deleted.")
+
+
+def install_pga(pga_url, exe_name="pga.exe"):
+    """
+    download pga executable to the same directory as pyncbiminer
+    path to pga after download: ./pga/pga.exe
+    :param pga_url: URL to download the pga exe file
+    :param exe_name: Name of the executable file (default: pga.exe)
+    :return:
+    """
+    root_path = Path.cwd()
+    pga_dir = root_path / r"./pga"
+    if not pga_dir.exists():
+        pga_dir.mkdir(exist_ok=True)
+    file_path = pga_dir / exe_name
+    print("Downloading PGA...")
+    file_path, _ = urlretrieve(pga_url, file_path, schedule)
+    print("PGA downloaded successfully.")
+    print(f"PGA installed at: {file_path}")
