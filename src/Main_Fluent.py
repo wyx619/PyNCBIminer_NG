@@ -239,8 +239,8 @@ class RetrievalInterface(SingleDirectionScrollArea):
         self.date_from.setDate(QDate())
         self.date_from_cleared = True
         self.date_from.dateChanged.connect(self.on_date_from_changed)
-        self.btn_clear_from = PushButton(self.entrez_card)
-        self.btn_clear_from.setIcon(FIF.BROOM)
+        self.btn_clear_from = PushButton("Reset", self.entrez_card)
+
 
         self.btn_clear_from.clicked.connect(self.clear_date_from)
         row3.addWidget(BodyLabel("Date From:"))
@@ -252,8 +252,8 @@ class RetrievalInterface(SingleDirectionScrollArea):
         self.date_to.setDate(QDate())
         self.date_to_cleared = True
         self.date_to.dateChanged.connect(self.on_date_to_changed)
-        self.btn_clear_to = PushButton(self.entrez_card)
-        self.btn_clear_to.setIcon(FIF.BROOM)
+        self.btn_clear_to = PushButton("Reset", self.entrez_card)
+
 
         self.btn_clear_to.clicked.connect(self.clear_date_to)
         row3.addWidget(BodyLabel("Date To:"))
@@ -429,7 +429,7 @@ class ConstructionInterface(QWidget):
 
         self.vBoxLayout.addWidget(self.pivot)
         self.vBoxLayout.addWidget(self.stackedWidget)
-        self.vBoxLayout.setContentsMargins(30, 10, 30, 30)
+        self.vBoxLayout.setContentsMargins(30, 25, 30, 15)
 
         # Init state
         self.stackedWidget.setCurrentWidget(self.page_filter)
@@ -953,7 +953,7 @@ class MainWindow(FluentWindow):
         self.is_closing = False
         self.setWindowTitle("PyNCBIminer-NG")
         self.setWindowIcon(QIcon(get_resource_path("icons/app_icon.ico")))
-        self.navigationInterface.setExpandWidth(250)
+        self.navigationInterface.setExpandWidth(240)
 
         # Set minimum window width
         self.setMinimumWidth(1100)
@@ -1142,11 +1142,17 @@ class MainWindow(FluentWindow):
 
         with open(params_file, "r") as fr:
             parameters = fr.read().splitlines()
-            for parameter in parameters:
-                if parameter.strip() != "":
-                    parts = parameter.split("\t")
-                    if len(parts) >= 2:
-                        parameters_dict[parts[0]] = str(parts[1])
+            for i, parameter in enumerate(parameters, 1):
+                if parameter.strip() == "":
+                    continue
+                parts = parameter.split("\t")
+                if len(parts) >= 2:
+                    parameters_dict[parts[0]] = str(parts[1])
+                else:
+                    self.backend.emit_log(
+                        f"Line {i} invalid format: {parameter[:20]}...",
+                        "WARNING"
+                    )
 
         ri.init_queries.clear()
         # Load Queries Logic

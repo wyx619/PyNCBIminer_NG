@@ -148,7 +148,7 @@ def call_miner_filter(in_path, out_path, action, consensus_value, len_shresh, em
                 my_miner_filter = Miner_filter(wd, out_path)
             except FileNotFoundError as e:
                 print(f"[WARNING] {e}")
-                emit_log(f"Results directory not found. Please run 'Submit New BLAST' first.", "WARNING")
+                emit_log("Results directory not found. Please run 'Submit New BLAST' first.", "WARNING")
                 continue
             t0 = datetime.now()
             my_miner_filter.control_extension(gappyness_threshold=0.5)
@@ -162,7 +162,7 @@ def call_miner_filter(in_path, out_path, action, consensus_value, len_shresh, em
                 my_miner_filter = Miner_filter(wd, out_path)
             except FileNotFoundError as e:
                 print(f"[WARNING] {e}")
-                emit_log(f"Results directory not found. Please run 'Submit New BLAST' first.", "WARNING")
+                emit_log("Results directory not found. Please run 'Submit New BLAST' first.", "WARNING")
                 continue
             t0 = datetime.now()
             my_miner_filter.reduce_dataset(
@@ -188,7 +188,7 @@ def call_miner_filter(in_path, out_path, action, consensus_value, len_shresh, em
                 my_miner_filter = Miner_filter(wd, out_path)
             except FileNotFoundError as e:
                 print(f"[WARNING] {e}")
-                emit_log(f"Results directory not found. Please run 'Submit New BLAST' first.", "WARNING")
+                emit_log("Results directory not found. Please run 'Submit New BLAST' first.", "WARNING")
                 continue
             t0 = datetime.now()
             my_miner_filter.control_extension(gappyness_threshold=0.5)
@@ -202,7 +202,7 @@ def call_miner_filter(in_path, out_path, action, consensus_value, len_shresh, em
                 my_miner_filter = Miner_filter(wd, out_path)
             except FileNotFoundError as e:
                 print(f"[WARNING] {e}")
-                emit_log(f"Results directory not found. Please run 'Submit New BLAST' first.", "WARNING")
+                emit_log("Results directory not found. Please run 'Submit New BLAST' first.", "WARNING")
                 continue
             my_miner_filter.reduce_dataset(
                 consensus_value=consensus_value,  # for consensus calculation

@@ -841,7 +841,7 @@ class BackendController(QObject):
         thread.start()
 
     def run_concatenation(self, construction_interface):
-        from my_concatenation import my_concatenation
+        from functional import my_concatenation
 
         in_p = construction_interface.concat_in.text().strip()
         out_p = construction_interface.concat_out.text().strip()
@@ -856,11 +856,17 @@ class BackendController(QObject):
             self.emit_log("Please set output path", "WARNING")
             return
 
-        if not Path(out_p).exists():
-            Path(out_p).mkdir(parents=True, exist_ok=True)
+        out_path_obj = Path(out_p)
+        if out_path_obj.exists() and any(out_path_obj.iterdir()):
+            self.emit_log(f"Output directory already exists and is not empty: {out_p}", "WARNING")
+            self.emit_log("Please choose an empty directory or remove existing files first", "WARNING")
+            return
+
+        if not out_path_obj.exists():
+            out_path_obj.mkdir(parents=True, exist_ok=True)
 
         self.emit_log("Running Concatenation...")
-        thread = threading.Thread(target=my_concatenation, args=(in_p, out_p))
+        thread = threading.Thread(target=my_concatenation, args=(in_p, out_p, self.emit_log))
         thread.daemon = True
         thread.start()
 

@@ -33,6 +33,7 @@ dependencies = [
     "scikit-learn",
     "markov-clustering",
     "networkx",
+    "PySide6-Fluent-Widgets"
 ]
 
 [project.scripts]
@@ -50,6 +51,5 @@ icon = "src/icons/app_icon.ico"
 [dependency-groups]
 dev = [
     "pyinstaller>=6.18.0",
-    "Pillow>=10.0.0",
-    "PySide6-Fluent-Widgets"
+    "Pillow>=10.0.0"
 ]

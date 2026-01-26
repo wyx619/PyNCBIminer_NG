@@ -2,7 +2,8 @@ import shutil
 import sys
 from pathlib import Path
 import pandas as pd
-from Bio import SeqIO, SeqRecord
+from Bio import SeqIO, SeqRecord, AlignIO
+from Bio.Seq import Seq
 
 
 def check_inpath_validity(path):
@@ -188,72 +189,47 @@ def fas2phy(in_path, out_path="./"):
     - written_results - a list of pair [species_number, sequence_length]
         where species_number is the number of species in a fasta
         and sequence length is the length of sequences in this fasta"""
-    # STEP 0: check validity of in_path and out_path
     file_handles = get_file_handles(in_path)
     if not check_outpath_validity(out_path):
-        return []  # write nothing if output folder is invalid
-    out_path = Path(out_path) / "phylip.result"
+        return []
+
+    out_path = Path(out_path) / "phylip"
     create_folder(out_path)
-    written_results = []  # to store the pair [species_number, sequence_length]
+    written_results = []
 
-    # STEP 1: read and get length of the longest name, species number and sequence length.
-    # and also checking whether all sequences are of the same length
     for in_file in file_handles:
-        record_iter = SeqIO.parse(in_file, "fasta")
-        aligned = True
-        len_longest_name = 0
-        species_number = 0
-        sequence_length = 0
-
-        for record in record_iter:
-            taxon_name = record.description
-            taxon_length = len(record.seq)
-            if species_number == 0:  # initiate sequence length
-                sequence_length = taxon_length
-            if (
-                taxon_length != sequence_length
-            ):  # phylip requires sequences in same length
-                aligned = False
-                break
-                # raise Exception('Invalid sequence length: ', str(in_file))
-            if len(taxon_name) > len_longest_name:
-                len_longest_name = len(taxon_name)
-            species_number += 1
-
-        # STEP 2: re-read input file and write to phylip format.
-        if not aligned:  # fasta is not aligned, cannot transform to phylip, so skip
-            continue
-        illegal_characters = ["\t", "\n", " ", ":", ",", ")", "(", ";", "]", "[", "'"]
         filename = Path(in_file).stem + ".phy"
-        fptr = open(out_path / filename, "w")
-        fptr.write(f" {species_number}  {sequence_length}" + "\n")  # header
-        record_iter = SeqIO.parse(in_file, "fasta")
-        name_room = (
-            len_longest_name + 1
-        )  # room for each taxon's name and following spaces
-        for record in record_iter:
-            taxon_name = record.description
-            taxon_seq = str(record.seq)
+        out_file = out_path / filename
 
-            # replace illegal characters in phylip by underlines if necessary.
-            if any(substring in taxon_name for substring in illegal_characters):
-                illegals = [
-                    substring
-                    for substring in taxon_name
-                    if substring in illegal_characters
-                ]
-                for char in illegals:
-                    taxon_name = taxon_name.replace(char, "_")
-                # to avoid gathering '_' in taxon name
-                taxon_name = "_".join(
-                    [part for part in taxon_name.split("_") if part != ""]
-                ).strip()
+        try:
+            alignments = AlignIO.parse(in_file, "fasta")
+            alignments = list(alignments)
 
-            space = " " * (name_room - len(taxon_name))
-            fptr.write(taxon_name + space + taxon_seq + "\n")
-        fptr.close()
-        written_results.append([species_number, sequence_length])
-    return written_results  # pair [species_number, sequence_length]
+            if not alignments:
+                print(f"Warning: {in_file} is empty or invalid, skipping...")
+                continue
+
+            for alignment in alignments:
+                seq_lengths = set(len(record.seq) for record in alignment)
+                if len(seq_lengths) > 1:
+                    print(f"Warning: {in_file} is not aligned, skipping...")
+                    continue
+
+                with open(out_file, "w") as f:
+                    n_taxa = len(alignment)
+                    seq_len = len(alignment[0].seq)
+                    f.write(f" {n_taxa}  {seq_len}\n")
+
+                    for record in alignment:
+                        taxon_name = record.description.replace(" ", "_")
+                        f.write(f"{taxon_name} {record.seq}\n")
+
+                written_results.append([n_taxa, seq_len])
+                print(f"Phylip file written to {out_file}")
+        except Exception as e:
+            print(f"Error converting {in_file}: {e}")
+
+    return written_results
 
 
 def taxon_completion(in_path, out_path="./"):
@@ -270,7 +246,7 @@ def taxon_completion(in_path, out_path="./"):
     file_handles = get_file_handles(in_path)
     if not check_outpath_validity(out_path):
         return {}  # write nothing if output folder is invalid
-    out_path = Path(out_path) / "completion.result"
+    out_path = Path(out_path) / "completion"
     create_folder(out_path)
     present_records = {}  # to store the missing taxon for each gene
     missing_records = {}  # the '-'-completed taxa
@@ -341,6 +317,7 @@ def taxon_completion(in_path, out_path="./"):
         value.sort()  # order the result
         f.write(f"{key}:  {', '.join([name for name in value])}\n")
     f.close()
+    print(f"Completion log written to {out_path / 'completion.log'}")
 
     return missing_records  # {marker: [missing taxa]}
 
@@ -362,7 +339,7 @@ def concat(in_path, out_path="./", filename="concat.fasta"):
     file_handles = get_file_handles(in_path)
     if not check_outpath_validity(out_path):
         return {}  # write nothing if output folder is invalid
-    out_path = Path(out_path) / "concat.result"
+    out_path = Path(out_path) / "concat"
     create_folder(out_path)
 
     # STEP 1: check whether there is a 'marker gap' for all taxa and whether same length
@@ -395,7 +372,7 @@ def concat(in_path, out_path="./", filename="concat.fasta"):
         for record in record_iter:
             concat_result.setdefault(
                 record.description,
-                SeqRecord.SeqRecord("", id=record.id, description=""),
+                SeqRecord.SeqRecord(Seq(""), id=record.id, description=""),
             )
             concat_result[record.description].seq += record.seq
             if marker_record[marker_name] == []:
@@ -408,7 +385,7 @@ def concat(in_path, out_path="./", filename="concat.fasta"):
     marker_record.pop("total_length", None)
 
     SeqIO.write(concat_result.values(), out_path / filename, "fasta")
-
+    print(f"Concatenated file written to {out_path / filename}")
     # STEP 3: prepare log and cfg file to record gene positions
     cfg_filename = Path(filename).stem
     header = f"""## ALIGNMENT FILE ##
@@ -442,4 +419,17 @@ search = greedy;"""
     f = open(out_path / f"{cfg_filename}.cfg", "w")
     f.write(cfg)
     f.close()
+    print(f"Config file written to {out_path / f'{cfg_filename}.cfg'}")
+
+    part_content = ""
+    for key, value in marker_record.items():
+        if value == []:
+            continue
+        part_content += f"DNA, {key} = {value[0]}-{value[1]}\n"
+
+    f = open(out_path / "part.txt", "w")
+    f.write(part_content)
+    f.close()
+    print(f"Part file written to {out_path / 'part.txt'}")
+
     return marker_record

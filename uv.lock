@@ -368,6 +368,7 @@ dependencies = [
     { name = "numpy" },
     { name = "pandas" },
     { name = "pyside6" },
+    { name = "pyside6-fluent-widgets" },
     { name = "scikit-learn" },
     { name = "scipy" },
 ]
@@ -376,7 +377,6 @@ dependencies = [
 dev = [
     { name = "pillow" },
     { name = "pyinstaller" },
-    { name = "pyside6-fluent-widgets" },
 ]
 
 [package.metadata]
@@ -388,6 +388,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.18.0" },
     { name = "pandas", specifier = ">=1.0.0" },
     { name = "pyside6", specifier = ">=6.0.0" },
+    { name = "pyside6-fluent-widgets" },
     { name = "scikit-learn" },
     { name = "scipy" },
 ]
@@ -396,7 +397,6 @@ requires-dist = [
 dev = [
     { name = "pillow", specifier = ">=10.0.0" },
     { name = "pyinstaller", specifier = ">=6.18.0" },
-    { name = "pyside6-fluent-widgets" },
 ]
 
 [[package]]
