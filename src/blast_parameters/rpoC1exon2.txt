@@ -1,7 +1,7 @@
 target_region	rpoC1exon2
-entrez_qualifier	(("rpoC1" OR "RNA polymerase beta") NOT mitochondrion NOT mitochondrial NOT "environmental sample" NOT "environmental_sample")
+entrez_qualifier	(("rpoC2" OR "RNA polymerase beta") NOT mitochondrion NOT mitochondrial NOT "environmental sample" NOT "environmental_sample")
 max_length	1700
-key_annotations	rpoC1|RNA polymerase beta
+key_annotations	rpoC2|RNA polymerase beta
 exclude_sources	mitochondrion|mitochondrial|environmental sample|environmental_sample
 expect_value	1e-05
 gap_costs	2 1

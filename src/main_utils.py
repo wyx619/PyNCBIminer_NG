@@ -132,15 +132,16 @@ class BackendController(QObject):
         taxonomy = retrieval_interface.tax_edit.toPlainText().strip()
         email = retrieval_interface.email_edit.text().strip()
         qualifier = retrieval_interface.entrez_qualifier.toPlainText().strip()
+        marker_summary_mode = retrieval_interface.chk_summary.isChecked()
 
         if taxonomy == "":
             self.emit_log("Please input your target groups.", "WARNING")
         if email == "":
             self.emit_log("Please input your email address.", "WARNING")
-        if qualifier == "":
+        if qualifier == "" and not marker_summary_mode:
             self.emit_log("Please input your Entrez qualifier.", "WARNING")
 
-        if taxonomy == "" or email == "" or qualifier == "":
+        if taxonomy == "" or email == "" or (qualifier == "" and not marker_summary_mode):
             return
 
         organisms = [x for x in taxonomy.splitlines() if len(x) > 0]
@@ -193,7 +194,7 @@ class BackendController(QObject):
 
             thread = threading.Thread(
                 target=entrez_summary,
-                args=(email, organisms, target_region_dict, d_from, d_to),
+                args=(email, organisms, target_region_dict, d_from, d_to, self.emit_log),
             )
         else:
 
@@ -232,6 +233,7 @@ class BackendController(QObject):
         wd = retrieval_interface.wd_edit.text().strip()
         date_from_qdate = retrieval_interface.date_from.date
         date_to_qdate = retrieval_interface.date_to.date
+        marker_summary_mode = retrieval_interface.chk_summary.isChecked()
 
         if not retrieval_interface.date_from_cleared and date_from_qdate.isValid():
             date_from = date_from_qdate.toString("yyyy/MM/dd")
@@ -252,7 +254,7 @@ class BackendController(QObject):
             self.emit_log("Please input your target groups.", "WARNING")
         if email == "":
             self.emit_log("Please input your email address.", "WARNING")
-        if qualifier == "":
+        if qualifier == "" and not marker_summary_mode:
             self.emit_log("Please input your Entrez qualifier.", "WARNING")
         if wd == "":
             self.emit_log("Please input your working directory path.", "WARNING")
@@ -261,7 +263,7 @@ class BackendController(QObject):
         if (
             taxonomy == ""
             or email == ""
-            or qualifier == ""
+            or (qualifier == "" and not marker_summary_mode)
             or wd == ""
             or (not date_from and date_to)
         ):
