@@ -496,6 +496,7 @@ class ConstructionInterface(QWidget):
             "One working directory or the parent directory of multiple working directories"
         )
         btn_in = PushButton("Browse")
+        btn_in.setIcon(FIF.FOLDER)
         btn_in.clicked.connect(lambda: self.browse_dir(self.filter_in))
         h1 = QHBoxLayout()
         h1.addWidget(BodyLabel("Input Path:"))
@@ -505,6 +506,7 @@ class ConstructionInterface(QWidget):
         self.filter_out = LineEdit()
         self.filter_out.setPlaceholderText("The same as input path by default")
         btn_out = PushButton("Browse")
+        btn_out.setIcon(FIF.FOLDER)
         btn_out.clicked.connect(lambda: self.browse_dir(self.filter_out))
         h2 = QHBoxLayout()
         h2.addWidget(BodyLabel("Output Path:"))
@@ -546,6 +548,7 @@ class ConstructionInterface(QWidget):
         self.align_in = LineEdit()
         self.align_in.setPlaceholderText("Input file or directory")
         btn_in = PushButton("Browse")
+        btn_in.setIcon(FIF.FOLDER)
         btn_in.clicked.connect(
             lambda: self.browse_file_or_dir(
                 self.align_in, self.rb_align_single.isChecked()
@@ -557,6 +560,7 @@ class ConstructionInterface(QWidget):
             "one folder to save the aligned fasta files, create a new one if does not exists"
         )
         btn_out = PushButton("Browse")
+        btn_out.setIcon(FIF.FOLDER)
         btn_out.clicked.connect(lambda: self.browse_dir(self.align_out))
 
         h1 = QHBoxLayout()
@@ -628,6 +632,7 @@ class ConstructionInterface(QWidget):
             "the path of one fasta file or the folder path that contains multiple fasta files"
         )
         btn_in = PushButton("Browse")
+        btn_in.setIcon(FIF.FOLDER)
         btn_in.clicked.connect(
             lambda: self.browse_file_or_dir(
                 self.trim_in, self.rb_trim_single.isChecked()
@@ -638,6 +643,7 @@ class ConstructionInterface(QWidget):
             "one folder to save the trimmed fasta files, create a new one if does not exists"
         )
         btn_out = PushButton("Browse")
+        btn_out.setIcon(FIF.FOLDER)
         btn_out.clicked.connect(lambda: self.browse_dir(self.trim_out))
 
         h1 = QHBoxLayout()
@@ -724,6 +730,7 @@ class ConstructionInterface(QWidget):
             "the folder path that contains multiple fasta files"
         )
         btn_in = PushButton("Browse")
+        btn_in.setIcon(FIF.FOLDER)
         btn_in.clicked.connect(lambda: self.browse_dir(self.concat_in))
 
         self.concat_out = LineEdit()
@@ -731,6 +738,7 @@ class ConstructionInterface(QWidget):
             "one folder to save the concatenation results, create a new one if does not exists"
         )
         btn_out = PushButton("Browse")
+        btn_out.setIcon(FIF.FOLDER)
         btn_out.clicked.connect(lambda: self.browse_dir(self.concat_out))
 
         h1 = QHBoxLayout()
@@ -778,9 +786,434 @@ class ChloroplastMinerInterface(QWidget):
         super().__init__()
         self.main_window = main_window
         self.setObjectName("chloroplast_miner_interface")
+
         self.vBoxLayout = QVBoxLayout(self)
-        self.vBoxLayout.setContentsMargins(30, 30, 30, 30)
-        self.vBoxLayout.setSpacing(20)
+        self.pivot = SegmentedWidget(self)
+        self.stackedWidget = QStackedWidget(self)
+
+        # -- Pages --
+        self.page_search = self.create_search_page()
+        self.page_extract = self.create_extract_page()
+        self.page_cds = self.create_cds_page()
+        self.page_align = self.create_chloroplast_align_page()
+
+        # Add items to SegmentedWidget
+        self.addSubInterface(self.page_search, "search", "Search && Download")
+        self.addSubInterface(self.page_extract, "extract", "Extract Info && Quality Control")
+        self.addSubInterface(self.page_cds, "cds", "Get && Filter CDS")
+        self.addSubInterface(self.page_align, "chloroplast_align", "Align && Trim")
+
+        self.vBoxLayout.addWidget(self.pivot)
+        self.vBoxLayout.addWidget(self.stackedWidget)
+        self.vBoxLayout.setContentsMargins(30, 25, 30, 15)
+
+        # Init state
+        self.stackedWidget.setCurrentWidget(self.page_search)
+        self.pivot.setCurrentItem("search")
+        self.pivot.currentItemChanged.connect(self.on_chloroplast_page_changed)
+
+    def on_chloroplast_page_changed(self, key):
+        self.stackedWidget.setCurrentWidget(self.findChild(QWidget, key))
+        if key == "extract":
+            self.update_qc_input_default()
+
+    def update_qc_input_default(self):
+        if hasattr(self, 'chloro_qc_in') and hasattr(self, 'chloro_download_dir_edit'):
+            download_dir = self.chloro_download_dir_edit.text().strip()
+            if download_dir and not self.chloro_qc_in.text().strip():
+                self.chloro_qc_in.setText(download_dir)
+
+    def addSubInterface(self, widget: QWidget, objectName, text):
+        widget.setObjectName(objectName)
+        self.stackedWidget.addWidget(widget)
+        self.pivot.addItem(routeKey=objectName, text=text)
+
+    def create_search_page(self):
+        w = QWidget()
+        layout = QVBoxLayout(w)
+        layout.setContentsMargins(5, 20, 5, 20)
+
+        grp = SettingCardGroup("Search & Download", w)
+
+        card = CardWidget()
+        card.setFixedHeight(230)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(15, 10, 15, 10)
+
+        self.chloro_tax_edit = PlainTextEdit()
+        self.chloro_tax_edit.setPlaceholderText("Enter taxon names (one per line)")
+        self.chloro_tax_edit.setFixedHeight(80)
+        card_layout.addWidget(BodyLabel("Target Taxa:"))
+        card_layout.addWidget(self.chloro_tax_edit)
+        card_layout.addSpacing(10)
+
+        self.chloro_date_from = DatePicker(card)
+        self.chloro_date_from.setDate(QDate())
+        self.chloro_date_from_cleared = True
+        self.chloro_date_from.dateChanged.connect(self.on_chloro_date_from_changed)
+        self.chloro_btn_clear_from = PushButton("Reset", card)
+        self.chloro_btn_clear_from.clicked.connect(self.clear_chloro_date_from)
+
+        self.chloro_date_to = DatePicker(card)
+        self.chloro_date_to.setDate(QDate())
+        self.chloro_date_to_cleared = True
+        self.chloro_date_to.dateChanged.connect(self.on_chloro_date_to_changed)
+        self.chloro_btn_clear_to = PushButton("Reset", card)
+        self.chloro_btn_clear_to.clicked.connect(self.clear_chloro_date_to)
+
+        h_date = QHBoxLayout()
+        h_date.addWidget(BodyLabel("Date From:"))
+        h_date.addWidget(self.chloro_date_from)
+        h_date.addWidget(self.chloro_btn_clear_from)
+        h_date.addStretch()
+        h_date.addWidget(BodyLabel("Date To:"))
+        h_date.addWidget(self.chloro_date_to)
+        h_date.addWidget(self.chloro_btn_clear_to)
+        card_layout.addLayout(h_date)
+        card_layout.addSpacing(10)
+
+        self.btn_chloro_search = PushButton("Search", self)
+        self.btn_chloro_search.setIcon(FIF.GLOBE)
+        self.btn_chloro_search.clicked.connect(self.on_chloro_search)
+        card_layout.addWidget(self.btn_chloro_search)
+
+        grp.addSettingCard(card)
+
+        card_download = CardWidget()
+        card_download.setFixedHeight(220)
+        download_layout = QVBoxLayout(card_download)
+        download_layout.setContentsMargins(15, 10, 15, 10)
+
+        self.chloro_wd_edit = LineEdit()
+        self.chloro_wd_edit.setPlaceholderText("Index File Path")
+        btn_chloro_wd = PushButton("Browse")
+        btn_chloro_wd.setIcon(FIF.FOLDER)
+        btn_chloro_wd.clicked.connect(lambda: self.browse_file(self.chloro_wd_edit))
+
+        h_box = QHBoxLayout()
+        h_box.addWidget(BodyLabel("Index File:"))
+        h_box.addWidget(self.chloro_wd_edit)
+        h_box.addWidget(btn_chloro_wd)
+
+        self.chloro_download_dir_edit = LineEdit()
+        self.chloro_download_dir_edit.setPlaceholderText("Download Directory Path")
+        btn_chloro_download_dir = PushButton("Browse")
+        btn_chloro_download_dir.setIcon(FIF.FOLDER)
+        btn_chloro_download_dir.clicked.connect(lambda: self.browse_folder(self.chloro_download_dir_edit))
+
+        h_box2 = QHBoxLayout()
+        h_box2.addWidget(BodyLabel("Download Directory:"))
+        h_box2.addWidget(self.chloro_download_dir_edit)
+        h_box2.addWidget(btn_chloro_download_dir)
+
+        self.chloro_email_edit = LineEdit()
+        self.chloro_email_edit.setPlaceholderText("Email (required for NCBI)")
+
+        h_box3 = QHBoxLayout()
+        h_box3.addWidget(BodyLabel("Email:"))
+        h_box3.addWidget(self.chloro_email_edit)
+
+        download_layout.addWidget(BodyLabel("Download Prepare:"))
+        download_layout.addSpacing(10)
+        download_layout.addLayout(h_box)
+        download_layout.addSpacing(10)
+        download_layout.addLayout(h_box2)
+        download_layout.addSpacing(10)
+        download_layout.addLayout(h_box3)
+        download_layout.addSpacing(10)
+
+        self.btn_chloro_download = PushButton("Download")
+        self.btn_chloro_download.setIcon(FIF.DOWNLOAD)
+        self.btn_chloro_download.clicked.connect(self.on_chloro_download)
+        download_layout.addWidget(self.btn_chloro_download)
+
+        grp.addSettingCard(card_download)
+
+        layout.addWidget(grp)
+        return w
+
+    def create_extract_page(self):
+        w = QWidget()
+        layout = QVBoxLayout(w)
+        layout.setContentsMargins(5, 20, 5, 20)
+
+        grp = SettingCardGroup("Extract Info & Quality Control", w)
+
+        card = CardWidget()
+        card.setFixedHeight(280)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(15, 10, 15, 10)
+
+        h_input = QHBoxLayout()
+        self.chloro_qc_in = LineEdit()
+        self.chloro_qc_in.setPlaceholderText("Input directory containing GenBank files")
+        btn_chloro_qc_in = PushButton("Browse")
+        btn_chloro_qc_in.setIcon(FIF.FOLDER)
+        btn_chloro_qc_in.clicked.connect(lambda: self.browse_folder(self.chloro_qc_in))
+        h_input.addWidget(BodyLabel("Input Directory:"))
+        h_input.addWidget(self.chloro_qc_in)
+        h_input.addWidget(btn_chloro_qc_in)
+        card_layout.addLayout(h_input)
+
+        h_output = QHBoxLayout()
+        self.chloro_qc_out = LineEdit()
+        self.chloro_qc_out.setPlaceholderText("Output directory for problematic genome FASTA files")
+        btn_chloro_qc_out = PushButton("Browse")
+        btn_chloro_qc_out.setIcon(FIF.FOLDER)
+        btn_chloro_qc_out.clicked.connect(lambda: self.browse_folder(self.chloro_qc_out))
+        h_output.addWidget(BodyLabel("Output Directory:"))
+        h_output.addWidget(self.chloro_qc_out)
+        h_output.addWidget(btn_chloro_qc_out)
+        card_layout.addLayout(h_output)
+
+        self.chloro_cds_thresh = LineEdit()
+        self.chloro_cds_thresh.setText("80")
+        self.chloro_ambig_thresh = LineEdit()
+        self.chloro_ambig_thresh.setText("0.2")
+
+        h_threshold = QHBoxLayout()
+        h_threshold.addWidget(BodyLabel("CDS Threshold:"))
+        h_threshold.addWidget(self.chloro_cds_thresh)
+        h_threshold.addStretch()
+        h_threshold.addWidget(BodyLabel("Ambiguity Threshold:"))
+        h_threshold.addWidget(self.chloro_ambig_thresh)
+        card_layout.addLayout(h_threshold)
+
+        self.btn_chloro_qc_extract = PushButton("Extract")
+        self.btn_chloro_qc_extract.setIcon(FIF.PLAY)
+        self.btn_chloro_qc_extract.clicked.connect(self.on_chloro_qc_extract)
+        card_layout.addWidget(self.btn_chloro_qc_extract)
+
+        grp.addSettingCard(card)
+
+        layout.addWidget(grp)
+        layout.addStretch(1)
+        return w
+
+    def create_cds_page(self):
+        w = QWidget()
+        layout = QVBoxLayout(w)
+        layout.setContentsMargins(5, 20, 5, 20)
+
+        grp = SettingCardGroup("Get CDS", w)
+
+        card = CardWidget()
+        card.setFixedHeight(120)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(15, 10, 15, 10)
+
+        self.chloro_cds_in = LineEdit()
+        self.chloro_cds_in.setPlaceholderText("Input directory containing filtered GenBank files")
+        btn_chloro_cds_in = PushButton("Browse")
+        btn_chloro_cds_in.setIcon(FIF.FOLDER)
+        btn_chloro_cds_in.clicked.connect(lambda: self.browse_dir(self.chloro_cds_in))
+
+        card_layout.addWidget(BodyLabel("Input Directory:"))
+        card_layout.addWidget(self.chloro_cds_in)
+        card_layout.addWidget(btn_chloro_cds_in)
+
+        grp.addSettingCard(card)
+
+        card_output = CardWidget()
+        card_output.setFixedHeight(120)
+        output_layout = QVBoxLayout(card_output)
+        output_layout.setContentsMargins(15, 10, 15, 10)
+
+        self.chloro_cds_out = LineEdit()
+        self.chloro_cds_out.setPlaceholderText("Output directory for CDS files")
+        btn_chloro_cds_out = PushButton("Browse")
+        btn_chloro_cds_out.setIcon(FIF.FOLDER)
+        btn_chloro_cds_out.clicked.connect(lambda: self.browse_dir(self.chloro_cds_out))
+
+        output_layout.addWidget(BodyLabel("Output Directory:"))
+        output_layout.addWidget(self.chloro_cds_out)
+        output_layout.addWidget(btn_chloro_cds_out)
+
+        grp.addSettingCard(card_output)
+
+        self.btn_chloro_cds = PrimaryPushButton("Extract CDS")
+        self.btn_chloro_cds.setIcon(FIF.CODE)
+
+        layout.addWidget(grp)
+        layout.addWidget(self.btn_chloro_cds)
+        return w
+
+    def create_chloroplast_align_page(self):
+        w = QWidget()
+        layout = QVBoxLayout(w)
+        layout.setContentsMargins(5, 20, 5, 20)
+
+        grp = SettingCardGroup("Align & Trim", w)
+
+        card = CardWidget()
+        card.setFixedHeight(240)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(15, 10, 15, 10)
+
+        self.chloro_align_in = LineEdit()
+        self.chloro_align_in.setPlaceholderText("Input directory containing CDS files")
+        btn_chloro_align_in = PushButton("Browse")
+        btn_chloro_align_in.setIcon(FIF.FOLDER)
+        btn_chloro_align_in.clicked.connect(lambda: self.browse_dir(self.chloro_align_in))
+
+        self.chloro_align_out = LineEdit()
+        self.chloro_align_out.setPlaceholderText("Output directory for aligned files")
+        btn_chloro_align_out = PushButton("Browse")
+        btn_chloro_align_out.setIcon(FIF.FOLDER)
+        btn_chloro_align_out.clicked.connect(lambda: self.browse_dir(self.chloro_align_out))
+
+        card_layout.addWidget(BodyLabel("Input Directory:"))
+        card_layout.addWidget(self.chloro_align_in)
+        card_layout.addWidget(btn_chloro_align_in)
+        card_layout.addWidget(BodyLabel("Output Directory:"))
+        card_layout.addWidget(self.chloro_align_out)
+        card_layout.addWidget(btn_chloro_align_out)
+
+        grp.addSettingCard(card)
+
+        card_trim = CardWidget()
+        card_trim.setFixedHeight(80)
+        trim_layout = QHBoxLayout(card_trim)
+        trim_layout.setContentsMargins(15, 10, 15, 10)
+
+        self.chloro_trim_method = ComboBox()
+        self.chloro_trim_method.addItems([
+            "automated1",
+            "gappyout",
+            "strict",
+            "strictplus"
+        ])
+
+        trim_layout.addWidget(BodyLabel("Trimming Method:"))
+        trim_layout.addWidget(self.chloro_trim_method)
+
+        grp.addSettingCard(card_trim)
+
+        self.btn_chloro_align = PrimaryPushButton("Align & Trim")
+        self.btn_chloro_align.setIcon(FIF.PLAY)
+
+        layout.addWidget(grp)
+        layout.addWidget(self.btn_chloro_align)
+        return w
+
+    def browse_file(self, line_edit):
+        path, _ = QFileDialog.getOpenFileName(self, "Select File")
+        if path:
+            line_edit.setText(path)
+
+    def browse_folder(self, line_edit):
+        path = QFileDialog.getExistingDirectory(self, "Select Directory")
+        if path:
+            line_edit.setText(path)
+
+    def on_chloro_download(self):
+        if not self.chloro_wd_edit.text().strip() or not self.chloro_download_dir_edit.text().strip() or not self.chloro_email_edit.text().strip():
+            self.main_window.backend.emit_log("Please select index file, download directory and enter email", "WARNING")
+            return
+
+        email = self.chloro_email_edit.text().strip()
+        in_path = self.chloro_wd_edit.text().strip()
+        out_path = self.chloro_download_dir_edit.text().strip()
+
+        self.main_window.backend.download_chloroplast_genomes(email, in_path, out_path)
+
+    def on_chloro_date_from_changed(self, date):
+        if date.isValid():
+            self.chloro_date_from_cleared = False
+
+    def on_chloro_date_to_changed(self, date):
+        if date.isValid():
+            self.chloro_date_to_cleared = False
+
+    def clear_chloro_date_from(self):
+        self.chloro_date_from.setDate(QDate())
+        self.chloro_date_from_cleared = True
+
+    def clear_chloro_date_to(self):
+        self.chloro_date_to.setDate(QDate())
+        self.chloro_date_to_cleared = True
+
+    def on_chloro_search(self):
+        text = self.chloro_tax_edit.toPlainText().strip()
+        if not text:
+            self.main_window.backend.emit_log("Please enter at least one taxon name", "WARNING")
+            return
+
+        date_from_obj = self.chloro_date_from.date
+        date_to_obj = self.chloro_date_to.date
+
+        has_from = not self.chloro_date_from_cleared and date_from_obj.isValid()
+        has_to = not self.chloro_date_to_cleared and date_to_obj.isValid()
+
+        if has_from and not has_to:
+            self.chloro_date_to.setDate(QDate.currentDate())
+            self.main_window.backend.emit_log("Date To not set, automatically set to today", "INFO")
+        elif not has_from and has_to:
+            self.main_window.backend.emit_log("Please select both Date From and Date To, or leave both empty", "WARNING")
+            return
+
+        from urllib.parse import quote
+        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtCore import QUrl
+
+        taxa = [line.strip() for line in text.split('\n') if line.strip()]
+
+        if len(taxa) == 1:
+            taxa_query = f'"{taxa[0]}"[Organism]'
+        else:
+            taxa_queries = " OR ".join([f'"{t}"[Organism]' for t in taxa])
+            taxa_query = f"({taxa_queries})"
+
+        query = f'{taxa_query} AND (plastid[All Fields] OR chloroplast[All Fields]) AND (100000[Sequence Length] : 300000[Sequence Length]) NOT mitochondrion[Title] NOT mitochondrial[Title] NOT chromosome[Title]'
+
+        d_from = ""
+        d_to = ""
+
+        if has_from:
+            d_from = date_from_obj.toString("yyyy/MM/dd")
+        if has_to:
+            d_to = date_to_obj.toString("yyyy/MM/dd")
+
+        if d_from and d_to:
+            query = f'{query} AND "{d_from}"[PDAT] : "{d_to}"[PDAT]'
+        elif d_from:
+            query = f'{query} AND "{d_from}"[PDAT]'
+
+        encoded_query = quote(query, safe='()')
+        url = f"https://www.ncbi.nlm.nih.gov/nuccore/?term={encoded_query}"
+
+        QDesktopServices.openUrl(QUrl(url))
+
+    def on_chloro_qc_extract(self):
+        in_folder = self.chloro_qc_in.text().strip()
+        out_folder = self.chloro_qc_out.text().strip()
+
+        if not in_folder or not out_folder:
+            self.main_window.backend.emit_log("Please select both input and output directories", "WARNING")
+            return
+
+        cds_threshold = 80
+        try:
+            cds_threshold = int(self.chloro_cds_thresh.text().strip())
+            if cds_threshold < 0:
+                self.main_window.backend.emit_log("CDS threshold must be a positive integer", "WARNING")
+                return
+        except ValueError:
+            self.main_window.backend.emit_log("Invalid CDS threshold value", "WARNING")
+            return
+
+        ambig_threshold = 0.2
+        try:
+            ambig_threshold = float(self.chloro_ambig_thresh.text().strip())
+            if ambig_threshold < 0 or ambig_threshold > 1:
+                self.main_window.backend.emit_log("Ambiguity threshold must be between 0 and 1", "WARNING")
+                return
+        except ValueError:
+            self.main_window.backend.emit_log("Invalid ambiguity threshold value", "WARNING")
+            return
+
+        self.main_window.backend.emit_log("Quality control started...", "INFO")
+        self.main_window.backend.quality_control(in_folder, out_folder, cds_threshold, ambig_threshold)
 
 
 class DependenciesInterface(QWidget):

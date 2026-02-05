@@ -909,6 +909,73 @@ class BackendController(QObject):
     def check_dependencies(self):
         pass
 
+    def download_chloroplast_genomes(self, email, in_path, out_path):
+        from pathlib import Path
+        from Chloroplast.download_gb_file import download_gb_file
+
+        in_path = Path(in_path)
+        out_path = Path(out_path)
+
+        out_path.mkdir(parents=True, exist_ok=True)
+        existing_files = {p.stem for p in out_path.glob("*.gb")}
+
+        with open(in_path, "r") as fr:
+            accession_list = fr.read().splitlines()
+
+        skipped = []
+        to_download = []
+        for acc in accession_list:
+            acc_clean = acc.split(".")[0]
+            if acc and acc_clean not in existing_files:
+                to_download.append(acc)
+            else:
+                skipped.append(acc_clean)
+
+        self.emit_log(f"Total: {len(accession_list)}, Already downloaded: {len(skipped)}, To download: {len(to_download)}")
+
+        if len(to_download) == 0:
+            self.emit_log("All files already downloaded!", "SUCCESS")
+            return
+
+        self.emit_log("Starting download...")
+
+        def run():
+            _, _, _, success, failed = download_gb_file(email, in_path, out_path, 10)
+            self.emit_log(f"Downloaded: {success}, Failed: {failed}")
+            if failed == 0:
+                self.emit_log("All downloads completed successfully!", "SUCCESS")
+            else:
+                self.emit_log(f"All downloads completed with {failed} failures", "WARNING")
+
+        thread = threading.Thread(target=run)
+        thread.daemon = True
+        thread.start()
+
+    def quality_control(self, in_folder, out_folder, cds_threshold=80, ambig_threshold=0.2, threads=None):
+        from Chloroplast.quality_ctrl import generate_genome_report
+        from pathlib import Path
+        from PySide6.QtCore import QTimer
+
+        in_folder = Path(in_folder)
+        out_folder = Path(out_folder)
+
+        out_folder.mkdir(parents=True, exist_ok=True)
+
+        def run():
+            error_count = generate_genome_report(
+                in_folder_path=str(in_folder),
+                out_folder_path=str(out_folder),
+                cds_threshold=cds_threshold,
+                ambig_threshold=ambig_threshold,
+                threads=threads
+            )
+            if error_count > 0:
+                self.emit_log(f"Quality control completed with {error_count} error(s)", "WARNING")
+            else:
+                self.emit_log("Quality control completed successfully!", "SUCCESS")
+
+        QTimer.singleShot(100, run)
+
 
 def print_line(character="#"):
     print(character * 50)
