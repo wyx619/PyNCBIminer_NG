@@ -947,7 +947,7 @@ class BackendController(QObject):
 
         w = MessageBox(title, content, parent_window)
         w.setClosableOnMaskClicked(True)
-        w.setDraggable(True)
+        w.setDraggable(False)
 
         w.yesButton.setText("View Github Page")
         w.yesButton.setIcon(FIF.GITHUB)

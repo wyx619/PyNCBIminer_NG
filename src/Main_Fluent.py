@@ -7,7 +7,6 @@ from PySide6.QtCore import (
     QEasingCurve,
     QEventLoop,
     QObject,
-    QProcess,
     QPropertyAnimation,
     Qt,
     QTimer,
@@ -406,13 +405,14 @@ class RetrievalInterface(QWidget):
         self.switch_reduce.checkedChanged.connect(self.on_switch_reduce_changed)
         row2.addWidget(BodyLabel("Species-level sequence selection"))
         row2.addWidget(self.switch_reduce)
+        row2.addSpacing(40)
         row2.addWidget(BodyLabel("Length Threshold:"))
         self.len_thresh = LineEdit()
         self.len_thresh.setText("100")
         self.len_thresh.setEnabled(False)
-        self.len_thresh.setFixedWidth(240)
+        #self.len_thresh.setFixedWidth(240)
         row2.addWidget(self.len_thresh)
-        row2.addSpacing(20)
+        row2.addSpacing(40)
         self.chk_consensus = CheckBox("Abnormal Index (Consensus)", card_opts)
         self.chk_consensus.setChecked(True)
         self.chk_consensus.setEnabled(False)
@@ -1132,14 +1132,14 @@ class ChloroplastMinerInterface(QWidget):
         h_filter_params = QHBoxLayout()
         self.cds_filter_ref = ComboBox()
         self.cds_filter_ref.addItems(["Angiosperms", "Gymnosperms"])
-        self.cds_filter_ref.setFixedWidth(220)
+
         self.cds_filter_ref.setCurrentIndex(0)
         self.cds_filter_lb = LineEdit()
         self.cds_filter_lb.setText("0.5")
-        self.cds_filter_lb.setFixedWidth(220)
+
         self.cds_filter_ub = LineEdit()
         self.cds_filter_ub.setText("2.0")
-        self.cds_filter_ub.setFixedWidth(220)
+
         h_filter_params.addWidget(BodyLabel("Reference:"))
         h_filter_params.addWidget(self.cds_filter_ref)
         h_filter_params.addStretch(1)
@@ -1543,51 +1543,49 @@ class DependenciesInterface(QWidget):
         grp.addSettingCard(card_install)
         layout.addWidget(grp)
 
+        layout.addSpacing(20)
+
         app_settings_grp = SettingCardGroup("Application Settings", w)
 
         card_theme = CardWidget()
         card_theme.setFixedHeight(80)
         h_theme = QHBoxLayout(card_theme)
         h_theme.setContentsMargins(15, 10, 15, 10)
-        h_theme.setSpacing(20)
+        h_theme.setSpacing(30)
 
-        h_theme.addWidget(BodyLabel("Theme:"))
+        theme_container = QWidget(card_theme)
+        theme_layout = QHBoxLayout(theme_container)
+        theme_layout.setContentsMargins(0, 0, 0, 0)
+        theme_layout.addWidget(BodyLabel("Theme:"))
         self.combo_theme = ComboBox(card_theme)
-        self.combo_theme.setFixedWidth(220)
         self.combo_theme.addItems(["Light", "Dark", "Auto"])
         self.combo_theme.setCurrentIndex(2)
         self.combo_theme.currentIndexChanged.connect(main_window.change_theme)
-        h_theme.addWidget(self.combo_theme)
+        theme_layout.addWidget(self.combo_theme)
+        h_theme.addWidget(theme_container, 1)
 
-        h_theme.addStretch(1)
-
-        h_theme.addWidget(BodyLabel("Color:"))
+        color_container = QWidget(card_theme)
+        color_layout = QHBoxLayout(color_container)
+        color_layout.setContentsMargins(0, 0, 0, 0)
+        color_layout.addWidget(BodyLabel("Color:"))
         self.color_picker = ColorPickerButton(
             parent=card_theme, title="Color", color=themeColor()
         )
-        self.color_picker.setFixedWidth(220)
         self.color_picker.colorChanged.connect(lambda c: setThemeColor(c, save=True))
-        h_theme.addWidget(self.color_picker)
-        h_theme.addStretch(1)
-        app_settings_grp.addSettingCard(card_theme)
+        color_layout.addWidget(self.color_picker)
+        h_theme.addWidget(color_container, 1)
 
-        card_restart = CardWidget()
-        card_restart.setFixedHeight(80)
-        h_restart = QHBoxLayout(card_restart)
-        h_restart.setContentsMargins(15, 10, 15, 10)
-        h_restart.setSpacing(30)
-
-        btn_restart = PushButton("Restart Application", card_restart)
-        btn_restart.setIcon(FIF.SYNC)
-        btn_restart.clicked.connect(main_window.restart_app)
-        h_restart.addWidget(btn_restart, 1)
-
-        btn_about = PushButton("About PyNCBIminer-NG", card_restart)
+        about_container = QWidget(card_theme)
+        about_layout = QHBoxLayout(about_container)
+        about_layout.setContentsMargins(0, 0, 0, 0)
+        about_layout.addWidget(BodyLabel("About:"))
+        btn_about = PushButton("About PyNCBIminer-NG", card_theme)
         btn_about.setIcon(FIF.INFO)
         btn_about.clicked.connect(main_window.show_about)
-        h_restart.addWidget(btn_about, 1)
+        about_layout.addWidget(btn_about)
+        h_theme.addWidget(about_container, 1)
 
-        app_settings_grp.addSettingCard(card_restart)
+        app_settings_grp.addSettingCard(card_theme)
         layout.addWidget(app_settings_grp)
         layout.addStretch(1)
 
@@ -1909,11 +1907,6 @@ class MainWindow(FluentWindow):
 
     def show_about(self):
         self.backend.show_about(self)
-
-    def restart_app(self):
-        self.is_closing = True
-        QApplication.exit(0)
-        QProcess.startDetached(sys.executable, sys.argv)
 
 
 if __name__ == "__main__":
