@@ -1,141 +1,160 @@
-# PyNCBIminer
+# PyNCBIminer-NG
 
-PyNCBIminer is a user-friendly graphical interface software designed for efficient and precise retrieval of GenBank data. Its simple operation does not require a background in bioinformatics. PyNCBIminer automatically performs BLAST iterations and optimizations based on user-provided nucleotide sequence names, target taxa, and initial reference sequences. This enhances the integrity of both sequence quantity and length, facilitating the identification and retrieval of specific gene sequence data for multiple species or taxa as specified by the user.
+A powerful, user-friendly graphical interface for efficient retrieval and analysis of GenBank sequence data.
 
-# 1. Download and Installed
+## Overview
 
-**Download**
+PyNCBIminer-NG is a next-generation bioinformatics tool that simplifies the retrieval of nucleotide sequences from NCBI GenBank. Whether you are studying plant phylogenetics, bacterial diversity, or any organism of interest, PyNCBIminer-NG streamlines your workflow by automating BLAST iterations, sequence filtering, multiple sequence alignment, and supermatrix construction—no programming experience required.
 
-Download the corresponding version of the packaged from [SourceForge](https://sourceforge.net/projects/pyncbiminer/files/).
+---
 
-**Installed**
+## Key Features
 
-**For windows**: Users only need to unzip the package and double click the executable(.exe) file of PyNCBIminer directly.
+### 🔍 Intelligent Sequence Retrieval
 
-**For macOS**: Users only need to unzip the package and double click the executable(.exe) file of PyNCBIminer directly. 
+- **Automated BLAST Iterations**: Automatically performs iterative BLAST searches until no new relevant sequences are found
+- **Smart Query Selection**: Intelligently selects optimal reference sequences at each iteration to maximize retrieval coverage
+- **Resume Capability**: Interrupted workflow? No problem—resume from where you left off anytime
+- **Customizable Taxa & Genes**: Specify your target taxa and gene markers (ITS, rbcL, matK, ndhF, and more)
 
-# 2. Running PyNCBIminer
+### 🧬 Comprehensive Sequence Processing
 
-Double click the executable file(.exe), and the following interactive interface will appear.
+- **Sequence Filtering**: Remove erroneous annotations, control sequence extensions, and reduce datasets to one representative sequence per species
+- **Quality Control**: Built-in tools to identify and handle potentially erroneous sequences
+- **Flexible Output**: Results organized in clear folder structures with detailed sequence information
 
-![image](graph/main_graph.png)
+### 📊 Multiple Sequence Alignment & Trimming
 
-## 2.1 Sequence Retrieving Module
+- **MAFFT Integration**: High-quality multiple sequence alignments using the industry-standard MAFFT algorithm
+- **trimAl Support**: Automated alignment trimming with customizable methods (automated1, gappyout, strict, strictplus)
+- **Chloroplast Mode**: Specialized workflow for chloroplast genome analysis with boundary trimming
 
-The Sequence Retrieving Module is instrumental in accomplishing the primary function of PyNCBIminer, enabling the identification and download of specific gene sequence data for multiple species or taxa as specified by the user.
+### 🏗️ Supermatrix Construction
 
-### 2.1.1 Quick start example
+- **Concatenation**: Combine multiple gene markers into a single supermatrix for phylogenomic analysis
+- **Automatic Gap Handling**: Missing markers are automatically filled with gaps
 
-**Taxa**: Saxifragales, **Gene**: ITS
+### 🌿 Chloroplast Genome Analysis (New!)
 
-![image](graph/quickstart.png)
+- Specialized tools for chloroplast genome mining
+- Extract CDS regions from GenBank files
+- Quality control and sequence filtering for chloroplast sequences
 
-### 2.1.2 The detailed steps
+### 🖥️ User-Friendly Interface
 
-#### Step 1: Set target region
+- **Modern Fluent Design**: Clean, intuitive PySide6-based interface
+- **Real-time Progress Tracking**: Monitor BLAST iterations and sequence processing
+- **Customizable Themes**: Light, Dark, or Auto (follows system) mode
+- **Software Auto-Installation**: MAFFT, trimAl, and PGA-NG can be installed directly from the app
 
-**Working diretory**: The destination folder of output. 
+---
 
-**Basic setting**: Under the **'Basic Settings'** section, choose **'ITS'** from the dropdown options and click the `Set Target Region` button.
+## Installation
 
-![image](graph/set_target_region.png)
+### Prerequisites
 
-**Advanced setting**: After clicking the `Set Target Region` button, the **'Advanced Settings'** section will automatically configure default reference sequences and BLAST parameters. You can edit the text boxes, for more details on parameters, please refer to the [manual](PyNCBIminer_1.2.5_manual.pdf).
+- Windows 10/11 (macOS and Linux support coming soon)
+- Python 3.12 or higher (if running from source)
 
-**entrez email**: Users can restrict the search to sequences published within a specific timeframe (default: 1900-now). We recommend users to provide their email address, failure to do so may result in access being blocked by NCBI.
+### Option 1: Pre-built Executable
 
-![image](graph/entrez_search.png)
+1. Download the latest release from [Release Page](https://github.com/wyx619/PyNCBIminer_NG/releases)
+2. Double-click `PyNCBIminer-NG.exe` to launch
 
-#### Step 2: Submit BLAST
+---
 
-Click the `submit New BLAST` button in the 'Working directory' section to initiate the BLAST process. The process continues until no new sequences can be found, at which point the BLAST stops, and sequence downloading begins.
+## Quick Start Guide
 
-![image](graph/submit_new_blast.png)
+### Step 1: Set Your Working Directory
 
-#### Step 3: Load previous job
+Choose a folder where all outputs will be saved.
 
-If you wish to resume an incomplete task, enter the working directory and click the `load Previous Job` button for loading. The program will automatically assess the progress and resume execution from the point of interruption.
+### Step 2: Configure Target Region
 
-![image](graph/load_previous_job.png)
+- Select a predefined gene marker (ITS, rbcL, matK, etc.) or enter a custom region
+- Optionally provide your email for NCBI compliance
 
-### 2.1.3 View results
+### Step 3: Submit BLAST
 
-Three folders, namely `parameters`,`results`, and `tmp_files` , will be generated in the working directory. They primarily store initial parameters, BLAST results, and intermediate files, respectively.
+Click "Submit New BLAST" and watch as PyNCBIminer automatically:
 
+- Searches NCBI for matching sequences
+- Identifies and retrieves new reference sequences
+- Iterates until no new sequences are found
 
-**1). `parameters <folder>`**:
+### Step 4: Process Your Sequences
 
-`blast_parameters.txt <file>`:The BLAST parameters 
+Use the Construction Module to:
 
-`initial_queries.fasta <file>`: The fasta file of initial reference sequences.
+1. **Filter** sequences (remove errors, reduce to one per species)
+2. **Align** sequences with MAFFT
+3. **Trim** alignments with trimAl
+4. **Concatenate** multiple genes into a supermatrix
 
-`all_new_queries_info.txt <file>`: Information about the newly selected reference sequences in each round. 
+---
 
-`ref_seq <folder>`: The newly selected reference sequences in fasta format.
+## Supported Gene Markers
 
-`ref_msa <folder>`: The newly selected reference sequence alignment results.
+PyNCBIminer-NG comes pre-configured with reference sequences for:
 
+| Category    | Genes                                                                           |
+| ----------- | ------------------------------------------------------------------------------- |
+| Ribosomal   | 18S, 28S, ITS                                                                   |
+| Chloroplast | rbcL, matK, ndhF, ndhD, ndhI, ndhJ-ndhK-ndhC, psbA-trnH, trnL-trnF, rpoB, rpoC1 |
+| Custom      | User-defined regions                                                            |
 
-**2). `results <folder>`**:
+---
 
-`blast_results.txt <file>`:The final BLAST results.
+## Output Structure
 
-`blast_results_checked.fasta <file>`: The fasta file for correctly annotated sequences.**(We typically use this file for subsequent phylogenetic analysis.)**
+After a successful retrieval, your working directory will contain:
 
-`blast_results_checked_seq_info.txt <file>`: The sequence information for correctly annotated sequences.
+```
+working_directory/
+├── parameters/           # BLAST parameters and initial queries
+│   ├── blast_parameters.txt
+│   ├── initial_queries.fasta
+│   └── ref_seq/         # Reference sequences
+├── results/              # Final sequence data
+│   ├── blast_results.txt
+│   ├── blast_results_checked.fasta    # Clean sequences for analysis
+│   └── erroneous_sequences.fasta
+└── tmp_files/           # Intermediate files from each BLAST round
+```
 
- `erroneous_blast_results_checked.fasta <file>`: The fasta file for erroneous annotation sequences.
+---
 
- `erroneous_blast_results_checked_seq_info.txt <file>`: The sequence information for erroneous annotation sequences.
- 
+## Documentation
 
-**3). `tmp_files`**: 
+For detailed instructions, parameter explanations, and example workflows, please refer to the Manunal.
 
-For each round of BLAST, intermediate results are stored in separate subfolders with a prefix 'BLAST_' followed by numerical identifiers, created within the working directory. These subfolders individually contain the results of each round of BLAST. For more details, please refer to the [manual](PyNCBIminer_1.2.5_manual.pdf).
+---
 
-## 2.2 Supermatrix Construction Module
+## Troubleshooting
 
-### 2.2.1 Sequence Filtering
+**Q: NCBI is blocking my requests**
+A: Provide a valid email address in the Entrez Email field. NCBI may temporarily block requests without an email.
 
-`Control extension`: Remove errors related to sequence extension that may occur during the sequence download.
+**Q: Some sequences are missing**
+A: Check if your target taxa have sequences deposited in GenBank. You can also try extending the search date range.
 
-`Reduce dataset`: This function is designed to eliminate sequences with specific names (such as 'sp,', 'cf', 'aff', 'x') and lengths below a specified threshold. It will also rename instances of 'subsp,' 'var,' and 'f' to the corresponding species-level names. The ultimate goal is to preserve a single representative sequence for each species.
+**Q: MAFFT/trimAl not found**
+A: Use the "Software Settings" page in PyNCBIminer-NG to automatically download and install these tools.
 
-**input path:** The entire folder generated as output by the Sequence Retrieving Module (e.g., `D:/PyNCBIminer_data/ITS_20230308_Saxifragales <folder>`)
+---
 
-**output path:** The input file(s) of sequences to be filtered in fasta format (e.g., `D:/PyNCBIminer_data/ITS_20230308_Saxifragales/results/blast_results_checked.fasta <file>`)
+## Citation
 
-### 2.2.2 Sequence Alignment
+If you use PyNCBIminer-NG in your research, please cite:
 
-PyNCBIminer can perform sequence alignment using MAFFT, for more details on parameters, please refer to the manual of [MAFFT](https://mafft.cbrc.jp/alignment/software/manual/manual.html).
+> PyNCBIminer: A user-friendly graphical interface for efficient and precise retrieval of GenBank data
 
-For a quick start, only input and output path are required, and are listed as below:
+---
 
-**input path:** The input file(s) of sequences to be aligned in fasta format. 
+## License
 
-**output path:** The destination folder of output, where log files and result will be written.
+MIT License
 
-### 2.2.3 Alignments Trimming
+---
 
-PyNCBIminer can perform alignment trimming using trimAl, for more details on parameters, please refer to the [trimal](http://trimal.cgenomics.org/use_of_the_command_line_trimal_v1.2).
-
-**input path:** The input file(s) of sequences to be aligned in fasta format. 
-
-**output path:** The destination folder of output, where log files and result will be written.
-
-### 2.2.4 Alignments concatenation
-
-PyNCBIminer can perform alignment concatenation to concatenate alignments of multiple markers to build supermatrix. Markers of each taxon from different input files will be concatenated end to end, and missing markers will be filled with gap ‘-’. For a quick start (the same is for a normal run), only input and output path are required, and are listed as below:
-
-**input path:** The input file(s) of sequences to be aligned in fasta format. 
-
-**output path:** The destination folder of output, where log files and result will be written.
-
-# 3. User manual
-
-A more complete manual is [here](PyNCBIminer_1.2.5_manual.pdf), example data can be downloaded from [here](https://datadryad.org/stash/dataset/doi:10.5061/dryad.xpnvx0kq3).
-
-# 4. Contact
-
-If you encounter any issues during usage, feel free to ask in the [PyNCBIminer Discussion](https://github.com/Xiaoting-Xu/PyNCBIminer/discussions/categories/q-a), and we will respond as soon as possible.
-
+*PyNCBIminer-NG — Empowering phylogenetic research for everyone.*

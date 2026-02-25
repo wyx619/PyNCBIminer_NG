@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "PyNCBIminer-NG"
-version = "2.0"
+version = "1.0.0"
 description = "A user-friendly graphical interface software for efficient and precise retrieval of GenBank data"
 authors = [
     { name = "Ruijing Cheng" },{ name = "Yuxuan Wang" }
@@ -13,7 +13,7 @@ maintainers = [
     { name = "Xiaoting Xu" },
 ]
 readme = "README.md"
-urls = { homepage = "https://github.com/Xiaoting-Xu/PyNCBIminer" }
+urls = { homepage = "https://github.com/wyx619/PyNCBIminer_NG" }
 license = { text = "MIT" }
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -37,7 +37,7 @@ dependencies = [
 ]
 
 [project.scripts]
-pyNCBIminer = "src.pyNCBIminer_00_main:main"
+pyNCBIminer = "src.Main_Fluent:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
