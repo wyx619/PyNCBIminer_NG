@@ -295,7 +295,7 @@ def seq_check_download(
 def seq_check_download_main(
     wd, acc_file, out_file, key_annotations, exclude_sources, entrez_email, extend=False
 ):
-    # print_line()
+
     print("Downloading sequences...")
     df = pd.read_table(Path(wd) / Path(acc_file), sep="\t", engine="python")
     # drop duplicate

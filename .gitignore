@@ -10,6 +10,7 @@ wheels/
 .venv/
 mafft/
 trimal/
+/PGA*
 filtered_seqs/
 runtime_hooks/
 faba/
@@ -21,7 +22,8 @@ filtered_seqs/
 htmlout/
 dist_fluent/
 config/
-Medicago_right/
+medicago
 tests/
-Medicago/
+/*.7z
+/CPminer_*
 

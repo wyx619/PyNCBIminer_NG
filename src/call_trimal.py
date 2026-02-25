@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
-from pathlib import Path
-from Bio import SeqIO, SeqRecord
-from format_wizard import check_outpath_validity, get_file_handles, create_folder
-from datetime import datetime
-
 import os
 import shutil
 import subprocess
 import sys
+from datetime import datetime
+from pathlib import Path
+import numpy as np
+from Bio import SeqIO, SeqRecord, AlignIO
+
+from format_wizard import check_outpath_validity, create_folder, get_file_handles
 
 
 def _run_silent(command):
@@ -34,22 +35,20 @@ def _run_silent(command):
 
 def get_trimal_path():
     """Get path to trimal executable"""
-    # Try to find trimal in common locations
     trimal_dir = Path.cwd() / "trimal"
 
     if trimal_dir.exists():
-        # Recursively search for trimal executable
         for root, dirs, files in os.walk(trimal_dir):
             for file in files:
                 if file.lower() in ["trimal.exe", "trimal"]:
                     return str(Path(root) / file)
 
-    # Check if it's in PATH
     if shutil.which("trimal"):
         return "trimal"
 
-    # If not found, return "trimal" and let's error show
-    return "trimal"
+    raise FileNotFoundError(
+        "trimal executable not found. Please go to Software Settings Page to install trimAl first"
+    )
 
 
 def trimal(
@@ -183,3 +182,62 @@ def trimal(
         print(" trimal Running time: %s seconds" % elapsed)
 
     return file_handles, total_time
+
+
+def trim_start_end_optimized(boundaries_threshold=0.025, in_path=None):
+    """
+    边界修剪：去除比对序列两端高gap比例的区域
+    
+    Parameters:
+    - boundaries_threshold: gap比例阈值，默认0.025
+    - in_path: 输入文件夹路径，处理后会原地替换原文件
+    """
+    in_path_obj = Path(in_path)
+    
+    if in_path_obj.is_file():
+        file_list = [in_path_obj]
+    else:
+        file_list = list(in_path_obj.glob("*.fasta")) + \
+                    list(in_path_obj.glob("*.fas")) + \
+                    list(in_path_obj.glob("*.fa"))
+    
+    if not file_list:
+        print(f"No fasta files found in {in_path}")
+        return
+    
+    total_time = 0.0
+    
+    for fasta_file in file_list:
+        #print(f"Processing {fasta_file.name}...")
+        
+        try:
+            
+            alignments = AlignIO.read(fasta_file, "fasta")
+            n_row = len(alignments)
+            n_col = len(alignments[0])
+            
+            seq_array = np.array([[c for c in str(record.seq)] for record in alignments])
+            gap_ratios = (seq_array == '-').sum(axis=0) / n_row
+            
+            valid_cols = np.where(gap_ratios < boundaries_threshold)[0]
+            if len(valid_cols) == 0:
+                i, j = 0, n_col
+            else:
+                i = valid_cols[0]
+                j = valid_cols[-1] + 1
+            
+            trimmed_records = []
+            for record in alignments:
+                trimmed_seq = record.seq[i:j]
+                record.seq = trimmed_seq
+                trimmed_records.append(record)
+            
+            SeqIO.write(trimmed_records, fasta_file, "fasta")
+        
+            #print(f"  Completed in {elapsed:.2f}s")
+            
+        except Exception as e:
+            print(f"  Error processing {fasta_file.name}: {e}")
+            continue
+    
+    print(f"Boundary trimming completed: {len(file_list)} files processed in {total_time:.2f}s")

@@ -425,7 +425,7 @@ search = greedy;"""
     for key, value in marker_record.items():
         if value == []:
             continue
-        part_content += f"DNA, {key} = {value[0]}-{value[1]}\n"
+        part_content += f"DNA, {key.replace('trim_msa_', '')} = {value[0]}-{value[1]}\n"
 
     f = open(out_path / "part.txt", "w")
     f.write(part_content)

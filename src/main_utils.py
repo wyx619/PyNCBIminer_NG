@@ -3,8 +3,8 @@ import sys
 import threading
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal, QObject, QDate
-from qfluentwidgets import InfoBar, InfoBarPosition
+from PySide6.QtCore import QDate, QObject, Qt, Signal
+from qfluentwidgets import InfoBar, InfoBarPosition, MessageBox
 
 
 def get_resource_path(relative_path):
@@ -141,7 +141,11 @@ class BackendController(QObject):
         if qualifier == "" and not marker_summary_mode:
             self.emit_log("Please input your Entrez qualifier.", "WARNING")
 
-        if taxonomy == "" or email == "" or (qualifier == "" and not marker_summary_mode):
+        if (
+            taxonomy == ""
+            or email == ""
+            or (qualifier == "" and not marker_summary_mode)
+        ):
             return
 
         organisms = [x for x in taxonomy.splitlines() if len(x) > 0]
@@ -194,7 +198,14 @@ class BackendController(QObject):
 
             thread = threading.Thread(
                 target=entrez_summary,
-                args=(email, organisms, target_region_dict, d_from, d_to, self.emit_log),
+                args=(
+                    email,
+                    organisms,
+                    target_region_dict,
+                    d_from,
+                    d_to,
+                    self.emit_log,
+                ),
             )
         else:
 
@@ -210,10 +221,10 @@ class BackendController(QObject):
         thread.start()
 
     def submit_new_blast(self, retrieval_interface, parent_window=None):
-        from my_entrez import entrez_count
         from iterated_blast import iterated_blast_main
+        from my_entrez import entrez_count
 
-        print_line("*")
+        print("=" * 50)
         self.emit_log("Submitting New BLAST...")
 
         # read the current text of BLAST parameters
@@ -447,7 +458,7 @@ class BackendController(QObject):
             self.emit_log("Please input your working directory path.", "WARNING")
             return
 
-        print_line("*")
+        print("=" * 50)
         self.emit_log("Loading previous job...")
 
         # check if working directory exists
@@ -645,7 +656,7 @@ class BackendController(QObject):
             retrieval_interface.entrez_qualifier.clear()
             retrieval_interface.combo_region.setCurrentIndex(0)
 
-    def set_reduce_threshold(self, construction_interface, state):
+    def set_reduce_threshold(self, retrieval_interface, state):
         if isinstance(state, bool):
             is_checked = state
         else:
@@ -654,8 +665,8 @@ class BackendController(QObject):
                 if isinstance(state, Qt.CheckState)
                 else (state == 2)
             )
-        construction_interface.len_thresh.setEnabled(is_checked)
-        construction_interface.combo_consensus.setEnabled(is_checked)
+        retrieval_interface.len_thresh.setEnabled(is_checked)
+        retrieval_interface.chk_consensus.setEnabled(is_checked)
 
     def select_tri_method(self, construction_interface):
         method = construction_interface.combo_trim_method.currentText()
@@ -665,11 +676,11 @@ class BackendController(QObject):
         construction_interface.trim_ct.setEnabled(False)
         construction_interface.trim_con.setEnabled(is_user)
 
-    def run_filtering(self, construction_interface):
+    def run_filtering(self, retrieval_interface):
         from my_filter import call_miner_filter
 
-        in_path = construction_interface.filter_in.text().strip()
-        out_path = construction_interface.filter_out.text().strip() or in_path
+        in_path = retrieval_interface.filter_in.text().strip()
+        out_path = retrieval_interface.filter_out.text().strip() or in_path
 
         if not in_path:
             self.emit_log("Please set input path", "WARNING")
@@ -682,21 +693,21 @@ class BackendController(QObject):
             Path(out_path).mkdir(parents=True, exist_ok=True)
 
         try:
-            len_thr = int(construction_interface.len_thresh.text().strip())
-            cons = construction_interface.combo_consensus.currentText() == "True"
+            len_thr = int(retrieval_interface.len_thresh.text().strip())
+            cons = retrieval_interface.chk_consensus.isChecked()
         except ValueError as e:
             self.emit_log(f"Value Error: {e}", "ERROR")
             return
 
         action = 0
         if (
-            construction_interface.switch_ext.isChecked()
-            and construction_interface.switch_reduce.isChecked()
+            retrieval_interface.switch_ext.isChecked()
+            and retrieval_interface.switch_reduce.isChecked()
         ):
             action = 3  # both
-        elif construction_interface.switch_ext.isChecked():
+        elif retrieval_interface.switch_ext.isChecked():
             action = 1  # extension only
-        elif construction_interface.switch_reduce.isChecked():
+        elif retrieval_interface.switch_reduce.isChecked():
             action = 2  # reduce only
 
         if action == 0:
@@ -739,7 +750,7 @@ class BackendController(QObject):
             thread_num = int(construction_interface.align_thread.text().strip())
         except ValueError:
             thread_num = -1
-        reorder = construction_interface.align_reorder.currentText() == "True"
+        reorder = construction_interface.chk_reorder.isChecked()
 
         def emit_callback(message, level="INFO"):
             self.emit_log(message, level)
@@ -747,8 +758,8 @@ class BackendController(QObject):
         self.emit_log("Running MAFFT...")
 
         def run_mafft_thread():
-            import tempfile
             import shutil
+            import tempfile
 
             with tempfile.TemporaryDirectory() as temp_dir:
                 _, total_time = mafft(
@@ -778,11 +789,12 @@ class BackendController(QObject):
         thread.start()
 
     def run_trimming(self, construction_interface):
-        self.check_dependencies()
-        from call_trimal import trimal
+
+        from call_trimal import trimal, trim_start_end_optimized
 
         in_path = construction_interface.trim_in.text().strip()
         out_path = construction_interface.trim_out.text().strip()
+        is_chloroplast = construction_interface.chk_chloroplast.isChecked()
 
         if not in_path:
             self.emit_log("Please set input path", "WARNING")
@@ -815,9 +827,21 @@ class BackendController(QObject):
         def emit_callback(message, level="INFO"):
             self.emit_log(message, level)
 
-        self.emit_log("Running trimAl...")
+        def run_trimming_thread():
+            if is_chloroplast:
+                self.emit_log("Running boundary trimming (Chloroplast Mode)...")
+                try:
+                    trim_start_end_optimized(
+                        boundaries_threshold=0.025,
+                        in_path=in_path
+                    )
+                    self.emit_log("Boundary trimming completed", "SUCCESS")
+                except Exception as e:
+                    self.emit_log(f"Boundary trimming failed: {e}", "ERROR")
+                    return
 
-        def run_trimal_thread():
+            self.emit_log("Running trimAl...")
+
             _, total_time = trimal(
                 in_path,
                 out_path,
@@ -838,7 +862,7 @@ class BackendController(QObject):
                     f"trimAl completed in {total_time:.2f} seconds", "SUCCESS"
                 )
 
-        thread = threading.Thread(target=run_trimal_thread)
+        thread = threading.Thread(target=run_trimming_thread)
         thread.daemon = True
         thread.start()
 
@@ -860,15 +884,22 @@ class BackendController(QObject):
 
         out_path_obj = Path(out_p)
         if out_path_obj.exists() and any(out_path_obj.iterdir()):
-            self.emit_log(f"Output directory already exists and is not empty: {out_p}", "WARNING")
-            self.emit_log("Please choose an empty directory or remove existing files first", "WARNING")
+            self.emit_log(
+                f"Output directory already exists and is not empty: {out_p}", "WARNING"
+            )
+            self.emit_log(
+                "Please choose an empty directory or remove existing files first",
+                "WARNING",
+            )
             return
 
         if not out_path_obj.exists():
             out_path_obj.mkdir(parents=True, exist_ok=True)
 
         self.emit_log("Running Concatenation...")
-        thread = threading.Thread(target=my_concatenation, args=(in_p, out_p, self.emit_log))
+        thread = threading.Thread(
+            target=my_concatenation, args=(in_p, out_p, self.emit_log)
+        )
         thread.daemon = True
         thread.start()
 
@@ -876,7 +907,11 @@ class BackendController(QObject):
         from install_dependencies import install_mafft
 
         self.emit_log("Installing MAFFT...")
-        thread = threading.Thread(target=install_mafft)
+
+        def install_thread():
+            install_mafft(log_callback=lambda msg: self.emit_log(msg, "INFO"))
+
+        thread = threading.Thread(target=install_thread)
         thread.daemon = True
         thread.start()
 
@@ -884,7 +919,11 @@ class BackendController(QObject):
         from install_dependencies import install_trimal
 
         self.emit_log("Installing trimAl...")
-        thread = threading.Thread(target=install_trimal)
+
+        def install_thread():
+            install_trimal(log_callback=lambda msg: self.emit_log(msg, "INFO"))
+
+        thread = threading.Thread(target=install_thread)
         thread.daemon = True
         thread.start()
 
@@ -892,25 +931,37 @@ class BackendController(QObject):
         from install_dependencies import install_pga
 
         self.emit_log("Installing PGA...")
-        thread = threading.Thread(target=install_pga)
+
+        def install_thread():
+            install_pga(log_callback=lambda msg: self.emit_log(msg, "INFO"))
+
+        thread = threading.Thread(target=install_thread)
         thread.daemon = True
         thread.start()
 
     def show_about(self, parent_window):
-        InfoBar.info(
-            title="PyNCBIminer-NG",
-            content="Author: Ruijing Cheng & Yuxuan Wang\nLicense: GPL V3",
-            orient=Qt.Vertical,
-            position=InfoBarPosition.BOTTOM_RIGHT,
-            duration=5000,
-            parent=parent_window,
-        )
+        from qfluentwidgets import FluentIcon as FIF
 
-    def check_dependencies(self):
-        pass
+        title = "About"
+        content = "Authors: Ruijing Cheng & Yuxuan Wang\n\nLicense: GPL V3"
+
+        w = MessageBox(title, content, parent_window)
+        w.setClosableOnMaskClicked(True)
+        w.setDraggable(True)
+
+        w.yesButton.setText("View Github Page")
+        w.yesButton.setIcon(FIF.GITHUB)
+        w.cancelButton.setText("Back")
+
+        if w.exec():
+            from PySide6.QtCore import QUrl
+            from PySide6.QtGui import QDesktopServices
+
+            QDesktopServices.openUrl(QUrl("https://github.com/wyx619/PyNCBIminer_NG"))
 
     def download_chloroplast_genomes(self, email, in_path, out_path):
         from pathlib import Path
+
         from Chloroplast.download_gb_file import download_gb_file
 
         in_path = Path(in_path)
@@ -931,7 +982,9 @@ class BackendController(QObject):
             else:
                 skipped.append(acc_clean)
 
-        self.emit_log(f"Total: {len(accession_list)}, Already downloaded: {len(skipped)}, To download: {len(to_download)}")
+        self.emit_log(
+            f"Total: {len(accession_list)}, Already downloaded: {len(skipped)}, To download: {len(to_download)}"
+        )
 
         if len(to_download) == 0:
             self.emit_log("All files already downloaded!", "SUCCESS")
@@ -945,40 +998,274 @@ class BackendController(QObject):
             if failed == 0:
                 self.emit_log("All downloads completed successfully!", "SUCCESS")
             else:
-                self.emit_log(f"All downloads completed with {failed} failures", "WARNING")
+                self.emit_log(
+                    f"All downloads completed with {failed} failures", "WARNING"
+                )
 
         thread = threading.Thread(target=run)
         thread.daemon = True
         thread.start()
 
-    def quality_control(self, in_folder, out_folder, cds_threshold=80, ambig_threshold=0.2, threads=None):
-        from Chloroplast.quality_ctrl import generate_genome_report
+    def quality_control(
+        self, in_folder, out_folder, cds_threshold=80, ambig_threshold=0.2, threads=None
+    ):
         from pathlib import Path
-        from PySide6.QtCore import QTimer
+
+        from Chloroplast.quality_ctrl import generate_genome_report
 
         in_folder = Path(in_folder)
         out_folder = Path(out_folder)
 
         out_folder.mkdir(parents=True, exist_ok=True)
 
-        def run():
+        def run_qc():
             error_count = generate_genome_report(
                 in_folder_path=str(in_folder),
                 out_folder_path=str(out_folder),
                 cds_threshold=cds_threshold,
                 ambig_threshold=ambig_threshold,
-                threads=threads
+                threads=threads,
             )
             if error_count > 0:
-                self.emit_log(f"Quality control completed with {error_count} error(s)", "WARNING")
+                self.emit_log(
+                    f"Quality control failed with {error_count} error(s)", "WARNING"
+                )
             else:
                 self.emit_log("Quality control completed successfully!", "SUCCESS")
 
-        QTimer.singleShot(100, run)
+        thread = threading.Thread(target=run_qc)
+        thread.daemon = True
+        thread.start()
 
+    def run_get_cds(self, in_folder, out_folder, threads=3):
+        from pathlib import Path
+        from Chloroplast.get_cds import get_cds
 
-def print_line(character="#"):
-    print(character * 50)
+        in_folder = Path(in_folder)
+        out_folder = Path(out_folder)
+
+        out_folder.mkdir(parents=True, exist_ok=True)
+
+        def run_cds():
+            try:
+                get_cds(str(in_folder), str(out_folder), threads)
+                self.emit_log("CDS extraction completed successfully!", "SUCCESS")
+            except Exception as e:
+                self.emit_log(f"CDS extraction failed: {e}", "WARNING")
+
+        thread = threading.Thread(target=run_cds)
+        thread.daemon = True
+        thread.start()
+
+    def run_filter_cds(self, in_folder, out_folder, ref_type, lower_bound, upper_bound, threads=3):
+        from pathlib import Path
+        from Chloroplast.filter_seq import select_seq_by_len, get_ref_dict
+
+        in_folder = Path(in_folder)
+        out_folder = Path(out_folder)
+
+        if not in_folder.exists():
+            self.emit_log(f"Input directory does not exist: {in_folder}", "WARNING")
+            return
+
+        ref_dict = get_ref_dict(ref_type)
+        if ref_dict is None:
+            self.emit_log(f"Invalid reference type: {ref_type}", "WARNING")
+            return
+
+        out_folder.mkdir(parents=True, exist_ok=True)
+
+        def run_filter():
+            try:
+                select_seq_by_len(str(in_folder), str(out_folder), ref_dict, lower_bound, upper_bound, threads)
+                self.emit_log("CDS filtering completed successfully!", "SUCCESS")
+            except Exception as e:
+                self.emit_log(f"CDS filtering failed: {e}", "WARNING")
+
+        thread = threading.Thread(target=run_filter)
+        thread.daemon = True
+        thread.start()
+
+    def run_select_cds(self, in_folder, out_folder, enable_tax_res=False, tax_file=None, threads=3):
+        from pathlib import Path
+        from Chloroplast.select_seq_by_acc import make_tab, select_seq_by_acc
+
+        in_folder = Path(in_folder)
+        out_folder = Path(out_folder)
+
+        if not in_folder.exists():
+            self.emit_log(f"Input directory does not exist: {in_folder}", "WARNING")
+            return
+
+        length_csv = in_folder / "length.csv"
+        if not length_csv.exists():
+            self.emit_log(f"length.csv not found in {in_folder}", "WARNING")
+            return
+
+        out_folder.mkdir(parents=True, exist_ok=True)
+
+        def run_select():
+            try:
+                file_organism_name = tax_file if enable_tax_res and tax_file else None
+                df_organism = make_tab(str(in_folder), file_organism_name)
+                if df_organism is not None:
+                    select_seq_by_acc(str(in_folder), str(out_folder), df_organism, num_processes=threads)
+                    self.emit_log("CDS selection completed successfully!", "SUCCESS")
+                else:
+                    self.emit_log("CDS selection skipped (no valid data)", "WARNING")
+            except Exception as e:
+                self.emit_log(f"CDS selection failed: {e}", "WARNING")
+
+        thread = threading.Thread(target=run_select)
+        thread.daemon = True
+        thread.start()
+
+    def run_pga(self, in_folder, ori_gb_folder, clade, ref_folder=None):
+        import shutil
+        import time
+        from pathlib import Path
+        import re
+        from functional import run_command
+
+        root_path = Path.cwd()
+        pga_dir = root_path / r"./PGA-NG"
+        if not pga_dir.exists():
+            self.emit_log(
+                "PGA directory not found. Please go to Software Settings Page to install PGA first.", "WARNING"
+            )
+            return
+        in_folder = Path(in_folder)
+        ori_gb_folder = Path(ori_gb_folder) if ori_gb_folder else in_folder
+        if not in_folder.exists() or not any(in_folder.iterdir()):
+            self.emit_log("Input genome not found.", "WARNING")
+            return
+        fasta_files = [
+            f for f in in_folder.iterdir() if f.suffix.lower() in {".fasta", ".fa"}
+        ]
+        fasta_stems = {f.stem for f in fasta_files}  # 获取文件名（不含后缀）
+        num_genomes = len(fasta_files)
+
+        if clade == "Angiosperms":
+            ref_folder = Path(pga_dir / "Reference" / "Angiosperms")
+        elif clade == "Gymnosperms":
+            ref_folder = Path(pga_dir / "Reference" / "Gymnosperms")
+        elif clade == "User defined":
+            ref_folder = Path(ref_folder)
+            if not ref_folder.exists() or not any(ref_folder.iterdir()):
+                self.emit_log("Reference genome not found.", "WARNING")
+                return
+        pga_main = Path(pga_dir / "PGA2.exe")
+        out_folder = in_folder / "pga_output"
+        out_folder.mkdir(exist_ok=True)
+        pga_command = f"{pga_main} -r {ref_folder} -t {in_folder} -o {out_folder}"
+
+        self.emit_log(
+            f"{num_genomes} genomes will be reannotated using {clade} reference genomes",
+            "INFO",
+        )
+
+        done_flag = [False]  # 用列表包装以便在嵌套函数中修改
+
+        def monitor_thread():
+            processed_stems = set()
+            while not done_flag[0]:
+                current_gb_files = list(out_folder.glob("*.gb"))
+                current_stems = {f.stem for f in current_gb_files}
+                new_stems = current_stems - processed_stems
+                if new_stems:
+                    for stem in new_stems:
+                        if stem in fasta_stems:
+                            self.emit_log(
+                                f"Progressed: {len(current_stems)}/{num_genomes} - {stem}",
+                                "INFO",
+                            )
+                    processed_stems = current_stems
+                time.sleep(3)
+            # 最终检查确保最后一个文件也被记录
+            final_gb = list(out_folder.glob("*.gb"))
+            final_stems = {f.stem for f in final_gb}
+            for stem in final_stems:
+                if stem in fasta_stems and stem not in processed_stems:
+                    self.emit_log(
+                        f"Progressed: {len(final_stems)}/{num_genomes} - {stem}",
+                        "SUCCESS",
+                    )
+
+        def run_pga_thread():
+            result = run_command(pga_command)
+            done_flag[0] = True
+            if result.returncode != 0:
+                self.emit_log(
+                    f"Annotation failed with code {result.returncode}", "ERROR"
+                )
+                return
+
+            for f in Path(in_folder).glob("*.njs"):
+                f.unlink(missing_ok=True)
+
+            for f in out_folder.glob("*.gb"):
+                shutil.copy(f, ori_gb_folder / f.name)
+
+            # 修复 annotated 文件的 LOCUS 行
+            for annotated_file in ori_gb_folder.glob("*_reannoated.gb"):
+                original_file = ori_gb_folder / annotated_file.name.replace("_reannoated", "")
+                
+                # 读取全部内容
+                with open(original_file, "r", encoding="utf-8") as f1:
+                    original_lines = f1.readlines()
+                with open(annotated_file, "r", encoding="utf-8") as f2:
+                    annotated_lines = f2.readlines()
+                
+                # 步骤1: 修复 LOCUS 行
+                original_first = original_lines[0]
+                annotated_first = annotated_lines[0]
+                # 提取类似 "08-NOV-2022" 的日期部分（两个数字-三个字母-四个数字）
+                match = re.search(r'\b\d{2}-[A-Z]{3}-\d{4}\b', annotated_first)
+                date_part = match.group(0) if match else ""
+                # 这一行的作用：
+                # 1. 从 original_first 中去掉行尾空白（rstrip()）
+                # 2. 用正则把里面类似 "08-NOV-2022" 的日期整体替换成 date_part（其实 date_part 就是刚才匹配到的同一串日期）
+                # 3. 最后再加上一个换行符 "\n"，拼成新的 LOCUS 行
+                new_first_line = re.sub(r'\b\d{2}-[A-Z]{3}-\d{4}\b', date_part, original_first.rstrip()) + "\n"
+                annotated_lines[0] = new_first_line
+                
+                # 写入修复后的第一行
+                with open(annotated_file, "w", encoding="utf-8") as f:
+                    f.writelines(annotated_lines)
+                
+                # 步骤2 & 3: 使用 Biopython 处理
+                from Bio import SeqIO
+                
+                original_record = SeqIO.read(original_file, "genbank")
+                annotated_record = SeqIO.read(annotated_file, "genbank")
+                
+                # 提取原始文件的 organism 名称
+                organism_name = original_record.annotations.get("organism", "")
+                
+                # 复制 source 相关信息
+                annotated_record.annotations["source"] = original_record.annotations.get("source", "")
+                annotated_record.annotations["organism"] = organism_name
+                annotated_record.annotations["taxonomy"] = original_record.annotations.get("taxonomy", "")
+                # 替换 /organism qualifier
+                for feat in annotated_record.features:
+                    if feat.type == "source":
+                        feat.qualifiers["organism"] = [organism_name]
+                
+                # 写入修复后的文件
+                SeqIO.write(annotated_record, annotated_file, "genbank")
+                
+                # 删除original_file
+                original_file.unlink(missing_ok=True)
+                # 将annotated_file重命名为original_file
+                annotated_file.rename(original_file)
+
+        thread1 = threading.Thread(target=monitor_thread)
+        thread1.daemon = True
+        thread1.start()
+
+        thread2 = threading.Thread(target=run_pga_thread)
+        thread2.daemon = True
+        thread2.start()
 
 
 def get_query_accession(record):

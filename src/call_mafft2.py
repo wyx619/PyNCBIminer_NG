@@ -25,7 +25,9 @@ def get_mafft_path():
     if shutil.which("mafft"):
         return "mafft"
 
-    return "mafft"
+    raise FileNotFoundError(
+        "mafft executable not found. Please go to Software Settings Page to install MAFFT first"
+    )
 
 
 def mafft_add(in_path, in_file, out_path, cmd_str):

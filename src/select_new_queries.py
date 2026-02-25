@@ -12,7 +12,7 @@ from pathlib import Path
 from datetime import datetime
 from scipy.sparse import csr_matrix
 from Bio import SeqIO
-from main_utils import print_line, get_query_accession
+from main_utils import get_query_accession
 from seq_check_download import seq_check_download_main
 from call_mafft2 import mafft
 import shutil
@@ -47,7 +47,7 @@ def cluster_queries(wd, ref_list=None):
     index_list = []
     for name, group in groups:
         try:
-            print_line()
+
             print("%s, %d sequences" % (name, len(group)))
             if len(group) < 3:
                 print("Selecting one sequence found by this query randomly ...")

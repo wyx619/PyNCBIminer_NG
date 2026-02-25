@@ -1,27 +1,27 @@
 # *-* coding:utf-8 *-*
 import sys
-
 from pathlib import Path
 
 from PySide6.QtCore import (
-    Qt,
-    Signal,
-    QObject,
-    QEventLoop,
-    QTimer,
-    Slot,
-    QPropertyAnimation,
-    QEasingCurve,
     QDate,
+    QEasingCurve,
+    QEventLoop,
+    QObject,
+    QProcess,
+    QPropertyAnimation,
+    Qt,
+    QTimer,
+    Signal,
+    Slot,
 )
-from PySide6.QtGui import QTextCursor, QIcon
+from PySide6.QtGui import QIcon, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
     QHBoxLayout,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
-    QStackedWidget,
 )
 
 try:
@@ -32,37 +32,38 @@ except ImportError:
     HAS_SYSTEM_ACCENT = False
 
 from qfluentwidgets import (
+    BodyLabel,
+    CardWidget,
+    CheckBox,
+    ColorPickerButton,
+    ComboBox,
+    DatePicker,
+    ExpandSettingCard,
     FluentWindow,
+    InfoBar,
+    InfoBarPosition,
+    LineEdit,
     NavigationItemPosition,
-    SubtitleLabel,
+    PlainTextEdit,
     PrimaryPushButton,
     PushButton,
-    LineEdit,
-    TextEdit,
-    ComboBox,
-    CheckBox,
     RadioButton,
-    CardWidget,
-    SwitchButton,
-    BodyLabel,
-    InfoBar,
-    FluentIcon as FIF,
     SegmentedWidget,
     SettingCardGroup,
-    ExpandSettingCard,
-    PlainTextEdit,
-    setTheme,
-    Theme,
-    InfoBarPosition,
-    DatePicker,
     SingleDirectionScrollArea,
+    SubtitleLabel,
+    SwitchButton,
+    TextEdit,
+    Theme,
+    setTheme,
     setThemeColor,
     themeColor,
-    ColorPickerButton,
+)
+from qfluentwidgets import (
+    FluentIcon as FIF,
 )
 
 from main_utils import BackendController
-# --- Tools / Utils ---
 
 
 def get_resource_path(relative_path):
@@ -90,12 +91,7 @@ class EmittingStr(QObject):
         pass
 
 
-# --- Custom UI Components ---
-
-
 class LogWidget(CardWidget):
-    """A dedicated widget for console output"""
-
     def __init__(self, parent=None):
         super().__init__(parent)
         self.vBoxLayout = QVBoxLayout(self)
@@ -117,108 +113,122 @@ class LogWidget(CardWidget):
         self.textEdit.ensureCursorVisible()
 
 
-# --- Interfaces (Pages) ---
-
-
-class RetrievalInterface(SingleDirectionScrollArea):
-    """Tab 1: Sequence Retrieval"""
-
+class RetrievalInterface(QWidget):
     def __init__(self, main_window):
-        super().__init__(parent=main_window)
+        super().__init__()
         self.main_window = main_window
         self.date_from_cleared = True
         self.date_to_cleared = True
+        self.setObjectName("retrieval_interface")
 
-        self.view = QWidget(self)
-        self.vBoxLayout = QVBoxLayout(self.view)
-        self.vBoxLayout.setContentsMargins(30, 30, 30, 30)
-        self.vBoxLayout.setSpacing(20)
+        self.vBoxLayout = QVBoxLayout(self)
+        self.pivot = SegmentedWidget(self)
+        self.stackedWidget = QStackedWidget(self)
 
-        # 1. Working Directory Card
-        self.wd_group = SettingCardGroup("Working Directory", self.view)
-        self.wd_card = CardWidget(self.view)
-        self.wd_card.setFixedHeight(60)
-        wd_layout = QHBoxLayout(self.wd_card)
+        self.page_retrieval = self.create_retrieval_page()
+        self.page_filter = self.create_filtering_page()
+
+        self.addSubInterface(self.page_retrieval, "retrieval", "Sequence Retrieval")
+        self.addSubInterface(self.page_filter, "filter", "Sequence Filtering")
+
+        self.vBoxLayout.addWidget(self.pivot)
+        self.vBoxLayout.addWidget(self.stackedWidget)
+        self.vBoxLayout.setContentsMargins(30, 25, 30, 15)
+
+        self.stackedWidget.setCurrentWidget(self.page_retrieval)
+        self.pivot.setCurrentItem("retrieval")
+        self.pivot.currentItemChanged.connect(
+            lambda k: self.stackedWidget.setCurrentWidget(self.findChild(QWidget, k))
+        )
+
+    def addSubInterface(self, widget: QWidget, objectName, text):
+        widget.setObjectName(objectName)
+        self.stackedWidget.addWidget(widget)
+        self.pivot.addItem(routeKey=objectName, text=text)
+
+    def create_retrieval_page(self):
+        w = SingleDirectionScrollArea()
+        w.setWidgetResizable(True)
+        view = QWidget()
+        vBoxLayout = QVBoxLayout(view)
+        vBoxLayout.setContentsMargins(5, 20, 25, 20)
+        vBoxLayout.setSpacing(20)
+
+        wd_group = SettingCardGroup("Working Directory", view)
+        wd_card = CardWidget(view)
+        wd_card.setFixedHeight(60)
+        wd_layout = QHBoxLayout(wd_card)
         wd_layout.setContentsMargins(15, 10, 15, 10)
-        self.wd_edit = LineEdit(self.wd_card)
+        self.wd_edit = LineEdit(wd_card)
         self.wd_edit.setPlaceholderText("Absolute path of working directory")
-        self.btn_wd_view = PushButton("Browse", self.wd_card)
+        self.btn_wd_view = PushButton("Browse", wd_card)
         self.btn_wd_view.setIcon(FIF.FOLDER)
         wd_layout.addWidget(BodyLabel("Path:"))
         wd_layout.addWidget(self.wd_edit)
         wd_layout.addWidget(self.btn_wd_view)
-        self.wd_group.addSettingCard(self.wd_card)
-        self.vBoxLayout.addWidget(self.wd_group)
+        wd_group.addSettingCard(wd_card)
+        vBoxLayout.addWidget(wd_group)
 
-        # 2. Basic Settings
-        self.basic_group = SettingCardGroup("Basic Settings", self.view)
+        basic_group = SettingCardGroup("Basic Settings", view)
 
-        # 3. Taxonomy
-        self.tax_card = CardWidget(self.view)
-        self.tax_card.setFixedHeight(150)
-        tax_layout = QVBoxLayout(self.tax_card)
+        tax_card = CardWidget(view)
+        tax_card.setFixedHeight(150)
+        tax_layout = QVBoxLayout(tax_card)
         tax_layout.setContentsMargins(15, 10, 15, 15)
         tax_layout.addWidget(BodyLabel("Target Groups (Taxonomy):"))
-        self.tax_edit = PlainTextEdit(self.tax_card)
+        self.tax_edit = PlainTextEdit(tax_card)
         self.tax_edit.setPlaceholderText("One taxon per line")
         self.tax_edit.setFixedHeight(100)
         tax_layout.addWidget(self.tax_edit)
-        self.basic_group.addSettingCard(self.tax_card)
+        basic_group.addSettingCard(tax_card)
 
-        # 4. Target Region Selection
-        self.region_card = CardWidget(self.view)
-        self.region_card.setFixedHeight(80)
-        reg_layout = QHBoxLayout(self.region_card)
+        region_card = CardWidget(view)
+        region_card.setFixedHeight(80)
+        reg_layout = QHBoxLayout(region_card)
         reg_layout.setContentsMargins(15, 10, 15, 10)
-        self.combo_region = ComboBox(self.region_card)
+        self.combo_region = ComboBox(region_card)
         self.combo_region.setMaxVisibleItems(6)
 
-        # Dynamically load all available markers from blast_parameters directory
         blast_params_dir = Path(get_writable_path("blast_parameters"))
         default_params_dir = Path(get_resource_path("blast_parameters"))
 
         marker_set = set()
-        marker_set.add("")  # Add empty option
+        marker_set.add("")
 
-        # Load from custom directory
         if blast_params_dir.exists():
             for f in blast_params_dir.iterdir():
                 if f.is_file() and f.suffix == ".txt":
                     marker_set.add(f.stem)
 
-        # Load from default directory
         if default_params_dir.exists():
             for f in default_params_dir.iterdir():
                 if f.is_file() and f.suffix == ".txt":
                     marker_set.add(f.stem)
 
-        # Sort markers (empty first, then alphabetical)
         markers = sorted(marker_set, key=lambda x: (x != "", x))
         self.combo_region.addItems(markers)
 
-        # New region input (only enabled when combo is empty)
-        self.new_region_edit = LineEdit(self.region_card)
+        self.new_region_edit = LineEdit(region_card)
         self.new_region_edit.setPlaceholderText("Enter new region name")
         self.new_region_edit.setEnabled(False)
         self.new_region_edit.setFixedWidth(180)
 
-        self.btn_set_region = PrimaryPushButton("Set Region", self.region_card)
-        self.btn_save_settings = PushButton("Save Settings", self.region_card)
+        self.btn_set_region = PrimaryPushButton("Set Region", region_card)
+        self.btn_save_settings = PushButton("Save Settings", region_card)
         reg_layout.addWidget(BodyLabel("Target Region:"))
         reg_layout.addWidget(self.combo_region)
         reg_layout.addWidget(self.new_region_edit)
         reg_layout.addWidget(self.btn_set_region)
         reg_layout.addWidget(self.btn_save_settings)
-        self.basic_group.addSettingCard(self.region_card)
+        basic_group.addSettingCard(region_card)
 
-        # 5. Entrez & Dates
-        self.entrez_card = CardWidget(self.view)
-        self.entrez_card.setFixedHeight(230)
-        ent_layout = QVBoxLayout(self.entrez_card)
+        entrez_card = CardWidget(view)
+        entrez_card.setFixedHeight(230)
+        ent_layout = QVBoxLayout(entrez_card)
         ent_layout.setContentsMargins(15, 10, 15, 10)
 
         row1 = QHBoxLayout()
-        self.entrez_qualifier = PlainTextEdit(self.entrez_card)
+        self.entrez_qualifier = PlainTextEdit(entrez_card)
         ent_layout.addWidget(BodyLabel("Entrez Qualifier:"))
         self.entrez_qualifier.setPlaceholderText(
             "Constraint on BLAST search (Entrez Qualifier)"
@@ -228,19 +238,18 @@ class RetrievalInterface(SingleDirectionScrollArea):
         ent_layout.addLayout(row1)
 
         row2 = QHBoxLayout()
-        self.email_edit = LineEdit(self.entrez_card)
+        self.email_edit = LineEdit(entrez_card)
         self.email_edit.setPlaceholderText("User's Email")
         row2.addWidget(BodyLabel("Email:"))
         row2.addWidget(self.email_edit)
         ent_layout.addLayout(row2)
 
         row3 = QHBoxLayout()
-        self.date_from = DatePicker(self.entrez_card)
+        self.date_from = DatePicker(entrez_card)
         self.date_from.setDate(QDate())
         self.date_from_cleared = True
         self.date_from.dateChanged.connect(self.on_date_from_changed)
-        self.btn_clear_from = PushButton("Reset", self.entrez_card)
-
+        self.btn_clear_from = PushButton("Reset", entrez_card)
 
         self.btn_clear_from.clicked.connect(self.clear_date_from)
         row3.addWidget(BodyLabel("Date From:"))
@@ -248,12 +257,11 @@ class RetrievalInterface(SingleDirectionScrollArea):
         row3.addWidget(self.btn_clear_from)
         row3.addStretch()
 
-        self.date_to = DatePicker(self.entrez_card)
+        self.date_to = DatePicker(entrez_card)
         self.date_to.setDate(QDate())
         self.date_to_cleared = True
         self.date_to.dateChanged.connect(self.on_date_to_changed)
-        self.btn_clear_to = PushButton("Reset", self.entrez_card)
-
+        self.btn_clear_to = PushButton("Reset", entrez_card)
 
         self.btn_clear_to.clicked.connect(self.clear_date_to)
         row3.addWidget(BodyLabel("Date To:"))
@@ -261,44 +269,39 @@ class RetrievalInterface(SingleDirectionScrollArea):
         row3.addWidget(self.btn_clear_to)
         ent_layout.addLayout(row3)
 
-        self.basic_group.addSettingCard(self.entrez_card)
+        basic_group.addSettingCard(entrez_card)
 
-        # 6. Actions Row
-        self.action_card = CardWidget(self.view)
-        self.action_card.setFixedHeight(80)
-        act_layout = QHBoxLayout(self.action_card)
+        action_card = CardWidget(view)
+        action_card.setFixedHeight(80)
+        act_layout = QHBoxLayout(action_card)
         act_layout.setContentsMargins(15, 10, 15, 10)
-        self.chk_summary = CheckBox("Summarize widely used marker", self.action_card)
-        self.btn_esearch = PrimaryPushButton("Entrez Search", self.action_card)
+        self.chk_summary = CheckBox("Summarize widely used marker", action_card)
+        self.btn_esearch = PrimaryPushButton("Entrez Search", action_card)
         self.btn_esearch.setIcon(FIF.SEARCH)
         act_layout.addWidget(self.chk_summary)
         act_layout.addStretch(1)
         act_layout.addWidget(self.btn_esearch)
-        self.basic_group.addSettingCard(self.action_card)
+        basic_group.addSettingCard(action_card)
 
-        self.vBoxLayout.addWidget(self.basic_group)
+        vBoxLayout.addWidget(basic_group)
 
-        # 7. Advanced Settings (Expandable)
-        self.adv_group = ExpandSettingCard(
+        adv_group = ExpandSettingCard(
             FIF.SETTING, "Advanced BLAST Parameters", "Click to expand configuration"
         )
-        self.adv_group.setExpand(True)
-        self.adv_view = QWidget()
-        adv_layout = QVBoxLayout(self.adv_view)
+        adv_group.setExpand(True)
+        adv_view = QWidget()
+        adv_layout = QVBoxLayout(adv_view)
 
-        # Initial Queries (Fasta) - Full width
         adv_layout.addWidget(BodyLabel("Initial Queries (Fasta):"))
         self.init_queries = PlainTextEdit()
         self.init_queries.setPlaceholderText("Paste sequences in fasta format here")
         self.init_queries.setFixedHeight(200)
         adv_layout.addWidget(self.init_queries)
 
-        # Grid for params
         grid_layout = QHBoxLayout()
         col1 = QVBoxLayout()
         col2 = QVBoxLayout()
 
-        # Left column: Key Annotations, Exclude Sources
         self.key_anno = PlainTextEdit()
         self.key_anno.setPlaceholderText("Separated by semicolons")
         self.key_anno.setFixedHeight(60)
@@ -312,7 +315,6 @@ class RetrievalInterface(SingleDirectionScrollArea):
         col1.addWidget(self.excl_source)
         col1.addStretch(2)
 
-        # Right column: Other parameters (evenly distributed)
         self.max_len = LineEdit()
         self.max_len.setPlaceholderText("Integer")
         self.word_size = LineEdit()
@@ -347,39 +349,118 @@ class RetrievalInterface(SingleDirectionScrollArea):
         grid_layout.addLayout(col2, 1)
         adv_layout.addLayout(grid_layout)
 
-        self.adv_group.viewLayout.addWidget(self.adv_view)
-        self.vBoxLayout.addWidget(self.adv_group)
+        adv_group.viewLayout.addWidget(adv_view)
+        vBoxLayout.addWidget(adv_group)
 
-        # 4. Final Buttons
-        self.btn_submit_blast = PrimaryPushButton("Submit New BLAST", self)
+        self.btn_submit_blast = PrimaryPushButton("Submit New BLAST", view)
         self.btn_submit_blast.setIcon(FIF.PLAY)
-        self.btn_load_job = PushButton("Load Previous Job", self)
+        self.btn_load_job = PushButton("Load Previous Job", view)
         self.btn_load_job.setIcon(FIF.HISTORY)
-        self.btn_stop = PushButton("Stop", self)
+        self.btn_stop = PushButton("Stop", view)
         self.btn_stop.setIcon(FIF.CLOSE)
         self.btn_stop.setEnabled(False)
 
         btn_row = QHBoxLayout()
         btn_row.addWidget(self.btn_submit_blast)
         btn_row.addWidget(self.btn_load_job)
-        self.vBoxLayout.addLayout(btn_row)
+        vBoxLayout.addLayout(btn_row)
 
         stop_row = QHBoxLayout()
         stop_row.addWidget(self.btn_stop)
-        self.vBoxLayout.addLayout(stop_row)
+        vBoxLayout.addLayout(stop_row)
 
-        self.vBoxLayout.addStretch(1)
+        vBoxLayout.addStretch(1)
 
-        # Set widget and properties after all components are added
-        self.setWidget(self.view)
-        self.setWidgetResizable(True)
-        self.setObjectName("retrieval_interface")
+        w.setWidget(view)
+        w.setObjectName("retrieval_page")
+        w.setStyleSheet("QScrollArea {border: none; background:transparent}")
+        view.setStyleSheet("QWidget {background:transparent}")
 
-        self.setStyleSheet("QScrollArea {border: none; background:transparent}")
-        self.view.setStyleSheet("QWidget {background:transparent}")
-
-        # Connect internal signals
         self.btn_wd_view.clicked.connect(self.select_wd)
+
+        return w
+
+    def create_filtering_page(self):
+        w = QWidget()
+        layout = QVBoxLayout(w)
+        layout.setContentsMargins(5, 20, 5, 20)
+
+        grp = SettingCardGroup("Sequence Filtering", w)
+
+        card_opts = CardWidget()
+        card_opts.setFixedHeight(220)
+        l_opts = QVBoxLayout(card_opts)
+        l_opts.setContentsMargins(15, 10, 15, 10)
+
+        row1 = QHBoxLayout()
+        self.switch_ext = SwitchButton(card_opts)
+        self.switch_ext.setChecked(False)
+        row1.addWidget(BodyLabel("Extended segments refinement"))
+        row1.addWidget(self.switch_ext)
+        row1.addStretch()
+        l_opts.addLayout(row1)
+
+        row2 = QHBoxLayout()
+        self.switch_reduce = SwitchButton(card_opts)
+        self.switch_reduce.setChecked(False)
+        self.switch_reduce.checkedChanged.connect(self.on_switch_reduce_changed)
+        row2.addWidget(BodyLabel("Species-level sequence selection"))
+        row2.addWidget(self.switch_reduce)
+        row2.addWidget(BodyLabel("Length Threshold:"))
+        self.len_thresh = LineEdit()
+        self.len_thresh.setText("100")
+        self.len_thresh.setEnabled(False)
+        self.len_thresh.setFixedWidth(240)
+        row2.addWidget(self.len_thresh)
+        row2.addSpacing(20)
+        self.chk_consensus = CheckBox("Abnormal Index (Consensus)", card_opts)
+        self.chk_consensus.setChecked(True)
+        self.chk_consensus.setEnabled(False)
+        row2.addWidget(self.chk_consensus)
+        l_opts.addLayout(row2)
+
+        row3 = QHBoxLayout()
+        self.filter_in = LineEdit()
+        self.filter_in.setPlaceholderText(
+            "One working directory or the parent directory of multiple working directories"
+        )
+        btn_in = PushButton("Browse")
+        btn_in.setIcon(FIF.FOLDER)
+        btn_in.clicked.connect(lambda: self.browse_dir(self.filter_in))
+        row3.addWidget(BodyLabel("Input Path:"))
+        row3.addWidget(self.filter_in, 1)
+        row3.addWidget(btn_in)
+        l_opts.addLayout(row3)
+
+        row4 = QHBoxLayout()
+        self.filter_out = LineEdit()
+        self.filter_out.setPlaceholderText("The same as input path by default")
+        btn_out = PushButton("Browse")
+        btn_out.setIcon(FIF.FOLDER)
+        btn_out.clicked.connect(lambda: self.browse_dir(self.filter_out))
+        row4.addWidget(BodyLabel("Output Path:"))
+        row4.addWidget(self.filter_out, 1)
+        row4.addWidget(btn_out)
+        l_opts.addLayout(row4)
+
+        grp.addSettingCard(card_opts)
+
+        self.btn_run_filter = PrimaryPushButton("Run Filtering")
+        self.btn_run_filter.setIcon(FIF.PLAY)
+
+        layout.addWidget(grp)
+        layout.addWidget(self.btn_run_filter)
+        layout.addStretch(1)
+        return w
+
+    def on_switch_reduce_changed(self, checked):
+        self.len_thresh.setEnabled(checked)
+        self.chk_consensus.setEnabled(checked)
+
+    def browse_dir(self, line_edit):
+        path = QFileDialog.getExistingDirectory(self, "Select Directory")
+        if path:
+            line_edit.setText(path)
 
     def select_wd(self):
         path = QFileDialog.getExistingDirectory(self, "Select Working Directory")
@@ -404,8 +485,6 @@ class RetrievalInterface(SingleDirectionScrollArea):
 
 
 class ConstructionInterface(QWidget):
-    """Tab 2: Supermatrix Construction using SegmentedWidget for sub-steps"""
-
     def __init__(self, main_window):
         super().__init__()
         self.main_window = main_window
@@ -415,14 +494,10 @@ class ConstructionInterface(QWidget):
         self.pivot = SegmentedWidget(self)
         self.stackedWidget = QStackedWidget(self)
 
-        # -- Pages --
-        self.page_filter = self.create_filtering_page()
         self.page_align = self.create_alignment_page()
         self.page_trim = self.create_trimming_page()
         self.page_concat = self.create_concat_page()
 
-        # Add items to SegmentedWidget
-        self.addSubInterface(self.page_filter, "filter", "Filtering")
         self.addSubInterface(self.page_align, "align", "Alignment")
         self.addSubInterface(self.page_trim, "trim", "Trimming")
         self.addSubInterface(self.page_concat, "concat", "Concatenation")
@@ -431,9 +506,8 @@ class ConstructionInterface(QWidget):
         self.vBoxLayout.addWidget(self.stackedWidget)
         self.vBoxLayout.setContentsMargins(30, 25, 30, 15)
 
-        # Init state
-        self.stackedWidget.setCurrentWidget(self.page_filter)
-        self.pivot.setCurrentItem("filter")
+        self.stackedWidget.setCurrentWidget(self.page_align)
+        self.pivot.setCurrentItem("align")
         self.pivot.currentItemChanged.connect(
             lambda k: self.stackedWidget.setCurrentWidget(self.findChild(QWidget, k))
         )
@@ -443,87 +517,6 @@ class ConstructionInterface(QWidget):
         self.stackedWidget.addWidget(widget)
         self.pivot.addItem(routeKey=objectName, text=text)
 
-    def create_filtering_page(self):
-        w = QWidget()
-        layout = QVBoxLayout(w)
-        layout.setContentsMargins(5, 20, 5, 20)
-
-        grp = SettingCardGroup("Sequence Filtering", w)
-
-        # Options
-        card_opts = CardWidget()
-        card_opts.setFixedHeight(80)
-        l_opts = QHBoxLayout(card_opts)
-        l_opts.setContentsMargins(15, 10, 15, 10)
-        self.switch_ext = SwitchButton(card_opts)
-        self.switch_ext.setChecked(False)
-        self.switch_reduce = SwitchButton(card_opts)
-        self.switch_reduce.setChecked(False)
-
-        l_opts.addWidget(BodyLabel("Extended segments refinement"))
-        l_opts.addWidget(self.switch_ext)
-        l_opts.addStretch()
-
-        l_opts.addWidget(BodyLabel("Species-level sequence selection"))
-        l_opts.addWidget(self.switch_reduce)
-
-        grp.addSettingCard(card_opts)
-
-        # Parameters
-        card_params = CardWidget()
-        card_params.setFixedHeight(60)
-        l_params = QHBoxLayout(card_params)
-        l_params.setContentsMargins(15, 10, 15, 10)
-        self.len_thresh = LineEdit()
-        self.len_thresh.setText("100")
-        self.combo_consensus = ComboBox()
-        self.combo_consensus.addItems(["True", "False"])
-        l_params.addWidget(BodyLabel("Length Threshold:"))
-        l_params.addWidget(self.len_thresh)
-        l_params.addStretch()
-        l_params.addWidget(BodyLabel("Abnormal Index (Consensus):"))
-        l_params.addWidget(self.combo_consensus)
-        grp.addSettingCard(card_params)
-
-        # Paths
-        card_paths = CardWidget()
-        card_paths.setFixedHeight(180)
-        l_paths = QVBoxLayout(card_paths)
-        l_paths.setContentsMargins(15, 10, 15, 10)
-
-        self.filter_in = LineEdit()
-        self.filter_in.setPlaceholderText(
-            "One working directory or the parent directory of multiple working directories"
-        )
-        btn_in = PushButton("Browse")
-        btn_in.setIcon(FIF.FOLDER)
-        btn_in.clicked.connect(lambda: self.browse_dir(self.filter_in))
-        h1 = QHBoxLayout()
-        h1.addWidget(BodyLabel("Input Path:"))
-        h1.addWidget(self.filter_in)
-        h1.addWidget(btn_in)
-
-        self.filter_out = LineEdit()
-        self.filter_out.setPlaceholderText("The same as input path by default")
-        btn_out = PushButton("Browse")
-        btn_out.setIcon(FIF.FOLDER)
-        btn_out.clicked.connect(lambda: self.browse_dir(self.filter_out))
-        h2 = QHBoxLayout()
-        h2.addWidget(BodyLabel("Output Path:"))
-        h2.addWidget(self.filter_out)
-        h2.addWidget(btn_out)
-
-        l_paths.addLayout(h1)
-        l_paths.addLayout(h2)
-        grp.addSettingCard(card_paths)
-
-        self.btn_run_filter = PrimaryPushButton("Run Filtering")
-        self.btn_run_filter.setIcon(FIF.PLAY)
-
-        layout.addWidget(grp)
-        layout.addWidget(self.btn_run_filter)
-        return w
-
     def create_alignment_page(self):
         w = QWidget()
         layout = QVBoxLayout(w)
@@ -531,11 +524,10 @@ class ConstructionInterface(QWidget):
 
         grp = SettingCardGroup("Sequence Alignment (MAFFT)", w)
 
-        # Mode and Paths
-        card_paths = CardWidget()
-        card_paths.setFixedHeight(180)
-        l_paths = QVBoxLayout(card_paths)
-        l_paths.setContentsMargins(15, 10, 15, 10)
+        card_opts = CardWidget()
+        card_opts.setFixedHeight(220)
+        l_opts = QVBoxLayout(card_opts)
+        l_opts.setContentsMargins(15, 10, 15, 10)
 
         self.rb_align_single = RadioButton("Input one file")
         self.rb_align_multi = RadioButton("Input multiple files")
@@ -543,7 +535,7 @@ class ConstructionInterface(QWidget):
         row_rb = QHBoxLayout()
         row_rb.addWidget(self.rb_align_single)
         row_rb.addWidget(self.rb_align_multi)
-        l_paths.addLayout(row_rb)
+        l_opts.addLayout(row_rb)
 
         self.align_in = LineEdit()
         self.align_in.setPlaceholderText("Input file or directory")
@@ -571,17 +563,12 @@ class ConstructionInterface(QWidget):
         h2.addWidget(BodyLabel("Output:"))
         h2.addWidget(self.align_out)
         h2.addWidget(btn_out)
-        l_paths.addLayout(h1)
-        l_paths.addLayout(h2)
-        grp.addSettingCard(card_paths)
+        l_opts.addLayout(h1)
+        l_opts.addLayout(h2)
 
-        # Params
-        card_param = CardWidget()
-        card_param.setFixedHeight(80)
-        l_param = QHBoxLayout(card_param)
-        l_param.setContentsMargins(15, 10, 15, 10)
         self.align_thread = LineEdit()
         self.align_thread.setText("-1")
+        self.align_thread.setFixedWidth(80)
         self.align_algo = ComboBox()
         self.align_algo.addItems(
             [
@@ -589,22 +576,28 @@ class ConstructionInterface(QWidget):
                 "add(use long sequences as backbone to align fragment sequences)",
             ]
         )
-        self.align_reorder = ComboBox()
-        self.align_reorder.addItems(["True", "False"])
+        self.chk_reorder = CheckBox("Reorder", card_opts)
+        self.chk_reorder.setChecked(True)
 
-        l_param.addWidget(BodyLabel("Threads:"))
-        l_param.addWidget(self.align_thread)
-        l_param.addWidget(BodyLabel("Strategy:"))
-        l_param.addWidget(self.align_algo)
-        l_param.addWidget(BodyLabel("Reorder:"))
-        l_param.addWidget(self.align_reorder)
-        grp.addSettingCard(card_param)
+        row_param = QHBoxLayout()
+        row_param.addWidget(BodyLabel("Threads:"))
+        row_param.addWidget(self.align_thread)
+        row_param.addSpacing(10)
+        row_param.addWidget(BodyLabel("Strategy:"))
+        row_param.addWidget(self.align_algo, 1)
+        row_param.addSpacing(10)
+        row_param.addWidget(self.chk_reorder)
+        row_param.addStretch()
+        l_opts.addLayout(row_param)
+
+        grp.addSettingCard(card_opts)
 
         self.btn_run_align = PrimaryPushButton("Run Alignment")
         self.btn_run_align.setIcon(FIF.PLAY)
 
         layout.addWidget(grp)
         layout.addWidget(self.btn_run_align)
+        layout.addStretch(1)
         return w
 
     def create_trimming_page(self):
@@ -614,18 +607,24 @@ class ConstructionInterface(QWidget):
 
         grp = SettingCardGroup("Alignment Trimming (trimAl)", w)
 
-        # Input/Output
-        card_io = CardWidget()
-        card_io.setFixedHeight(180)
-        l_io = QVBoxLayout(card_io)
-        l_io.setContentsMargins(15, 10, 15, 10)
+        card_opts = CardWidget()
+        card_opts.setFixedHeight(340)
+        l_opts = QVBoxLayout(card_opts)
+        l_opts.setContentsMargins(15, 20, 15, 20)
         self.rb_trim_single = RadioButton("Input one file")
         self.rb_trim_multi = RadioButton("Input multiple files")
+        self.chk_chloroplast = CheckBox("Chloroplast Mode")
+        self.chk_chloroplast.setChecked(False)
+        self.chk_chloroplast.stateChanged.connect(self.on_chloroplast_mode_changed)
         self.rb_trim_single.setChecked(True)
         row_rb = QHBoxLayout()
         row_rb.addWidget(self.rb_trim_single)
+        row_rb.addStretch(1)
         row_rb.addWidget(self.rb_trim_multi)
-        l_io.addLayout(row_rb)
+        row_rb.addStretch(1)
+        row_rb.addWidget(self.chk_chloroplast)
+        l_opts.addLayout(row_rb)
+        l_opts.addSpacing(10)  
 
         self.trim_in = LineEdit()
         self.trim_in.setPlaceholderText(
@@ -654,16 +653,13 @@ class ConstructionInterface(QWidget):
         h2.addWidget(BodyLabel("Output:"))
         h2.addWidget(self.trim_out)
         h2.addWidget(btn_out)
-        l_io.addLayout(h1)
-        l_io.addLayout(h2)
-        grp.addSettingCard(card_io)
+        l_opts.addLayout(h1)
+        l_opts.addSpacing(10)
+        l_opts.addLayout(h2)
+        l_opts.addSpacing(10)
 
-        # Methods
-        card_met = CardWidget()
-        card_met.setFixedHeight(220)
-        l_met = QVBoxLayout(card_met)
-        l_met.setContentsMargins(15, 10, 15, 10)
         self.combo_trim_method = ComboBox()
+
         self.combo_trim_method.addItems(
             [
                 "automated1 (heuristic selection based on similarity statistics)",
@@ -673,8 +669,12 @@ class ConstructionInterface(QWidget):
                 "user defined method (set thresholds of non gap, similarity, consistency...)",
             ]
         )
-        l_met.addWidget(BodyLabel("Trimming Method:"))
-        l_met.addWidget(self.combo_trim_method)
+        row_method = QHBoxLayout()
+        row_method.addWidget(BodyLabel("Trimming Method:"))
+        row_method.addWidget(self.combo_trim_method, 1)
+        row_method.addStretch()
+        l_opts.addLayout(row_method)
+        l_opts.addSpacing(10)
 
         grid = QHBoxLayout()
         self.trim_gt = LineEdit()
@@ -704,14 +704,15 @@ class ConstructionInterface(QWidget):
 
         grid.addLayout(c1)
         grid.addLayout(c2)
-        l_met.addLayout(grid)
-        grp.addSettingCard(card_met)
+        l_opts.addLayout(grid)
+        grp.addSettingCard(card_opts)
 
         self.btn_run_trim = PrimaryPushButton("Run Trimming")
         self.btn_run_trim.setIcon(FIF.PLAY)
 
         layout.addWidget(grp)
         layout.addWidget(self.btn_run_trim)
+        layout.addStretch(1)
         return w
 
     def create_concat_page(self):
@@ -760,15 +761,19 @@ class ConstructionInterface(QWidget):
 
         layout.addWidget(grp)
         layout.addWidget(self.btn_run_concat)
+        layout.addStretch(1)
         return w
+
+    def on_chloroplast_mode_changed(self, state):
+        is_chloroplast = state == 2
+        self.rb_trim_single.setEnabled(not is_chloroplast)
+        if is_chloroplast:
+            self.rb_trim_multi.setChecked(True)
 
     def browse_dir(self, line_edit):
         path = QFileDialog.getExistingDirectory(self, "Select Directory")
         if path:
             line_edit.setText(path)
-
-    def on_date_changed(self, date, date_type):
-        pass
 
     def browse_file_or_dir(self, line_edit, is_single):
         if is_single:
@@ -780,8 +785,6 @@ class ConstructionInterface(QWidget):
 
 
 class ChloroplastMinerInterface(QWidget):
-    """Chloroplast Miner Page"""
-
     def __init__(self, main_window):
         super().__init__()
         self.main_window = main_window
@@ -791,23 +794,20 @@ class ChloroplastMinerInterface(QWidget):
         self.pivot = SegmentedWidget(self)
         self.stackedWidget = QStackedWidget(self)
 
-        # -- Pages --
         self.page_search = self.create_search_page()
         self.page_extract = self.create_extract_page()
         self.page_cds = self.create_cds_page()
-        self.page_align = self.create_chloroplast_align_page()
 
-        # Add items to SegmentedWidget
         self.addSubInterface(self.page_search, "search", "Search && Download")
-        self.addSubInterface(self.page_extract, "extract", "Extract Info && Quality Control")
-        self.addSubInterface(self.page_cds, "cds", "Get && Filter CDS")
-        self.addSubInterface(self.page_align, "chloroplast_align", "Align && Trim")
+        self.addSubInterface(
+            self.page_extract, "extract", "Extract Info && Quality Control"
+        )
+        self.addSubInterface(self.page_cds, "cds", "Get && Process CDS")
 
         self.vBoxLayout.addWidget(self.pivot)
         self.vBoxLayout.addWidget(self.stackedWidget)
         self.vBoxLayout.setContentsMargins(30, 25, 30, 15)
 
-        # Init state
         self.stackedWidget.setCurrentWidget(self.page_search)
         self.pivot.setCurrentItem("search")
         self.pivot.currentItemChanged.connect(self.on_chloroplast_page_changed)
@@ -818,7 +818,7 @@ class ChloroplastMinerInterface(QWidget):
             self.update_qc_input_default()
 
     def update_qc_input_default(self):
-        if hasattr(self, 'chloro_qc_in') and hasattr(self, 'chloro_download_dir_edit'):
+        if hasattr(self, "chloro_qc_in") and hasattr(self, "chloro_download_dir_edit"):
             download_dir = self.chloro_download_dir_edit.text().strip()
             if download_dir and not self.chloro_qc_in.text().strip():
                 self.chloro_qc_in.setText(download_dir)
@@ -833,7 +833,7 @@ class ChloroplastMinerInterface(QWidget):
         layout = QVBoxLayout(w)
         layout.setContentsMargins(5, 20, 5, 20)
 
-        grp = SettingCardGroup("Search & Download", w)
+        grp_search = SettingCardGroup("Search", w)
 
         card = CardWidget()
         card.setFixedHeight(230)
@@ -877,7 +877,10 @@ class ChloroplastMinerInterface(QWidget):
         self.btn_chloro_search.clicked.connect(self.on_chloro_search)
         card_layout.addWidget(self.btn_chloro_search)
 
-        grp.addSettingCard(card)
+        grp_search.addSettingCard(card)
+        layout.addWidget(grp_search)
+
+        grp_download = SettingCardGroup("Download", w)
 
         card_download = CardWidget()
         card_download.setFixedHeight(220)
@@ -899,7 +902,9 @@ class ChloroplastMinerInterface(QWidget):
         self.chloro_download_dir_edit.setPlaceholderText("Download Directory Path")
         btn_chloro_download_dir = PushButton("Browse")
         btn_chloro_download_dir.setIcon(FIF.FOLDER)
-        btn_chloro_download_dir.clicked.connect(lambda: self.browse_folder(self.chloro_download_dir_edit))
+        btn_chloro_download_dir.clicked.connect(
+            lambda: self.browse_folder(self.chloro_download_dir_edit)
+        )
 
         h_box2 = QHBoxLayout()
         h_box2.addWidget(BodyLabel("Download Directory:"))
@@ -913,7 +918,6 @@ class ChloroplastMinerInterface(QWidget):
         h_box3.addWidget(BodyLabel("Email:"))
         h_box3.addWidget(self.chloro_email_edit)
 
-        download_layout.addWidget(BodyLabel("Download Prepare:"))
         download_layout.addSpacing(10)
         download_layout.addLayout(h_box)
         download_layout.addSpacing(10)
@@ -927,9 +931,9 @@ class ChloroplastMinerInterface(QWidget):
         self.btn_chloro_download.clicked.connect(self.on_chloro_download)
         download_layout.addWidget(self.btn_chloro_download)
 
-        grp.addSettingCard(card_download)
-
-        layout.addWidget(grp)
+        grp_download.addSettingCard(card_download)
+        layout.addWidget(grp_download)
+        layout.addStretch(1)
         return w
 
     def create_extract_page(self):
@@ -940,7 +944,7 @@ class ChloroplastMinerInterface(QWidget):
         grp = SettingCardGroup("Extract Info & Quality Control", w)
 
         card = CardWidget()
-        card.setFixedHeight(280)
+        card.setFixedHeight(220)
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(15, 10, 15, 10)
 
@@ -957,10 +961,15 @@ class ChloroplastMinerInterface(QWidget):
 
         h_output = QHBoxLayout()
         self.chloro_qc_out = LineEdit()
-        self.chloro_qc_out.setPlaceholderText("Output directory for problematic genome FASTA files")
+        self.chloro_qc_out.setPlaceholderText(
+            "Output directory for problematic genome FASTA files"
+        )
+        self.chloro_qc_out.textChanged.connect(self.on_chloro_qc_out_changed)
         btn_chloro_qc_out = PushButton("Browse")
         btn_chloro_qc_out.setIcon(FIF.FOLDER)
-        btn_chloro_qc_out.clicked.connect(lambda: self.browse_folder(self.chloro_qc_out))
+        btn_chloro_qc_out.clicked.connect(
+            lambda: self.browse_folder(self.chloro_qc_out)
+        )
         h_output.addWidget(BodyLabel("Output Directory:"))
         h_output.addWidget(self.chloro_qc_out)
         h_output.addWidget(btn_chloro_qc_out)
@@ -987,113 +996,235 @@ class ChloroplastMinerInterface(QWidget):
         grp.addSettingCard(card)
 
         layout.addWidget(grp)
+
+        grp_pga = SettingCardGroup("Plastid Genome Annotator", w)
+
+        card_pga = CardWidget()
+        card_pga.setFixedHeight(180)
+        card_pga_layout = QVBoxLayout(card_pga)
+        card_pga_layout.setContentsMargins(15, 10, 15, 10)
+
+        h_pga_input = QHBoxLayout()
+        self.chloro_pga_in = LineEdit()
+        self.chloro_pga_in.setPlaceholderText(
+            "Input directory containing problematic genome FASTA files"
+        )
+        btn_chloro_pga_in = PushButton("Browse")
+        btn_chloro_pga_in.setIcon(FIF.FOLDER)
+        btn_chloro_pga_in.clicked.connect(
+            lambda: self.browse_folder(self.chloro_pga_in)
+        )
+        h_pga_input.addWidget(BodyLabel("Input Directory:"))
+        h_pga_input.addWidget(self.chloro_pga_in)
+        h_pga_input.addWidget(btn_chloro_pga_in)
+        card_pga_layout.addLayout(h_pga_input)
+
+        h_pga_ref = QHBoxLayout()
+        self.chloro_pga_clade = ComboBox()
+        self.chloro_pga_clade.addItems(["Angiosperms", "Gymnosperms", "User defined"])
+        self.chloro_pga_clade.currentTextChanged.connect(
+            self.on_chloro_pga_clade_changed
+        )
+        self.chloro_pga_ref = LineEdit()
+        self.chloro_pga_ref.setPlaceholderText("Reference genome directory")
+        self.chloro_pga_ref.setEnabled(False)
+        self.btn_chloro_pga_ref = PushButton("Browse")
+        self.btn_chloro_pga_ref.setIcon(FIF.FOLDER)
+        self.btn_chloro_pga_ref.setEnabled(False)
+        self.btn_chloro_pga_ref.clicked.connect(
+            lambda: self.browse_folder(self.chloro_pga_ref)
+        )
+        h_pga_ref.addWidget(BodyLabel("Clades:"))
+        h_pga_ref.addWidget(self.chloro_pga_clade)
+        h_pga_ref.addWidget(BodyLabel("Reference Genome:"))
+        h_pga_ref.addWidget(self.chloro_pga_ref)
+        h_pga_ref.addWidget(self.btn_chloro_pga_ref)
+        card_pga_layout.addLayout(h_pga_ref)
+
+        self.btn_chloro_pga = PushButton("Reannotate")
+        self.btn_chloro_pga.setIcon(FIF.PLAY)
+        self.btn_chloro_pga.clicked.connect(self.on_chloro_pga)
+        card_pga_layout.addWidget(self.btn_chloro_pga)
+
+        grp_pga.addSettingCard(card_pga)
+
+        layout.addWidget(grp_pga)
         layout.addStretch(1)
         return w
 
     def create_cds_page(self):
-        w = QWidget()
-        layout = QVBoxLayout(w)
-        layout.setContentsMargins(5, 20, 5, 20)
+        w = SingleDirectionScrollArea()
+        w.setWidgetResizable(True)
+        self.cds_view = QWidget()
+        self.cds_view.setObjectName("cds_view")
+        layout = QVBoxLayout(self.cds_view)
+        layout.setContentsMargins(5, 20, 20, 20)
+        layout.setSpacing(20)
 
-        grp = SettingCardGroup("Get CDS", w)
+        grp_get = SettingCardGroup("Get CDS", self.cds_view)
 
-        card = CardWidget()
-        card.setFixedHeight(120)
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(15, 10, 15, 10)
+        card_get = CardWidget()
+        card_get.setFixedHeight(160)
+        card_get_layout = QVBoxLayout(card_get)
+        card_get_layout.setContentsMargins(15, 10, 15, 10)
 
-        self.chloro_cds_in = LineEdit()
-        self.chloro_cds_in.setPlaceholderText("Input directory containing filtered GenBank files")
-        btn_chloro_cds_in = PushButton("Browse")
-        btn_chloro_cds_in.setIcon(FIF.FOLDER)
-        btn_chloro_cds_in.clicked.connect(lambda: self.browse_dir(self.chloro_cds_in))
+        h_get_input = QHBoxLayout()
+        self.cds_get_in = LineEdit()
+        self.cds_get_in.setPlaceholderText("Input directory containing filtered GenBank files")
+        btn_cds_get_in = PushButton("Browse")
+        btn_cds_get_in.setIcon(FIF.FOLDER)
+        btn_cds_get_in.clicked.connect(lambda: self.browse_folder(self.cds_get_in))
+        h_get_input.addWidget(BodyLabel("Input Directory:"))
+        h_get_input.addWidget(self.cds_get_in)
+        h_get_input.addWidget(btn_cds_get_in)
+        card_get_layout.addLayout(h_get_input)
 
-        card_layout.addWidget(BodyLabel("Input Directory:"))
-        card_layout.addWidget(self.chloro_cds_in)
-        card_layout.addWidget(btn_chloro_cds_in)
+        h_get_output = QHBoxLayout()
+        self.cds_get_out = LineEdit()
+        self.cds_get_out.setPlaceholderText("Output directory for CDS files")
+        self.cds_get_out.textChanged.connect(self.on_cds_get_out_changed)
+        btn_cds_get_out = PushButton("Browse")
+        btn_cds_get_out.setIcon(FIF.FOLDER)
+        btn_cds_get_out.clicked.connect(lambda: self.browse_folder(self.cds_get_out, self.cds_filter_in))
+        h_get_output.addWidget(BodyLabel("Output Directory:"))
+        h_get_output.addWidget(self.cds_get_out)
+        h_get_output.addWidget(btn_cds_get_out)
+        card_get_layout.addLayout(h_get_output)
 
-        grp.addSettingCard(card)
+        self.btn_cds_get = PushButton("Extract CDS")
+        self.btn_cds_get.setIcon(FIF.CODE)
+        self.btn_cds_get.clicked.connect(self.on_cds_get_extract)
+        card_get_layout.addWidget(self.btn_cds_get)
 
-        card_output = CardWidget()
-        card_output.setFixedHeight(120)
-        output_layout = QVBoxLayout(card_output)
-        output_layout.setContentsMargins(15, 10, 15, 10)
+        grp_get.addSettingCard(card_get)
+        layout.addWidget(grp_get)
 
-        self.chloro_cds_out = LineEdit()
-        self.chloro_cds_out.setPlaceholderText("Output directory for CDS files")
-        btn_chloro_cds_out = PushButton("Browse")
-        btn_chloro_cds_out.setIcon(FIF.FOLDER)
-        btn_chloro_cds_out.clicked.connect(lambda: self.browse_dir(self.chloro_cds_out))
+        grp_filter = SettingCardGroup("Filter CDS", self.cds_view)
 
-        output_layout.addWidget(BodyLabel("Output Directory:"))
-        output_layout.addWidget(self.chloro_cds_out)
-        output_layout.addWidget(btn_chloro_cds_out)
+        card_filter = CardWidget()
+        card_filter.setFixedHeight(210)
+        card_filter_layout = QVBoxLayout(card_filter)
+        card_filter_layout.setContentsMargins(15, 10, 15, 10)
 
-        grp.addSettingCard(card_output)
+        h_filter_input = QHBoxLayout()
+        self.cds_filter_in = LineEdit()
+        self.cds_filter_in.setPlaceholderText("Input directory containing CDS files")
+        btn_cds_filter_in = PushButton("Browse")
+        btn_cds_filter_in.setIcon(FIF.FOLDER)
+        btn_cds_filter_in.clicked.connect(lambda: self.browse_folder(self.cds_filter_in))
+        h_filter_input.addWidget(BodyLabel("Input Directory:"))
+        h_filter_input.addWidget(self.cds_filter_in)
+        h_filter_input.addWidget(btn_cds_filter_in)
+        card_filter_layout.addLayout(h_filter_input)
 
-        self.btn_chloro_cds = PrimaryPushButton("Extract CDS")
-        self.btn_chloro_cds.setIcon(FIF.CODE)
+        h_filter_output = QHBoxLayout()
+        self.cds_filter_out = LineEdit()
+        self.cds_filter_out.setPlaceholderText("Output directory for filtered CDS files")
+        self.cds_filter_out.textChanged.connect(self.on_cds_filter_out_changed)
+        btn_cds_filter_out = PushButton("Browse")
+        btn_cds_filter_out.setIcon(FIF.FOLDER)
+        btn_cds_filter_out.clicked.connect(lambda: self.browse_folder(self.cds_filter_out, self.cds_select_in))
+        h_filter_output.addWidget(BodyLabel("Output Directory:"))
+        h_filter_output.addWidget(self.cds_filter_out)
+        h_filter_output.addWidget(btn_cds_filter_out)
+        card_filter_layout.addLayout(h_filter_output)
 
-        layout.addWidget(grp)
-        layout.addWidget(self.btn_chloro_cds)
-        return w
+        h_filter_params = QHBoxLayout()
+        self.cds_filter_ref = ComboBox()
+        self.cds_filter_ref.addItems(["Angiosperms", "Gymnosperms"])
+        self.cds_filter_ref.setFixedWidth(220)
+        self.cds_filter_ref.setCurrentIndex(0)
+        self.cds_filter_lb = LineEdit()
+        self.cds_filter_lb.setText("0.5")
+        self.cds_filter_lb.setFixedWidth(220)
+        self.cds_filter_ub = LineEdit()
+        self.cds_filter_ub.setText("2.0")
+        self.cds_filter_ub.setFixedWidth(220)
+        h_filter_params.addWidget(BodyLabel("Reference:"))
+        h_filter_params.addWidget(self.cds_filter_ref)
+        h_filter_params.addStretch(1)
+        h_filter_params.addWidget(BodyLabel("Lower Bound:"))
+        h_filter_params.addWidget(self.cds_filter_lb)
+        h_filter_params.addStretch(1)
+        h_filter_params.addWidget(BodyLabel("Upper Bound:"))
+        h_filter_params.addWidget(self.cds_filter_ub)
+        card_filter_layout.addLayout(h_filter_params)
 
-    def create_chloroplast_align_page(self):
-        w = QWidget()
-        layout = QVBoxLayout(w)
-        layout.setContentsMargins(5, 20, 5, 20)
+        self.btn_cds_filter = PushButton("Filter CDS")
+        self.btn_cds_filter.setIcon(FIF.FILTER)
+        self.btn_cds_filter.clicked.connect(self.on_cds_filter_extract)
+        card_filter_layout.addWidget(self.btn_cds_filter)
 
-        grp = SettingCardGroup("Align & Trim", w)
+        grp_filter.addSettingCard(card_filter)
+        layout.addWidget(grp_filter)
 
-        card = CardWidget()
-        card.setFixedHeight(240)
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(15, 10, 15, 10)
+        grp_select = SettingCardGroup("Select CDS", self.cds_view)
 
-        self.chloro_align_in = LineEdit()
-        self.chloro_align_in.setPlaceholderText("Input directory containing CDS files")
-        btn_chloro_align_in = PushButton("Browse")
-        btn_chloro_align_in.setIcon(FIF.FOLDER)
-        btn_chloro_align_in.clicked.connect(lambda: self.browse_dir(self.chloro_align_in))
+        card_select = CardWidget()
+        card_select.setFixedHeight(200)
+        card_select_layout = QVBoxLayout(card_select)
+        card_select_layout.setContentsMargins(15, 10, 15, 10)
 
-        self.chloro_align_out = LineEdit()
-        self.chloro_align_out.setPlaceholderText("Output directory for aligned files")
-        btn_chloro_align_out = PushButton("Browse")
-        btn_chloro_align_out.setIcon(FIF.FOLDER)
-        btn_chloro_align_out.clicked.connect(lambda: self.browse_dir(self.chloro_align_out))
+        h_select_input = QHBoxLayout()
+        self.cds_select_in = LineEdit()
+        self.cds_select_in.setPlaceholderText("Input directory containing filtered CDS files")
+        btn_cds_select_in = PushButton("Browse")
+        btn_cds_select_in.setIcon(FIF.FOLDER)
+        btn_cds_select_in.clicked.connect(lambda: self.browse_folder(self.cds_select_in))
+        h_select_input.addWidget(BodyLabel("Input Directory:"))
+        h_select_input.addWidget(self.cds_select_in)
+        h_select_input.addWidget(btn_cds_select_in)
+        card_select_layout.addLayout(h_select_input)
 
-        card_layout.addWidget(BodyLabel("Input Directory:"))
-        card_layout.addWidget(self.chloro_align_in)
-        card_layout.addWidget(btn_chloro_align_in)
-        card_layout.addWidget(BodyLabel("Output Directory:"))
-        card_layout.addWidget(self.chloro_align_out)
-        card_layout.addWidget(btn_chloro_align_out)
+        h_select_output = QHBoxLayout()
+        self.cds_select_out = LineEdit()
+        self.cds_select_out.setPlaceholderText("Output directory for selected CDS files")
+        self.cds_select_out.textChanged.connect(self.on_cds_select_out_changed)
+        btn_cds_select_out = PushButton("Browse")
+        btn_cds_select_out.setIcon(FIF.FOLDER)
+        btn_cds_select_out.clicked.connect(lambda: self.browse_folder(self.cds_select_out))
+        h_select_output.addWidget(BodyLabel("Output Directory:"))
+        h_select_output.addWidget(self.cds_select_out)
+        h_select_output.addWidget(btn_cds_select_out)
+        card_select_layout.addLayout(h_select_output)
 
-        grp.addSettingCard(card)
+        h_select_tax = QHBoxLayout()
+        h_select_tax.addWidget(BodyLabel("Taxonomic Name Resolution:"))
+        self.cds_select_tax_switch = SwitchButton()
+        self.cds_select_tax_switch.setChecked(False)
+        h_select_tax.addWidget(self.cds_select_tax_switch)
+        h_select_tax.addSpacing(10)
+        h_select_tax.addWidget(BodyLabel("Resolution Source:"))
+        self.cds_select_tax_file = LineEdit()
+        self.cds_select_tax_file.setPlaceholderText("Select file (.csv)")
+        self.cds_select_tax_file.setEnabled(False)
 
-        card_trim = CardWidget()
-        card_trim.setFixedHeight(80)
-        trim_layout = QHBoxLayout(card_trim)
-        trim_layout.setContentsMargins(15, 10, 15, 10)
+        btn_cds_select_tax_file = PushButton("Browse")
+        btn_cds_select_tax_file.setIcon(FIF.FOLDER)
+        btn_cds_select_tax_file.setEnabled(False)
+        btn_cds_select_tax_file.clicked.connect(lambda: self.browse_file(self.cds_select_tax_file))
+        h_select_tax.addWidget(self.cds_select_tax_file)
+        h_select_tax.addWidget(btn_cds_select_tax_file)
+        card_select_layout.addLayout(h_select_tax)
 
-        self.chloro_trim_method = ComboBox()
-        self.chloro_trim_method.addItems([
-            "automated1",
-            "gappyout",
-            "strict",
-            "strictplus"
-        ])
+        self.cds_select_tax_switch.checkedChanged.connect(lambda checked: self.cds_select_tax_file.setEnabled(checked))
+        self.cds_select_tax_switch.checkedChanged.connect(lambda checked: btn_cds_select_tax_file.setEnabled(checked))
 
-        trim_layout.addWidget(BodyLabel("Trimming Method:"))
-        trim_layout.addWidget(self.chloro_trim_method)
+        self.btn_cds_select = PushButton("Select CDS")
+        self.btn_cds_select.setIcon(FIF.TAG)
+        self.btn_cds_select.clicked.connect(self.on_cds_select_extract)
+        card_select_layout.addWidget(self.btn_cds_select)
 
-        grp.addSettingCard(card_trim)
+        grp_select.addSettingCard(card_select)
+        layout.addWidget(grp_select)
 
-        self.btn_chloro_align = PrimaryPushButton("Align & Trim")
-        self.btn_chloro_align.setIcon(FIF.PLAY)
+        layout.addStretch(1)
 
-        layout.addWidget(grp)
-        layout.addWidget(self.btn_chloro_align)
+        w.setWidget(self.cds_view)
+        w.setObjectName("cds_page")
+        w.setStyleSheet("QScrollArea {border: none; background:transparent}")
+        self.cds_view.setStyleSheet("QWidget {background:transparent}")
+
         return w
 
     def browse_file(self, line_edit):
@@ -1101,14 +1232,23 @@ class ChloroplastMinerInterface(QWidget):
         if path:
             line_edit.setText(path)
 
-    def browse_folder(self, line_edit):
+    def browse_folder(self, line_edit, follow_target=None):
         path = QFileDialog.getExistingDirectory(self, "Select Directory")
         if path:
             line_edit.setText(path)
+            if follow_target:
+                follow_target.setText(path)
 
     def on_chloro_download(self):
-        if not self.chloro_wd_edit.text().strip() or not self.chloro_download_dir_edit.text().strip() or not self.chloro_email_edit.text().strip():
-            self.main_window.backend.emit_log("Please select index file, download directory and enter email", "WARNING")
+        if (
+            not self.chloro_wd_edit.text().strip()
+            or not self.chloro_download_dir_edit.text().strip()
+            or not self.chloro_email_edit.text().strip()
+        ):
+            self.main_window.backend.emit_log(
+                "Please select index file, download directory and enter email",
+                "WARNING",
+            )
             return
 
         email = self.chloro_email_edit.text().strip()
@@ -1136,7 +1276,9 @@ class ChloroplastMinerInterface(QWidget):
     def on_chloro_search(self):
         text = self.chloro_tax_edit.toPlainText().strip()
         if not text:
-            self.main_window.backend.emit_log("Please enter at least one taxon name", "WARNING")
+            self.main_window.backend.emit_log(
+                "Please enter at least one taxon name", "WARNING"
+            )
             return
 
         date_from_obj = self.chloro_date_from.date
@@ -1147,16 +1289,24 @@ class ChloroplastMinerInterface(QWidget):
 
         if has_from and not has_to:
             self.chloro_date_to.setDate(QDate.currentDate())
-            self.main_window.backend.emit_log("Date To not set, automatically set to today", "INFO")
+            date_to_obj = self.chloro_date_to.date
+            has_to = date_to_obj.isValid()
+            self.main_window.backend.emit_log(
+                "Date To not set, automatically set to today", "INFO"
+            )
         elif not has_from and has_to:
-            self.main_window.backend.emit_log("Please select both Date From and Date To, or leave both empty", "WARNING")
+            self.main_window.backend.emit_log(
+                "Please select both Date From and Date To, or leave both empty",
+                "WARNING",
+            )
             return
 
         from urllib.parse import quote
-        from PySide6.QtGui import QDesktopServices
-        from PySide6.QtCore import QUrl
 
-        taxa = [line.strip() for line in text.split('\n') if line.strip()]
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+
+        taxa = [line.strip() for line in text.split("\n") if line.strip()]
 
         if len(taxa) == 1:
             taxa_query = f'"{taxa[0]}"[Organism]'
@@ -1164,7 +1314,7 @@ class ChloroplastMinerInterface(QWidget):
             taxa_queries = " OR ".join([f'"{t}"[Organism]' for t in taxa])
             taxa_query = f"({taxa_queries})"
 
-        query = f'{taxa_query} AND (plastid[All Fields] OR chloroplast[All Fields]) AND (100000[Sequence Length] : 300000[Sequence Length]) NOT mitochondrion[Title] NOT mitochondrial[Title] NOT chromosome[Title]'
+        query = f"{taxa_query} AND (plastid[All Fields] OR chloroplast[All Fields]) AND (100000[Sequence Length] : 300000[Sequence Length]) NOT mitochondrion[Title] NOT mitochondrial[Title] NOT chromosome[Title]"
 
         d_from = ""
         d_to = ""
@@ -1179,7 +1329,7 @@ class ChloroplastMinerInterface(QWidget):
         elif d_from:
             query = f'{query} AND "{d_from}"[PDAT]'
 
-        encoded_query = quote(query, safe='()')
+        encoded_query = quote(query, safe="()")
         url = f"https://www.ncbi.nlm.nih.gov/nuccore/?term={encoded_query}"
 
         QDesktopServices.openUrl(QUrl(url))
@@ -1189,14 +1339,18 @@ class ChloroplastMinerInterface(QWidget):
         out_folder = self.chloro_qc_out.text().strip()
 
         if not in_folder or not out_folder:
-            self.main_window.backend.emit_log("Please select both input and output directories", "WARNING")
+            self.main_window.backend.emit_log(
+                "Please select both input and output directories", "WARNING"
+            )
             return
 
         cds_threshold = 80
         try:
             cds_threshold = int(self.chloro_cds_thresh.text().strip())
             if cds_threshold < 0:
-                self.main_window.backend.emit_log("CDS threshold must be a positive integer", "WARNING")
+                self.main_window.backend.emit_log(
+                    "CDS threshold must be a positive integer", "WARNING"
+                )
                 return
         except ValueError:
             self.main_window.backend.emit_log("Invalid CDS threshold value", "WARNING")
@@ -1206,129 +1360,242 @@ class ChloroplastMinerInterface(QWidget):
         try:
             ambig_threshold = float(self.chloro_ambig_thresh.text().strip())
             if ambig_threshold < 0 or ambig_threshold > 1:
-                self.main_window.backend.emit_log("Ambiguity threshold must be between 0 and 1", "WARNING")
+                self.main_window.backend.emit_log(
+                    "Ambiguity threshold must be between 0 and 1", "WARNING"
+                )
                 return
         except ValueError:
-            self.main_window.backend.emit_log("Invalid ambiguity threshold value", "WARNING")
+            self.main_window.backend.emit_log(
+                "Invalid ambiguity threshold value", "WARNING"
+            )
             return
 
         self.main_window.backend.emit_log("Quality control started...", "INFO")
-        self.main_window.backend.quality_control(in_folder, out_folder, cds_threshold, ambig_threshold)
+        self.main_window.backend.quality_control(
+            in_folder, out_folder, cds_threshold, ambig_threshold
+        )
+
+    def on_cds_get_extract(self):
+        in_folder = self.cds_get_in.text().strip()
+        out_folder = self.cds_get_out.text().strip()
+
+        if not in_folder or not out_folder:
+            self.main_window.backend.emit_log(
+                "Please select both input and output directories", "WARNING"
+            )
+            return
+
+        self.main_window.backend.emit_log("CDS extraction started...", "INFO")
+        self.main_window.backend.run_get_cds(in_folder, out_folder)
+
+    def on_cds_filter_extract(self):
+        in_folder = self.cds_filter_in.text().strip()
+        out_folder = self.cds_filter_out.text().strip()
+
+        if not in_folder or not out_folder:
+            self.main_window.backend.emit_log(
+                "Please select both input and output directories", "WARNING"
+            )
+            return
+
+        ref_text = self.cds_filter_ref.currentText()
+        ref_type = "Ang" if ref_text == "Angiosperms" else "Gym"
+
+        try:
+            lower_bound = float(self.cds_filter_lb.text().strip())
+            if lower_bound <= 0:
+                self.main_window.backend.emit_log(
+                    "Lower bound must be a positive number", "WARNING"
+                )
+                return
+        except ValueError:
+            self.main_window.backend.emit_log(
+                "Invalid lower bound value", "WARNING"
+            )
+            return
+
+        try:
+            upper_bound = float(self.cds_filter_ub.text().strip())
+            if upper_bound <= 0:
+                self.main_window.backend.emit_log(
+                    "Upper bound must be a positive number", "WARNING"
+                )
+                return
+        except ValueError:
+            self.main_window.backend.emit_log(
+                "Invalid upper bound value", "WARNING"
+            )
+            return
+
+        if lower_bound >= upper_bound:
+            self.main_window.backend.emit_log(
+                "Lower bound must be less than upper bound", "WARNING"
+            )
+            return
+
+        self.main_window.backend.emit_log("CDS filtering started...", "INFO")
+        self.main_window.backend.run_filter_cds(
+            in_folder, out_folder, ref_type, lower_bound, upper_bound
+        )
+
+    def on_cds_select_extract(self):
+        in_folder = self.cds_select_in.text().strip()
+        out_folder = self.cds_select_out.text().strip()
+
+        if not in_folder or not out_folder:
+            self.main_window.backend.emit_log(
+                "Please select both input and output directories", "WARNING"
+            )
+            return
+
+        enable_tax_res = self.cds_select_tax_switch.isChecked()
+        tax_file = self.cds_select_tax_file.text().strip() if enable_tax_res else None
+
+        if enable_tax_res and not tax_file:
+            self.main_window.backend.emit_log(
+                "Please select a taxonomic name resolution file", "WARNING"
+            )
+            return
+
+        self.main_window.backend.emit_log("CDS selection started...", "INFO")
+        self.main_window.backend.run_select_cds(
+            in_folder, out_folder, enable_tax_res, tax_file
+        )
+
+    def on_cds_get_out_changed(self, text):
+        if text:
+            self.cds_filter_in.setText(text)
+
+    def on_cds_filter_out_changed(self, text):
+        if text:
+            self.cds_select_in.setText(text)
+
+    def on_cds_select_out_changed(self, text):
+        pass
+
+    def on_chloro_qc_out_changed(self, text):
+        if text:
+            self.chloro_pga_in.setText(text)
+
+    def on_chloro_pga_clade_changed(self, text):
+        if text == "User defined":
+            self.chloro_pga_ref.setEnabled(True)
+            self.btn_chloro_pga_ref.setEnabled(True)
+        else:
+            self.chloro_pga_ref.setEnabled(False)
+            self.btn_chloro_pga_ref.setEnabled(False)
+            self.chloro_pga_ref.clear()
+
+    def on_chloro_pga(self):
+        in_folder = self.chloro_pga_in.text().strip()
+        ori_gb_folder = self.chloro_qc_in.text().strip()
+        clade = self.chloro_pga_clade.currentText()
+        ref_folder = self.chloro_pga_ref.text().strip()
+
+        if not in_folder:
+            self.main_window.backend.emit_log(
+                "Please select input directory", "WARNING"
+            )
+            return
+
+        if clade == "User defined" and not ref_folder:
+            self.main_window.backend.emit_log(
+                "Please select reference genome directory", "WARNING"
+            )
+            return
+
+        self.main_window.backend.emit_log(
+            "Plastid Genome Annotation started...", "INFO"
+        )
+        self.main_window.backend.run_pga(in_folder, ori_gb_folder, clade, ref_folder)
 
 
 class DependenciesInterface(QWidget):
-    """Dependencies Page"""
-
     def __init__(self, main_window):
         super().__init__()
         self.main_window = main_window
         self.setObjectName("dependencies_interface")
-        self.vBoxLayout = QVBoxLayout(self)
-        self.vBoxLayout.setContentsMargins(30, 30, 30, 30)
-        self.vBoxLayout.setSpacing(20)
 
-        # Dependencies Group
-        grp = SettingCardGroup("Dependencies", self)
+        w = QWidget()
+        layout = QVBoxLayout(w)
+        layout.setContentsMargins(30, 30, 30, 30)
 
-        # Install MAFFT
-        card_mafft = CardWidget()
-        card_mafft.setFixedHeight(80)
-        h1 = QHBoxLayout(card_mafft)
-        h1.setContentsMargins(15, 10, 15, 10)
-        h1.addWidget(BodyLabel("Install MAFFT dependency"))
-        btn_mafft = PushButton("Install", card_mafft)
+        grp = SettingCardGroup("Dependencies Installation", w)
+
+        card_install = CardWidget()
+        card_install.setFixedHeight(80)
+        h_install = QHBoxLayout(card_install)
+        h_install.setContentsMargins(15, 10, 15, 10)
+        h_install.setSpacing(30)
+
+        btn_mafft = PushButton("Install MAFFT", card_install)
         btn_mafft.clicked.connect(main_window.run_install_mafft)
-        h1.addWidget(btn_mafft)
-        grp.addSettingCard(card_mafft)
+        h_install.addWidget(btn_mafft, 1)
 
-        # Install TrimAl
-        card_trim = CardWidget()
-        card_trim.setFixedHeight(80)
-        h2 = QHBoxLayout(card_trim)
-        h2.setContentsMargins(15, 10, 15, 10)
-        h2.addWidget(BodyLabel("Install trimAl dependency"))
-        btn_trim = PushButton("Install", card_trim)
+        btn_trim = PushButton("Install trimAl", card_install)
         btn_trim.clicked.connect(main_window.run_install_trimal)
-        h2.addWidget(btn_trim)
-        grp.addSettingCard(card_trim)
+        h_install.addWidget(btn_trim, 1)
 
-        # Install PGA
-        card_pga = CardWidget()
-        card_pga.setFixedHeight(80)
-        h3 = QHBoxLayout(card_pga)
-        h3.setContentsMargins(15, 10, 15, 10)
-        h3.addWidget(BodyLabel("Install PGA dependency"))
-        btn_pga = PushButton("Install", card_pga)
+        btn_pga = PushButton("Install PGA", card_install)
         btn_pga.clicked.connect(main_window.run_install_pga)
-        h3.addWidget(btn_pga)
-        grp.addSettingCard(card_pga)
+        h_install.addWidget(btn_pga, 1)
 
-        self.vBoxLayout.addWidget(grp)
+        grp.addSettingCard(card_install)
+        layout.addWidget(grp)
 
-        # Theme Group
-        theme_grp = SettingCardGroup("Theme Settings", self)
+        app_settings_grp = SettingCardGroup("Application Settings", w)
 
         card_theme = CardWidget()
         card_theme.setFixedHeight(80)
-        h3 = QHBoxLayout(card_theme)
-        h3.setContentsMargins(15, 10, 15, 10)
-        h3.addWidget(BodyLabel("Application Theme"))
+        h_theme = QHBoxLayout(card_theme)
+        h_theme.setContentsMargins(15, 10, 15, 10)
+        h_theme.setSpacing(20)
+
+        h_theme.addWidget(BodyLabel("Theme:"))
         self.combo_theme = ComboBox(card_theme)
+        self.combo_theme.setFixedWidth(220)
         self.combo_theme.addItems(["Light", "Dark", "Auto"])
         self.combo_theme.setCurrentIndex(2)
         self.combo_theme.currentIndexChanged.connect(main_window.change_theme)
-        h3.addWidget(self.combo_theme)
-        theme_grp.addSettingCard(card_theme)
+        h_theme.addWidget(self.combo_theme)
 
-        # Theme Color Card
-        card_color = CardWidget()
-        card_color.setFixedHeight(80)
-        h4 = QHBoxLayout(card_color)
-        h4.setContentsMargins(15, 10, 15, 10)
-        h4.addWidget(BodyLabel("Theme Color"))
+        h_theme.addStretch(1)
+
+        h_theme.addWidget(BodyLabel("Color:"))
         self.color_picker = ColorPickerButton(
-            parent=card_color, title="Color", color=themeColor()
+            parent=card_theme, title="Color", color=themeColor()
         )
+        self.color_picker.setFixedWidth(220)
         self.color_picker.colorChanged.connect(lambda c: setThemeColor(c, save=True))
-        h4.addWidget(self.color_picker)
+        h_theme.addWidget(self.color_picker)
+        h_theme.addStretch(1)
+        app_settings_grp.addSettingCard(card_theme)
 
-        theme_grp.addSettingCard(card_color)
+        card_restart = CardWidget()
+        card_restart.setFixedHeight(80)
+        h_restart = QHBoxLayout(card_restart)
+        h_restart.setContentsMargins(15, 10, 15, 10)
+        h_restart.setSpacing(30)
 
-        self.vBoxLayout.addWidget(theme_grp)
-        self.vBoxLayout.addStretch()
+        btn_restart = PushButton("Restart Application", card_restart)
+        btn_restart.setIcon(FIF.SYNC)
+        btn_restart.clicked.connect(main_window.restart_app)
+        h_restart.addWidget(btn_restart, 1)
 
-
-class AboutInterface(QWidget):
-    """About Page"""
-
-    def __init__(self, main_window):
-        super().__init__()
-        self.main_window = main_window
-        self.setObjectName("about_interface")
-        self.vBoxLayout = QVBoxLayout(self)
-        self.vBoxLayout.setContentsMargins(30, 30, 30, 30)
-        self.vBoxLayout.setSpacing(20)
-
-        # About Group
-        grp = SettingCardGroup("About", self)
-
-        # About Card
-        card_about = CardWidget()
-        card_about.setFixedHeight(100)
-        h3 = QHBoxLayout(card_about)
-        h3.setContentsMargins(15, 10, 15, 10)
-
-        h3.addWidget(BodyLabel("About PyNCBIminer-NG"))
-        btn_about = PushButton("Show Info", card_about)
+        btn_about = PushButton("About PyNCBIminer-NG", card_restart)
+        btn_about.setIcon(FIF.INFO)
         btn_about.clicked.connect(main_window.show_about)
-        h3.addWidget(btn_about)
-        grp.addSettingCard(card_about)
+        h_restart.addWidget(btn_about, 1)
 
-        self.vBoxLayout.addWidget(grp)
-        self.vBoxLayout.addStretch()
+        app_settings_grp.addSettingCard(card_restart)
+        layout.addWidget(app_settings_grp)
+        layout.addStretch(1)
+
+        main_vbox = QVBoxLayout(self)
+        main_vbox.setContentsMargins(0, 0, 0, 0)
+        main_vbox.addWidget(w)
 
 
-# --- Main Window ---
 class MainWindow(FluentWindow):
     @Slot(str)
     def outputWritten(self, text):
@@ -1388,10 +1655,8 @@ class MainWindow(FluentWindow):
         self.setWindowIcon(QIcon(get_resource_path("icons/app_icon.ico")))
         self.navigationInterface.setExpandWidth(240)
 
-        # Set minimum window width
-        self.setMinimumWidth(1100)
+        self.setMinimumWidth(600)
 
-        # Set window size and center on screen
         self.resize(1100, 750)
         screen = QApplication.primaryScreen()
         screen_geometry = screen.availableGeometry()
@@ -1399,48 +1664,27 @@ class MainWindow(FluentWindow):
         y = (screen_geometry.height() - self.height()) // 2
         self.move(x, y)
 
-        # Sync with system theme color (Windows and macOS only)
         if HAS_SYSTEM_ACCENT and sys.platform in ["win32", "darwin"]:
             setThemeColor(getSystemAccentColor(), save=False)
 
-        # Initialize Backend Controller
         self.backend = BackendController()
         self.backend.log_signal.connect(self.outputWritten)
         self.backend.infobar_signal.connect(self.show_infobar)
         self.backend.count_signal.connect(self.handle_count)
 
-        # Define Interfaces
         self.retrieval_interface = RetrievalInterface(self)
         self.construction_interface = ConstructionInterface(self)
         self.chloroplast_miner_interface = ChloroplastMinerInterface(self)
         self.dependencies_interface = DependenciesInterface(self)
-        self.about_interface = AboutInterface(self)
 
-        # Add Interfaces to Navigation
-        self.addSubInterface(self.retrieval_interface, FIF.SEARCH, "Sequence Retrieval")
-        self.addSubInterface(
-            self.construction_interface, FIF.APPLICATION, "Supermatrix Construction"
-        )
+        self.addSubInterface(self.retrieval_interface, FIF.LIBRARY, "Fragments Miner")
         self.addSubInterface(
             self.chloroplast_miner_interface, FIF.LEAF, "Chloroplast Miner"
         )
-        self.addSubInterface(self.dependencies_interface, FIF.SETTING, "Dependencies")
         self.addSubInterface(
-            self.about_interface, FIF.INFO, "About", NavigationItemPosition.BOTTOM
+            self.construction_interface, FIF.APPLICATION, "Matrix Construction"
         )
-
-        # Global Log Widget (Bottom Dock area approximation)
-        # In FluentWindow, the central widget stack takes all space.
-        # We can insert the LogWidget into the main layout of FluentWindow
-        # but FluentWindow logic is complex.
-        # Easier strategy: Pass the log widget to the interfaces or
-        # create a custom central widget wrapper.
-        # Here, I will add the Log Widget to the BOTTOM of the Retrieval and Construction interfaces
-        # or separate it.
-        # Let's add it as a separate "Console" Tab for simplicity and cleanliness,
-        # or implement a splitter.
-        # *Decision*: I will use a custom layout. I will add the LogWidget to the stack
-        # but output is global. I will actually make a 'Console' page.
+        self.addSubInterface(self.dependencies_interface, FIF.SETTING, "Software Settings")
 
         self.console_interface = QWidget()
         self.console_interface.setObjectName("console_interface")
@@ -1454,21 +1698,16 @@ class MainWindow(FluentWindow):
             NavigationItemPosition.BOTTOM,
         )
 
-        # Redirect stdout/stderr
         sys.stdout = EmittingStr()
         sys.stdout.textWritten.connect(self.outputWritten)
         sys.stderr = EmittingStr()
         sys.stderr.textWritten.connect(self.outputWritten)
 
-        # --- Connections (Logic Mapping) ---
         self.connect_logic()
 
-        # Check tools
-        QTimer.singleShot(100, self.check_dependencies)
         self.mafft_checked = False
         self.trimal_checked = False
 
-        # Fade in effect
         self.setWindowOpacity(0)
         self.fade_in_animation = QPropertyAnimation(self, b"windowOpacity")
         self.fade_in_animation.setDuration(150)
@@ -1493,7 +1732,6 @@ class MainWindow(FluentWindow):
         self.fade_out_animation.start()
 
     def connect_logic(self):
-        # Retrieval
         ri = self.retrieval_interface
         ri.combo_region.currentIndexChanged.connect(self.on_region_combo_changed)
         ri.combo_region.currentIndexChanged.connect(self.select_target_region)
@@ -1506,37 +1744,29 @@ class MainWindow(FluentWindow):
         ri.btn_stop.clicked.connect(self.stop_blast)
         ri.chk_summary.stateChanged.connect(self.set_marker_summary)
 
-        # Construction
-        ci = self.construction_interface
-        ci.switch_reduce.checkedChanged.connect(self.set_reduce_threshold)
-        ci.combo_trim_method.currentIndexChanged.connect(self.select_tri_method)
+        ri.btn_run_filter.clicked.connect(self.run_filtering)
 
-        ci.btn_run_filter.clicked.connect(self.run_filtering)
+        ci = self.construction_interface
+        ci.combo_trim_method.currentIndexChanged.connect(self.select_tri_method)
 
         ci.btn_run_align.clicked.connect(self.run_alignment)
         ci.btn_run_trim.clicked.connect(self.run_trimming)
         ci.btn_run_concat.clicked.connect(self.run_concatenation)
 
-        # Initial UI State
         ri.btn_set_region.setEnabled(False)
-        ri.new_region_edit.setEnabled(True)  # Initially enabled since combo is empty
-        self.set_marker_summary(0)  # Init state
-        self.set_reduce_threshold(0)  # Init state
+        ri.new_region_edit.setEnabled(True)
+        self.set_marker_summary(0)
         self.select_tri_method()
-
-    # --- Logic Methods (Adapted from original) ---
 
     def on_region_combo_changed(self):
         ri = self.retrieval_interface
         target_region = ri.combo_region.currentText()
-        # Enable new_region_edit only when combo box is empty
         ri.new_region_edit.setEnabled(target_region == "")
         if target_region != "":
             ri.new_region_edit.clear()
 
     def on_new_region_changed(self):
         ri = self.retrieval_interface
-        # When typing in new_region_edit, clear combo box selection
         if ri.new_region_edit.text().strip():
             ri.combo_region.setCurrentIndex(0)
 
@@ -1552,7 +1782,6 @@ class MainWindow(FluentWindow):
 
     def set_target_region(self):
         ri = self.retrieval_interface
-        # Use new_region_edit if it has text, otherwise use combo box
         new_region = ri.new_region_edit.text().strip()
         if new_region:
             target_region = new_region
@@ -1583,12 +1812,10 @@ class MainWindow(FluentWindow):
                     parameters_dict[parts[0]] = str(parts[1])
                 else:
                     self.backend.emit_log(
-                        f"Line {i} invalid format: {parameter[:20]}...",
-                        "WARNING"
+                        f"Line {i} invalid format: {parameter[:20]}...", "WARNING"
                     )
 
         ri.init_queries.clear()
-        # Load Queries Logic
         initial_queries_dir = Path(get_writable_path("initial_queries"))
         custom_queries_dir = initial_queries_dir / Path(target_region)
 
@@ -1604,7 +1831,6 @@ class MainWindow(FluentWindow):
                 with open(queries_dir / Path(file), "r") as fr:
                     ri.init_queries.appendPlainText(fr.read() + "\n")
 
-        # Set UI elements
         ri.entrez_qualifier.setPlainText(parameters_dict.get("entrez_qualifier", ""))
         ri.max_len.setText(parameters_dict.get("max_length", ""))
         ri.expect_val.setText(parameters_dict.get("expect_value", ""))
@@ -1647,13 +1873,13 @@ class MainWindow(FluentWindow):
         self.backend.set_marker_summary(self.retrieval_interface, state)
 
     def set_reduce_threshold(self, state):
-        self.backend.set_reduce_threshold(self.construction_interface, state)
+        self.backend.set_reduce_threshold(self.retrieval_interface, state)
 
     def select_tri_method(self):
         self.backend.select_tri_method(self.construction_interface)
 
     def run_filtering(self):
-        self.backend.run_filtering(self.construction_interface)
+        self.backend.run_filtering(self.retrieval_interface)
 
     def run_alignment(self):
         self.backend.run_alignment(self.construction_interface)
@@ -1684,8 +1910,10 @@ class MainWindow(FluentWindow):
     def show_about(self):
         self.backend.show_about(self)
 
-    def check_dependencies(self):
-        self.backend.check_dependencies()
+    def restart_app(self):
+        self.is_closing = True
+        QApplication.exit(0)
+        QProcess.startDetached(sys.executable, sys.argv)
 
 
 if __name__ == "__main__":
@@ -1693,7 +1921,6 @@ if __name__ == "__main__":
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
     )
     app = QApplication(sys.argv)
-    # 设置全局字体
 
     app.setApplicationName("PyNCBIminer-NG")
     app.setOrganizationName("Sichuan University")

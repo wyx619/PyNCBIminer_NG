@@ -10,7 +10,7 @@ from pathlib import Path
 from math import ceil
 from Bio import SeqIO
 import threading
-from main_utils import print_line, get_query_accession
+from main_utils import get_query_accession
 from my_entrez import format_entrez_query
 from seq_check_download import check_annotation, seq_check_download_main
 from blast_put_get import blast_put_get_main
@@ -149,7 +149,7 @@ def iterated_blast_main(
             print("BLAST iteration stopped by user.")
             return
 
-        print_line("*")
+
         print("BLAST round %d" % blast_round)
         if blast_round == 1:
             if not (

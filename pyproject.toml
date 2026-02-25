@@ -53,3 +53,6 @@ dev = [
     "pyinstaller>=6.18.0",
     "Pillow>=10.0.0"
 ]
+[[tool.uv.index]]
+url="https://mirrors.aliyun.com/pypi/simple/"
+default=true

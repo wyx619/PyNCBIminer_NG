@@ -48,14 +48,14 @@ def process_single_file(file_path, out_folder_path, cds_threshold, ambig_thresho
 
         if results["CDS"] < cds_threshold or results["unclear_ratio"] > ambig_threshold:
             is_problematic = True
-            out_file = Path(out_folder_path) / (file_path.stem + ".fasta")
+            out_file = Path(out_folder_path) / (file_path.stem + "_reannoated.fasta")
             try:
                 with open(out_file, "w") as fw:
                     fw.write(
                         f">{record.id}|{record.annotations.get('organism', '')}|{record.description}\n"
                     )
                     fw.write(str(record.seq) + "\n")
-                file_path.unlink()
+                #file_path.unlink()
             except Exception as e:
                 print(f"Error saving {file_path}: {str(e)}")
                 results["error"] = f"Save failed: {str(e)}"
