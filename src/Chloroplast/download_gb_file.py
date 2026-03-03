@@ -76,14 +76,14 @@ def download_gb_file(email, in_path, out_path, max_threads=10, batch_size=None):
     success, failed = 0, 0
 
     def attempt_download(acc, retries=3):
-        """带重试的下载尝试"""
+        """Download attempt with retry"""
         for attempt in range(retries):
             try:
                 return download_single(email, acc, out_path, request_lock, last_request_time), True, None
             except func_timeout.exceptions.FunctionTimedOut:
                 if attempt < retries - 1:
                     sleep_time = 2 ** attempt
-                    print(f"[重试 {attempt + 1}/{retries - 1}] {acc}: 超时，等待{sleep_time}秒...")
+                    print(f"[Retry {attempt + 1}/{retries - 1}] {acc}: Timeout, waiting {sleep_time}s...")
                     time.sleep(sleep_time)
                     continue
                 return acc, False, "Timeout"
@@ -91,12 +91,12 @@ def download_gb_file(email, in_path, out_path, max_threads=10, batch_size=None):
                 error_msg = str(e)
                 if "429" in error_msg and attempt < retries - 1:
                     sleep_time = 5 * (attempt + 1)
-                    print(f"[重试 {attempt + 1}/{retries - 1}] {acc}: 429限流，等待{sleep_time}秒...")
+                    print(f"[Retry {attempt + 1}/{retries - 1}] {acc}: 429 Rate limit, waiting {sleep_time}s...")
                     time.sleep(sleep_time)
                     continue
                 if attempt < retries - 1:
                     sleep_time = min(60, 2 ** attempt)
-                    print(f"[重试 {attempt + 1}/{retries - 1}] {acc}: {error_msg[:50]}，等待{sleep_time}秒...")
+                    print(f"[Retry {attempt + 1}/{retries - 1}] {acc}: {error_msg[:50]}, waiting {sleep_time}s...")
                     time.sleep(sleep_time)
                     continue
                 return acc, False, error_msg[:100]

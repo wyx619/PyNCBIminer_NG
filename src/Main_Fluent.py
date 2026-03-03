@@ -976,7 +976,7 @@ class ChloroplastMinerInterface(QWidget):
         card_layout.addLayout(h_output)
 
         self.chloro_cds_thresh = LineEdit()
-        self.chloro_cds_thresh.setText("80")
+        self.chloro_cds_thresh.setText("75")
         self.chloro_ambig_thresh = LineEdit()
         self.chloro_ambig_thresh.setText("0.2")
 

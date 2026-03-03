@@ -1154,7 +1154,7 @@ class BackendController(QObject):
             if not ref_folder.exists() or not any(ref_folder.iterdir()):
                 self.emit_log("Reference genome not found.", "WARNING")
                 return
-        pga_main = Path(pga_dir / "PGA2.exe")
+        pga_main = Path(pga_dir / "PGA-NG.exe")
         out_folder = in_folder / "pga_output"
         out_folder.mkdir(exist_ok=True)
         pga_command = f"{pga_main} -r {ref_folder} -t {in_folder} -o {out_folder}"
@@ -1202,6 +1202,10 @@ class BackendController(QObject):
 
             for f in Path(in_folder).glob("*.njs"):
                 f.unlink(missing_ok=True)
+            # 检测 ori_gb_folder 是否存在，不存在则报错
+            if not Path(ori_gb_folder).exists():
+                self.emit_log(f"Reference/original genbank folder does not exist: {ori_gb_folder}", "ERROR")
+                return
 
             for f in out_folder.glob("*.gb"):
                 shutil.copy(f, ori_gb_folder / f.name)
