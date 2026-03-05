@@ -4,8 +4,11 @@
 # @File:my_entrez.py
 # @Software:PyCharm
 
+import ssl
 from func_timeout import func_set_timeout
 from Bio import Entrez
+
+ssl._create_default_https_context = ssl._create_unverified_context
 
 
 def format_entrez_query(organisms, entrez_qualifier="", date_from="", date_to=""):

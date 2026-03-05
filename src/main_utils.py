@@ -568,8 +568,8 @@ class BackendController(QObject):
         retrieval_interface.key_anno.setPlainText(key_annotations.replace("|", "; "))
         retrieval_interface.excl_source.setPlainText(exclude_sources.replace("|", "\n"))
 
-        date_from = retrieval_interface.date_from.date().toString("yyyy/MM/dd")
-        date_to = retrieval_interface.date_to.date().toString("yyyy/MM/dd")
+        date_from = retrieval_interface.date_from.date.toString("yyyy/MM/dd")
+        date_to = retrieval_interface.date_to.date.toString("yyyy/MM/dd")
 
         organisms = taxonomy.split("|")
         organisms = [x for x in organisms if len(x) > 0]

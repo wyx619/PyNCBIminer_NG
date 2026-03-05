@@ -410,7 +410,7 @@ class RetrievalInterface(QWidget):
         self.len_thresh = LineEdit()
         self.len_thresh.setText("100")
         self.len_thresh.setEnabled(False)
-        #self.len_thresh.setFixedWidth(240)
+        # self.len_thresh.setFixedWidth(240)
         row2.addWidget(self.len_thresh)
         row2.addSpacing(40)
         self.chk_consensus = CheckBox("Abnormal Index (Consensus)", card_opts)
@@ -624,7 +624,7 @@ class ConstructionInterface(QWidget):
         row_rb.addStretch(1)
         row_rb.addWidget(self.chk_chloroplast)
         l_opts.addLayout(row_rb)
-        l_opts.addSpacing(10)  
+        l_opts.addSpacing(10)
 
         self.trim_in = LineEdit()
         self.trim_in.setPlaceholderText(
@@ -1070,7 +1070,9 @@ class ChloroplastMinerInterface(QWidget):
 
         h_get_input = QHBoxLayout()
         self.cds_get_in = LineEdit()
-        self.cds_get_in.setPlaceholderText("Input directory containing filtered GenBank files")
+        self.cds_get_in.setPlaceholderText(
+            "Input directory containing filtered GenBank files"
+        )
         btn_cds_get_in = PushButton("Browse")
         btn_cds_get_in.setIcon(FIF.FOLDER)
         btn_cds_get_in.clicked.connect(lambda: self.browse_folder(self.cds_get_in))
@@ -1085,7 +1087,9 @@ class ChloroplastMinerInterface(QWidget):
         self.cds_get_out.textChanged.connect(self.on_cds_get_out_changed)
         btn_cds_get_out = PushButton("Browse")
         btn_cds_get_out.setIcon(FIF.FOLDER)
-        btn_cds_get_out.clicked.connect(lambda: self.browse_folder(self.cds_get_out, self.cds_filter_in))
+        btn_cds_get_out.clicked.connect(
+            lambda: self.browse_folder(self.cds_get_out, self.cds_filter_in)
+        )
         h_get_output.addWidget(BodyLabel("Output Directory:"))
         h_get_output.addWidget(self.cds_get_out)
         h_get_output.addWidget(btn_cds_get_out)
@@ -1111,7 +1115,9 @@ class ChloroplastMinerInterface(QWidget):
         self.cds_filter_in.setPlaceholderText("Input directory containing CDS files")
         btn_cds_filter_in = PushButton("Browse")
         btn_cds_filter_in.setIcon(FIF.FOLDER)
-        btn_cds_filter_in.clicked.connect(lambda: self.browse_folder(self.cds_filter_in))
+        btn_cds_filter_in.clicked.connect(
+            lambda: self.browse_folder(self.cds_filter_in)
+        )
         h_filter_input.addWidget(BodyLabel("Input Directory:"))
         h_filter_input.addWidget(self.cds_filter_in)
         h_filter_input.addWidget(btn_cds_filter_in)
@@ -1119,11 +1125,15 @@ class ChloroplastMinerInterface(QWidget):
 
         h_filter_output = QHBoxLayout()
         self.cds_filter_out = LineEdit()
-        self.cds_filter_out.setPlaceholderText("Output directory for filtered CDS files")
+        self.cds_filter_out.setPlaceholderText(
+            "Output directory for filtered CDS files"
+        )
         self.cds_filter_out.textChanged.connect(self.on_cds_filter_out_changed)
         btn_cds_filter_out = PushButton("Browse")
         btn_cds_filter_out.setIcon(FIF.FOLDER)
-        btn_cds_filter_out.clicked.connect(lambda: self.browse_folder(self.cds_filter_out, self.cds_select_in))
+        btn_cds_filter_out.clicked.connect(
+            lambda: self.browse_folder(self.cds_filter_out, self.cds_select_in)
+        )
         h_filter_output.addWidget(BodyLabel("Output Directory:"))
         h_filter_output.addWidget(self.cds_filter_out)
         h_filter_output.addWidget(btn_cds_filter_out)
@@ -1167,10 +1177,14 @@ class ChloroplastMinerInterface(QWidget):
 
         h_select_input = QHBoxLayout()
         self.cds_select_in = LineEdit()
-        self.cds_select_in.setPlaceholderText("Input directory containing filtered CDS files")
+        self.cds_select_in.setPlaceholderText(
+            "Input directory containing filtered CDS files"
+        )
         btn_cds_select_in = PushButton("Browse")
         btn_cds_select_in.setIcon(FIF.FOLDER)
-        btn_cds_select_in.clicked.connect(lambda: self.browse_folder(self.cds_select_in))
+        btn_cds_select_in.clicked.connect(
+            lambda: self.browse_folder(self.cds_select_in)
+        )
         h_select_input.addWidget(BodyLabel("Input Directory:"))
         h_select_input.addWidget(self.cds_select_in)
         h_select_input.addWidget(btn_cds_select_in)
@@ -1178,11 +1192,15 @@ class ChloroplastMinerInterface(QWidget):
 
         h_select_output = QHBoxLayout()
         self.cds_select_out = LineEdit()
-        self.cds_select_out.setPlaceholderText("Output directory for selected CDS files")
+        self.cds_select_out.setPlaceholderText(
+            "Output directory for selected CDS files"
+        )
         self.cds_select_out.textChanged.connect(self.on_cds_select_out_changed)
         btn_cds_select_out = PushButton("Browse")
         btn_cds_select_out.setIcon(FIF.FOLDER)
-        btn_cds_select_out.clicked.connect(lambda: self.browse_folder(self.cds_select_out))
+        btn_cds_select_out.clicked.connect(
+            lambda: self.browse_folder(self.cds_select_out)
+        )
         h_select_output.addWidget(BodyLabel("Output Directory:"))
         h_select_output.addWidget(self.cds_select_out)
         h_select_output.addWidget(btn_cds_select_out)
@@ -1202,13 +1220,19 @@ class ChloroplastMinerInterface(QWidget):
         btn_cds_select_tax_file = PushButton("Browse")
         btn_cds_select_tax_file.setIcon(FIF.FOLDER)
         btn_cds_select_tax_file.setEnabled(False)
-        btn_cds_select_tax_file.clicked.connect(lambda: self.browse_file(self.cds_select_tax_file))
+        btn_cds_select_tax_file.clicked.connect(
+            lambda: self.browse_file(self.cds_select_tax_file)
+        )
         h_select_tax.addWidget(self.cds_select_tax_file)
         h_select_tax.addWidget(btn_cds_select_tax_file)
         card_select_layout.addLayout(h_select_tax)
 
-        self.cds_select_tax_switch.checkedChanged.connect(lambda checked: self.cds_select_tax_file.setEnabled(checked))
-        self.cds_select_tax_switch.checkedChanged.connect(lambda checked: btn_cds_select_tax_file.setEnabled(checked))
+        self.cds_select_tax_switch.checkedChanged.connect(
+            lambda checked: self.cds_select_tax_file.setEnabled(checked)
+        )
+        self.cds_select_tax_switch.checkedChanged.connect(
+            lambda checked: btn_cds_select_tax_file.setEnabled(checked)
+        )
 
         self.btn_cds_select = PushButton("Select CDS")
         self.btn_cds_select.setIcon(FIF.TAG)
@@ -1409,9 +1433,7 @@ class ChloroplastMinerInterface(QWidget):
                 )
                 return
         except ValueError:
-            self.main_window.backend.emit_log(
-                "Invalid lower bound value", "WARNING"
-            )
+            self.main_window.backend.emit_log("Invalid lower bound value", "WARNING")
             return
 
         try:
@@ -1422,9 +1444,7 @@ class ChloroplastMinerInterface(QWidget):
                 )
                 return
         except ValueError:
-            self.main_window.backend.emit_log(
-                "Invalid upper bound value", "WARNING"
-            )
+            self.main_window.backend.emit_log("Invalid upper bound value", "WARNING")
             return
 
         if lower_bound >= upper_bound:
@@ -1682,7 +1702,9 @@ class MainWindow(FluentWindow):
         self.addSubInterface(
             self.construction_interface, FIF.APPLICATION, "Matrix Construction"
         )
-        self.addSubInterface(self.dependencies_interface, FIF.SETTING, "Software Settings")
+        self.addSubInterface(
+            self.dependencies_interface, FIF.SETTING, "Software Settings"
+        )
 
         self.console_interface = QWidget()
         self.console_interface.setObjectName("console_interface")

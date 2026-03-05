@@ -23,7 +23,7 @@ VSVersionInfo(
             StringStruct(u'OriginalFilename', u'PyNCBIminer-NG.exe'),
             StringStruct(u'ProductName', u'PyNCBIminer-NG'),
             StringStruct(u'ProductVersion', u'2.0.0'),
-            StringStruct(u'LegalCopyright', u'Copyright (c) 2024 Sichuan University')
+            StringStruct(u'LegalCopyright', u'Copyright (c) 2026 Sichuan University')
           ]
         )
       ]

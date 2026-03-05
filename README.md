@@ -53,10 +53,10 @@ PyNCBIminer-NG is a next-generation bioinformatics tool that simplifies the retr
 
 ### Prerequisites
 
-- Windows 10/11 (macOS and Linux support coming soon)
-- Python 3.12 or higher (if running from source)
+- Windows 10/11
+- Microsoft Visual C++ Redistributable v14 required, if not installed, [download](https://aka.ms/vc14/vc_redist.x64.exe) and install first.
 
-### Option 1: Pre-built Executable
+### Pre-built Executable
 
 1. Download the latest release from [Release Page](https://github.com/wyx619/PyNCBIminer_NG/releases)
 2. Double-click `PyNCBIminer-NG.exe` to launch
