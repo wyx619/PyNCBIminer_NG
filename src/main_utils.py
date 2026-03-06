@@ -1028,7 +1028,7 @@ class BackendController(QObject):
             )
             if error_count > 0:
                 self.emit_log(
-                    f"Quality control failed with {error_count} error(s)", "WARNING"
+                    f"Quality control completed with {error_count} error(s)", "WARNING"
                 )
             else:
                 self.emit_log("Quality control completed successfully!", "SUCCESS")

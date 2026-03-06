@@ -1,7 +1,7 @@
 from pathlib import Path
 import pandas as pd
 import argparse
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from datetime import datetime
 from Bio import SeqIO
@@ -109,11 +109,7 @@ def select_seq_by_len(
 
     threads = max(1, min(threads, len(file_list)))
 
-    with ProcessPoolExecutor(
-        max_workers=threads,
-        initializer=init_worker,
-        initargs=(ref_len_dict, lower_bound, upper_bound)
-    ) as executor:
+    with ThreadPoolExecutor(max_workers=threads) as executor:
         futures = {
             executor.submit(process_file, arg): Path(arg[2]).stem for arg in task_args
         }

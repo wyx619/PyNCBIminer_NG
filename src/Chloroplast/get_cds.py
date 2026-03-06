@@ -3,7 +3,7 @@ from Bio import SeqIO
 from datetime import datetime
 import pandas as pd
 import argparse
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import multiprocessing
 
 
@@ -117,7 +117,7 @@ def get_cds(in_path, out_path, threads=3):
     task_args = [(gb_name, str(in_path), str(out_path)) for gb_name in gb_file_list]
     all_sequences = {gene: [] for gene in _cds_list}
     
-    with ProcessPoolExecutor(max_workers=threads, initializer=init_worker, initargs=(_cds_list, _alternative_name)) as executor:
+    with ThreadPoolExecutor(max_workers=threads) as executor:
         futures = {executor.submit(process_gb_file, arg): Path(arg[0]).stem for arg in task_args}
         
         for future in as_completed(futures):

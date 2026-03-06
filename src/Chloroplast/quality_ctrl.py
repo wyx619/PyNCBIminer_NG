@@ -1,11 +1,11 @@
 # -*- coding = utf-8 -*-
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from Bio import SeqIO
 from datetime import datetime
 import pandas as pd
-
 import multiprocessing
 
 
@@ -60,14 +60,14 @@ def process_single_file(file_path, out_folder_path, cds_threshold, ambig_thresho
                 print(f"Error saving {file_path}: {str(e)}")
                 results["error"] = f"Save failed: {str(e)}"
     except Exception as e:
-        print(f"Error parsing {file_path}: {str(e)}")
+        print(f"Error parsing {file_path}: {str(e)}\n")
         results["error"] = str(e)
 
     return results, is_problematic
 
 
 def _process_file_wrapper(args):
-    """包装函数，用于 multiprocessing"""
+    """Wrapper function for threading"""
     file_path, out_folder_path, cds_threshold, ambig_threshold = args
     from pathlib import Path
     return process_single_file(Path(file_path), Path(out_folder_path), cds_threshold, ambig_threshold)
@@ -87,24 +87,24 @@ def generate_genome_report(
     Path(out_folder_path).mkdir(parents=True, exist_ok=True)
 
     all_results = []
-
-    import math
-
+    import  math
     if threads is None:
-        threads = min(math.ceil(multiprocessing.cpu_count() * 0.5), len(gb_files))
+        threads = min(math.ceil(multiprocessing.cpu_count() * 0.25), len(gb_files))
     else:
         threads = min(threads, len(gb_files))
 
-    threads = min(threads, len(gb_files))
-    print(f"Using {threads} processes for processing")
+    print(f"Using {threads} threads for processing")
 
     args_list = [
         (str(f), str(out_folder_path), cds_threshold, ambig_threshold)
         for f in gb_files
     ]
 
-    with multiprocessing.Pool(processes=threads) as pool:
-        results = pool.map(_process_file_wrapper, args_list)
+    with ThreadPoolExecutor(max_workers=threads) as executor:
+        futures = {executor.submit(_process_file_wrapper, arg): arg for arg in args_list}
+        results = []
+        for future in as_completed(futures):
+            results.append(future.result())
 
     for r in results:
         all_results.append(r[0])

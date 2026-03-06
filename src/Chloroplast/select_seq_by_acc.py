@@ -1,5 +1,5 @@
 import argparse
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
@@ -69,9 +69,7 @@ def select_seq_by_acc(
 
     processes = max(1, min(num_processes, len(file_list)))
 
-    with ProcessPoolExecutor(
-        max_workers=processes, initializer=init_worker, initargs=(selected_table,)
-    ) as executor:
+    with ThreadPoolExecutor(max_workers=processes) as executor:
         futures = {
             executor.submit(process_file, arg[0], arg[1], arg[2]): arg[0]
             for arg in task_args
