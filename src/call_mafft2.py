@@ -7,20 +7,18 @@ from pathlib import Path
 from Bio import SeqIO
 from datetime import datetime
 from functional import run_command
-import os
 import shutil
 
 
 def get_mafft_path():
-    """Get path to mafft executable"""
-    project_root = Path(__file__).parent.parent
-    mafft_dir = project_root / "mafft"
 
-    if mafft_dir.exists():
-        for root, dirs, files in os.walk(mafft_dir):
-            for file in files:
-                if file.lower() in ["mafft.exe", "mafft.bat", "mafft"]:
-                    return str(Path(root) / file)
+    """Get path to mafft executable"""
+
+
+    mafft_bat = Path.cwd() / "mafft" / "mafft-win" / "mafft.bat"
+    if mafft_bat.exists():
+        return str(mafft_bat)
+
 
     if shutil.which("mafft"):
         return "mafft"

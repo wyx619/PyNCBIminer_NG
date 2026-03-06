@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import os
+
 import shutil
 import subprocess
 import sys
@@ -38,10 +38,9 @@ def get_trimal_path():
     trimal_dir = Path.cwd() / "trimal"
 
     if trimal_dir.exists():
-        for root, dirs, files in os.walk(trimal_dir):
-            for file in files:
-                if file.lower() in ["trimal.exe", "trimal"]:
-                    return str(Path(root) / file)
+        for file in trimal_dir.rglob("*"):
+            if file.is_file() and file.name.lower() in ["trimal.exe", "trimal"]:
+                return str(file)
 
     if shutil.which("trimal"):
         return "trimal"

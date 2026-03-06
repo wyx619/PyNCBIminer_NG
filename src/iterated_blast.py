@@ -103,7 +103,7 @@ def iterated_blast_main(
     blast_round = 1  # to correct error in combining blast results.
     print("Start BLAST iteration...")
     entrez_query = format_entrez_query(
-        organisms=organisms, date_from=date_from, date_to=date_to
+        organisms=organisms, entrez_qualifier=entrez_qualifier, date_from=date_from, date_to=date_to
     )
     alignments = ceil(count * 1.05)
     last_new = 9999
