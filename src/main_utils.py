@@ -29,6 +29,11 @@ class BackendController(QObject):
         self.blast_thread = None
         self.stop_flag = threading.Event()
 
+    def run_pga(self, in_folder, ori_gb_folder, clade, ref_folder=None):
+        from Chloroplast.call_pga import run_pga as call_pga
+
+        call_pga(in_folder, ori_gb_folder, clade, ref_folder, emit_log=self.emit_log)
+
     def emit_log(self, message, level="INFO"):
         self.log_signal.emit(f"[{level}] {message}\n")
         self.infobar_signal.emit(level, message)
@@ -790,7 +795,7 @@ class BackendController(QObject):
 
     def run_trimming(self, construction_interface):
 
-        from call_trimal import trimal, trim_start_end_optimized
+        from call_trimal import trim_start_end_optimized, trimal
 
         in_path = construction_interface.trim_in.text().strip()
         out_path = construction_interface.trim_out.text().strip()
@@ -832,8 +837,7 @@ class BackendController(QObject):
                 self.emit_log("Running boundary trimming (Chloroplast Mode)...")
                 try:
                     trim_start_end_optimized(
-                        boundaries_threshold=0.025,
-                        in_path=in_path
+                        boundaries_threshold=0.025, in_path=in_path
                     )
                     self.emit_log("Boundary trimming completed", "SUCCESS")
                 except Exception as e:
@@ -988,6 +992,10 @@ class BackendController(QObject):
 
         if len(to_download) == 0:
             self.emit_log("All files already downloaded!", "SUCCESS")
+            self.emit_log("Running quality check...")
+            _, _, _, success, failed = download_gb_file(email, in_path, out_path, 10)
+            if success > 0:
+                self.emit_log(f"Quality check: Verified {success} files", "SUCCESS")
             return
 
         self.emit_log("Starting download...")
@@ -1039,6 +1047,7 @@ class BackendController(QObject):
 
     def run_get_cds(self, in_folder, out_folder, threads=3):
         from pathlib import Path
+
         from Chloroplast.get_cds import get_cds
 
         in_folder = Path(in_folder)
@@ -1057,9 +1066,12 @@ class BackendController(QObject):
         thread.daemon = True
         thread.start()
 
-    def run_filter_cds(self, in_folder, out_folder, ref_type, lower_bound, upper_bound, threads=3):
+    def run_filter_cds(
+        self, in_folder, out_folder, ref_type, lower_bound, upper_bound, threads=3
+    ):
         from pathlib import Path
-        from Chloroplast.filter_seq import select_seq_by_len, get_ref_dict
+
+        from Chloroplast.filter_seq import get_ref_dict, select_seq_by_len
 
         in_folder = Path(in_folder)
         out_folder = Path(out_folder)
@@ -1077,7 +1089,14 @@ class BackendController(QObject):
 
         def run_filter():
             try:
-                select_seq_by_len(str(in_folder), str(out_folder), ref_dict, lower_bound, upper_bound, threads)
+                select_seq_by_len(
+                    str(in_folder),
+                    str(out_folder),
+                    ref_dict,
+                    lower_bound,
+                    upper_bound,
+                    threads,
+                )
                 self.emit_log("CDS filtering completed successfully!", "SUCCESS")
             except Exception as e:
                 self.emit_log(f"CDS filtering failed: {e}", "WARNING")
@@ -1086,8 +1105,11 @@ class BackendController(QObject):
         thread.daemon = True
         thread.start()
 
-    def run_select_cds(self, in_folder, out_folder, enable_tax_res=False, tax_file=None, threads=3):
+    def run_select_cds(
+        self, in_folder, out_folder, enable_tax_res=False, tax_file=None, threads=3
+    ):
         from pathlib import Path
+
         from Chloroplast.select_seq_by_acc import make_tab, select_seq_by_acc
 
         in_folder = Path(in_folder)
@@ -1109,7 +1131,12 @@ class BackendController(QObject):
                 file_organism_name = tax_file if enable_tax_res and tax_file else None
                 df_organism = make_tab(str(in_folder), file_organism_name)
                 if df_organism is not None:
-                    select_seq_by_acc(str(in_folder), str(out_folder), df_organism, num_processes=threads)
+                    select_seq_by_acc(
+                        str(in_folder),
+                        str(out_folder),
+                        df_organism,
+                        num_processes=threads,
+                    )
                     self.emit_log("CDS selection completed successfully!", "SUCCESS")
                 else:
                     self.emit_log("CDS selection skipped (no valid data)", "WARNING")
@@ -1119,157 +1146,6 @@ class BackendController(QObject):
         thread = threading.Thread(target=run_select)
         thread.daemon = True
         thread.start()
-
-    def run_pga(self, in_folder, ori_gb_folder, clade, ref_folder=None):
-        import shutil
-        import time
-        from pathlib import Path
-        import re
-        from functional import run_command
-
-        root_path = Path.cwd()
-        pga_dir = root_path / r"./PGA-NG"
-        if not pga_dir.exists():
-            self.emit_log(
-                "PGA directory not found. Please go to Software Settings Page to install PGA first.", "WARNING"
-            )
-            return
-        in_folder = Path(in_folder)
-        ori_gb_folder = Path(ori_gb_folder) if ori_gb_folder else in_folder
-        if not in_folder.exists() or not any(in_folder.iterdir()):
-            self.emit_log("Input genome not found.", "WARNING")
-            return
-        fasta_files = [
-            f for f in in_folder.iterdir() if f.suffix.lower() in {".fasta", ".fa"}
-        ]
-        fasta_stems = {f.stem for f in fasta_files}  # 获取文件名（不含后缀）
-        num_genomes = len(fasta_files)
-
-        if clade == "Angiosperms":
-            ref_folder = Path(pga_dir / "Reference" / "Angiosperms")
-        elif clade == "Gymnosperms":
-            ref_folder = Path(pga_dir / "Reference" / "Gymnosperms")
-        elif clade == "User defined":
-            ref_folder = Path(ref_folder)
-            if not ref_folder.exists() or not any(ref_folder.iterdir()):
-                self.emit_log("Reference genome not found.", "WARNING")
-                return
-        pga_main = Path(pga_dir / "PGA-NG.exe")
-        out_folder = in_folder / "pga_output"
-        out_folder.mkdir(exist_ok=True)
-        pga_command = f"{pga_main} -r {ref_folder} -t {in_folder} -o {out_folder}"
-
-        self.emit_log(
-            f"{num_genomes} genomes will be reannotated using {clade} reference genomes",
-            "INFO",
-        )
-
-        done_flag = [False]  # 用列表包装以便在嵌套函数中修改
-
-        def monitor_thread():
-            processed_stems = set()
-            while not done_flag[0]:
-                current_gb_files = list(out_folder.glob("*.gb"))
-                current_stems = {f.stem for f in current_gb_files}
-                new_stems = current_stems - processed_stems
-                if new_stems:
-                    for stem in new_stems:
-                        if stem in fasta_stems:
-                            self.emit_log(
-                                f"Progressed: {len(current_stems)}/{num_genomes} - {stem}",
-                                "INFO",
-                            )
-                    processed_stems = current_stems
-                time.sleep(3)
-            # 最终检查确保最后一个文件也被记录
-            final_gb = list(out_folder.glob("*.gb"))
-            final_stems = {f.stem for f in final_gb}
-            for stem in final_stems:
-                if stem in fasta_stems and stem not in processed_stems:
-                    self.emit_log(
-                        f"Progressed: {len(final_stems)}/{num_genomes} - {stem}",
-                        "SUCCESS",
-                    )
-
-        def run_pga_thread():
-            result = run_command(pga_command)
-            done_flag[0] = True
-            if result.returncode != 0:
-                self.emit_log(
-                    f"Annotation failed with code {result.returncode}", "ERROR"
-                )
-                return
-
-            for f in Path(in_folder).glob("*.njs"):
-                f.unlink(missing_ok=True)
-            # 检测 ori_gb_folder 是否存在，不存在则报错
-            if not Path(ori_gb_folder).exists():
-                self.emit_log(f"Reference/original genbank folder does not exist: {ori_gb_folder}", "ERROR")
-                return
-
-            for f in out_folder.glob("*.gb"):
-                shutil.copy(f, ori_gb_folder / f.name)
-
-            # 修复 annotated 文件的 LOCUS 行
-            for annotated_file in ori_gb_folder.glob("*_reannoated.gb"):
-                original_file = ori_gb_folder / annotated_file.name.replace("_reannoated", "")
-                
-                # 读取全部内容
-                with open(original_file, "r", encoding="utf-8") as f1:
-                    original_lines = f1.readlines()
-                with open(annotated_file, "r", encoding="utf-8") as f2:
-                    annotated_lines = f2.readlines()
-                
-                # 步骤1: 修复 LOCUS 行
-                original_first = original_lines[0]
-                annotated_first = annotated_lines[0]
-                # 提取类似 "08-NOV-2022" 的日期部分（两个数字-三个字母-四个数字）
-                match = re.search(r'\b\d{2}-[A-Z]{3}-\d{4}\b', annotated_first)
-                date_part = match.group(0) if match else ""
-                # 这一行的作用：
-                # 1. 从 original_first 中去掉行尾空白（rstrip()）
-                # 2. 用正则把里面类似 "08-NOV-2022" 的日期整体替换成 date_part（其实 date_part 就是刚才匹配到的同一串日期）
-                # 3. 最后再加上一个换行符 "\n"，拼成新的 LOCUS 行
-                new_first_line = re.sub(r'\b\d{2}-[A-Z]{3}-\d{4}\b', date_part, original_first.rstrip()) + "\n"
-                annotated_lines[0] = new_first_line
-                
-                # 写入修复后的第一行
-                with open(annotated_file, "w", encoding="utf-8") as f:
-                    f.writelines(annotated_lines)
-                
-                # 步骤2 & 3: 使用 Biopython 处理
-                from Bio import SeqIO
-                
-                original_record = SeqIO.read(original_file, "genbank")
-                annotated_record = SeqIO.read(annotated_file, "genbank")
-                
-                # 提取原始文件的 organism 名称
-                organism_name = original_record.annotations.get("organism", "")
-                
-                # 复制 source 相关信息
-                annotated_record.annotations["source"] = original_record.annotations.get("source", "")
-                annotated_record.annotations["organism"] = organism_name
-                annotated_record.annotations["taxonomy"] = original_record.annotations.get("taxonomy", "")
-                # 替换 /organism qualifier
-                for feat in annotated_record.features:
-                    if feat.type == "source":
-                        feat.qualifiers["organism"] = [organism_name]
-                
-                # 写入修复后的文件
-                SeqIO.write(annotated_record, annotated_file, "genbank")
-                
-                # 删除original_file
-                original_file.unlink(missing_ok=True)
-                # 将annotated_file重命名为original_file
-                annotated_file.rename(original_file)
-
-        thread1 = threading.Thread(target=monitor_thread)
-        thread1.daemon = True
-        thread1.start()
-
-        thread2 = threading.Thread(target=run_pga_thread)
-        thread2.daemon = True
-        thread2.start()
 
 
 def get_query_accession(record):

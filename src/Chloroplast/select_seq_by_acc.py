@@ -69,7 +69,7 @@ def select_seq_by_acc(
 
     processes = max(1, min(num_processes, len(file_list)))
 
-    with ThreadPoolExecutor(max_workers=processes) as executor:
+    with ThreadPoolExecutor(max_workers=processes, initializer=init_worker, initargs=(selected_table,)) as executor:
         futures = {
             executor.submit(process_file, arg[0], arg[1], arg[2]): arg[0]
             for arg in task_args
@@ -90,10 +90,23 @@ def make_tab(in_path, file_organism_name=None, on_duplicates="keep_longest"):
     df1 = df[["filename", "organism", "cds_num"]].copy()
     df1["length"] = df[cds_cols].sum(axis=1)
 
+    df_organism_all = df1[["organism"]].drop_duplicates().copy()
+    df_organism_all.index = range(1, len(df_organism_all) + 1)
+    df_organism_all.index.name = "ID"
+    df_organism_all.to_csv(Path(in_path) / "organism.csv", index=True)
+
     if file_organism_name:
         df_rename = pd.read_csv(Path(file_organism_name))
-        df1 = pd.merge(df1, df_rename, on="organism", how="right")
-        print("Organism name standardization completed")
+        required_cols = {"ID", "organism", "new_name"}
+        if set(df_rename.columns) != required_cols:
+            print(f"[WARNING] Standardization file must contain exactly columns: {required_cols}")
+            print(f"          Found columns: {set(df_rename.columns)}")
+            print("          Skipping standardization...")
+        else:
+            df1 = pd.merge(df1, df_rename, on="organism", how="left")
+            df1["organism"] = df1["new_name"]
+            df1 = df1.drop(columns=["ID", "new_name"])
+            print("Organism name standardization completed")
 
     duplicate_counts = df1["organism"].value_counts().loc[lambda x: x > 1]
     if len(duplicate_counts):

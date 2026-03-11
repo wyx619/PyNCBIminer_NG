@@ -1,9 +1,3 @@
-# *-* coding:utf-8 *-*
-# @Time:2024/2/2 15:08
-# @Author:Ruijing Cheng
-# @File:select_new_queries.py
-# @Software:PyCharm
-
 import networkx as nx
 import pandas as pd
 import numpy as np
@@ -14,7 +8,8 @@ from scipy.sparse import csr_matrix
 from Bio import SeqIO
 from main_utils import get_query_accession
 from seq_check_download import seq_check_download_main
-from call_mafft2 import mafft
+from call_mafft2 import get_mafft_path
+from functional import run_command
 import shutil
 
 # 导入markov_clustering模块
@@ -332,6 +327,7 @@ def my_mcl(wd, df, table):
 
 def cluster_sequences_main(wd, fasta_file=r"hits_clustered_filtered.fasta"):
     print("Clustering sequences...")
+    msa_file = "msa_" + fasta_file
     # todo: if hits_clustered_filtered.fasta only has two sequence
     if (Path(wd) / Path(fasta_file)).stat().st_size > 0:
         n_seq = 0
@@ -349,18 +345,15 @@ def cluster_sequences_main(wd, fasta_file=r"hits_clustered_filtered.fasta"):
                 % n_seq
             )
             return seq_clustered
-        mafft(
-            in_path=str(Path(wd) / Path(fasta_file)),
-            out_path=str(Path(wd)),
-            algorithm="localpair",
-            additional_params="--maxiterate 1000",
-        )
+        mafft_exe = get_mafft_path()
+        command = f"{mafft_exe} --localpair --maxiterate 1000 {Path(wd) / fasta_file} > {Path(wd) / msa_file}"
+        run_command(command)
 
-    if (Path(wd) / Path(fasta_file)).stat().st_size > 0:
-        seq_distance = p_distance(wd, fasta_file)
+    if (Path(wd) / Path(msa_file)).stat().st_size > 0:
+        seq_distance = p_distance(wd, msa_file)
         # todo: what if no return
         seq_distance.to_csv(
-            Path(wd) / Path(Path(fasta_file).stem + "_distance.txt"),
+            Path(wd) / Path(Path(msa_file).stem + "_distance.txt"),
             index=True,
             sep="\t",
         )
@@ -379,6 +372,7 @@ def cluster_sequences_main(wd, fasta_file=r"hits_clustered_filtered.fasta"):
 
 def cluster_sequences(wd, fasta_file=r"hits_clustered_filtered.fasta"):
     print("Clustering sequences...")
+    msa_file = "msa_" + fasta_file
     # todo: if hits_clustered_filtered.fasta only has two sequence
     if (Path(wd) / fasta_file).stat().st_size > 0:
         n_seq = 0
@@ -396,20 +390,17 @@ def cluster_sequences(wd, fasta_file=r"hits_clustered_filtered.fasta"):
                 % n_seq
             )
             return seq_clustered
-        mafft(
-            in_path=str(Path(wd) / Path(fasta_file)),
-            out_path=str(Path(wd)),
-            algorithm="localpair",
-            additional_params="--maxiterate 1000",
-        )
+        mafft_exe = get_mafft_path()
+        command = f"{mafft_exe} --localpair --maxiterate 1000 {Path(wd) / fasta_file} > {Path(wd) / msa_file}"
+        run_command(command)
     else:
         return None
 
-    if (Path(wd) / Path(fasta_file)).stat().st_size > 0:
-        seq_distance = p_distance(wd, fasta_file)
+    if (Path(wd) / Path(msa_file)).stat().st_size > 0:
+        seq_distance = p_distance(wd, msa_file)
         # todo: what if no return
         seq_distance.to_csv(
-            Path(wd) / Path(Path(fasta_file).stem + "_distance.txt"),
+            Path(wd) / Path(Path(msa_file).stem + "_distance.txt"),
             index=True,
             sep="\t",
         )

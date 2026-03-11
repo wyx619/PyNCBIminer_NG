@@ -49,12 +49,10 @@ def filter_sequences(seq_df, seq_dict, ref_len):
 def process_file(args):
     in_path, out_path, file = args
     global _ref_len_dict, _lower_bound, _upper_bound
-
-    #print(f"Filter record of : {file} by length")
-
     gene = Path(file).stem
+    print(f"Filter record of : {gene} by length")
     if gene not in _ref_len_dict:
-        return file, None, f"基因名 {gene} 不在参考字典中"
+        return file, None, f"gene {gene} is not in ref dictionary"
 
     try:
         seq_dict = create_seq_dict(Path(in_path) / file)
@@ -63,9 +61,9 @@ def process_file(args):
 
         filtered = filter_sequences(seq_df, seq_dict, ref_len)
 
-        with open(Path(out_path) / file, "w") as out_file:
-            for seq_rec, seq_len in filtered:
-                out_file.write(f">{seq_rec.description}\n{seq_rec.seq}\n")
+        if filtered:
+            records = [seq_rec for seq_rec, seq_len in filtered]
+            SeqIO.write(records, Path(out_path) / file, "fasta")
 
         return (
             file,
@@ -109,7 +107,7 @@ def select_seq_by_len(
 
     threads = max(1, min(threads, len(file_list)))
 
-    with ThreadPoolExecutor(max_workers=threads) as executor:
+    with ThreadPoolExecutor(max_workers=threads, initializer=init_worker, initargs=(ref_len_dict, lower_bound, upper_bound)) as executor:
         futures = {
             executor.submit(process_file, arg): Path(arg[2]).stem for arg in task_args
         }

@@ -1,9 +1,9 @@
 import shutil
-import sys
 from pathlib import Path
 import pandas as pd
 from Bio import SeqIO, SeqRecord, AlignIO
 from Bio.Seq import Seq
+import traceback
 
 
 def check_inpath_validity(path):
@@ -278,7 +278,7 @@ def taxon_completion(in_path, out_path="./"):
         except IOError as e:
             print("Unable to copy file. %s" % e)
         except Exception:
-            print("Unexpected error:", sys.exc_info())
+            print("Unexpected error:", traceback.format_exc())
 
     # STEP 3: append '-'s to the end of these copied files if a marker is not present
     for in_file in file_handles:

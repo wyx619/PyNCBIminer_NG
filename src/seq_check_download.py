@@ -300,7 +300,7 @@ def seq_check_download_main(
     df = pd.read_table(Path(wd) / Path(acc_file), sep="\t", engine="python")
     # drop duplicate
     df.index = df["subject_acc.ver"]
-    file_list = list(Path(wd).iterdir())
+    file_list = [f.name for f in Path(wd).iterdir()]
 
     # def get_accession(record):
     #     accession = record.description.split(" ")[0].split("|")[0].split(":")[0]
@@ -367,22 +367,20 @@ def seq_check_download_main(
         entrez_email=entrez_email,
     )
 
-    fw = open(Path(wd) / Path("value_error_list.txt"), "r")
-    value_error_list = fw.read().splitlines()
-    if len(value_error_list) > 0:
-        print(
-            "%d value errors, the accession numbers were save in value_error_list.txt"
-            % len(value_error_list)
-        )
-    fw.close()
-    fw = open(Path(wd) / Path("bad_request_list.txt"), "r")
-    bad_request_list = fw.read().splitlines()
-    if len(bad_request_list) > 0:
-        print(
-            "%d bad requests, the accession numbers were save in bad_request_list.txt"
-            % len(bad_request_list)
-        )
-    fw.close()
+    with open(Path(wd) / Path("value_error_list.txt"), "r") as fw:
+        value_error_list = fw.read().splitlines()
+        if len(value_error_list) > 0:
+            print(
+                "%d value errors, the accession numbers were save in value_error_list.txt"
+                % len(value_error_list)
+            )
+    with open(Path(wd) / Path("bad_request_list.txt"), "r") as fw:
+        bad_request_list = fw.read().splitlines()
+        if len(bad_request_list) > 0:
+            print(
+                "%d bad requests, the accession numbers were save in bad_request_list.txt"
+                % len(bad_request_list)
+            )
 
     print("All sequences successfully downloaded!")
     print("Correct sequences were saved in %s." % out_file)

@@ -7,14 +7,14 @@
 
 
 from pathlib import Path
-
+import numpy as np
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from Bio import Entrez, SeqIO
 import func_timeout
 from func_timeout import func_set_timeout
 import time
 from threading import Lock
-
+import pandas as pd
 
 @func_set_timeout(600)
 def download_single(email, accession, out_path, request_lock, last_request_time):
@@ -55,8 +55,13 @@ def download_gb_file(email, in_path, out_path, max_threads=10, batch_size=None):
         accession_list = fr.read().splitlines()
 
     out_path.mkdir(parents=True, exist_ok=True)
+    error_file = out_path / "error_downloaded_index.csv"
 
-    existing_files = {p.stem for p in out_path.glob("*.gb")}
+    if error_file.exists() and error_file.stat().st_size > 0:
+        error_df = pd.read_csv(error_file, header=None)
+        existing_files = {p.stem for p in out_path.glob("*.gb")} | set(error_df.iloc[:, 0].astype(str))
+    else:
+        existing_files = {p.stem for p in out_path.glob("*.gb")}
     to_download = []
     skipped = []
     for acc in accession_list:
@@ -123,5 +128,36 @@ def download_gb_file(email, in_path, out_path, max_threads=10, batch_size=None):
                 print(f"[ERROR] {acc}: {str(e)[:100]}")
 
     print(f"All downloads completed. Success: {success}, Failed: {failed}")
+
+    
+    file_sizes = [f.stat().st_size for f in out_path.glob("*.gb")]
+    print(f"Total downloaded: {len(file_sizes)}")
+    if not file_sizes:
+        print("No .gb files found in out_path!")
+        return len(accession_list), len(skipped), len(to_download), success, failed
+
+    small_files = [f for f in out_path.glob("*.gb")]
+
+    error_files = []
+    for f in small_files:
+        with open(f, "r") as fr:
+            lines = fr.readlines()
+        for i, line in enumerate(lines):
+            if line.startswith("ORIGIN"):
+                if i + 1 < len(lines) and lines[i + 1].strip():
+                    break
+        else:
+            error_files.append((f, f.stat().st_size))
+            f.unlink()
+    if error_files:
+        with open(out_path / "error_downloaded_index.csv", "w") as fw:
+            for f, size in error_files:
+                fw.write(f"{f.stem},{size / 1024:.2f}\n")
+                print(f"Deleted {f.name} without ORIGIN section")
+        print(f"Quality check completed! Deleted {len(error_files)} invalid files.")
+    else:
+        print("Quality check completed! All files are valid.")
+
+
 
     return len(accession_list), len(skipped), len(to_download), success, failed

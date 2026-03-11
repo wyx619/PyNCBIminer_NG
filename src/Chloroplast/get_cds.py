@@ -6,6 +6,10 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import multiprocessing
 
+import warnings
+warnings.filterwarnings("ignore")
+
+
 
 _cds_list = None
 _alternative_name = None
@@ -30,12 +34,20 @@ def extract_gene_name(feature):
 
 
 def extract_sequence(seq_record, feature):
+
     seq = seq_record.seq
     parts = feature.location.parts if hasattr(feature.location, 'parts') else [feature.location]
-    fas_seq = "".join(
-        str(seq[part.start:part.end].reverse_complement()) if part.strand == -1 else str(seq[part.start:part.end])
-        for part in parts
-    )
+    seq_parts = []
+    for part in parts:
+        if part is None: 
+            continue
+        if part.strand is None:
+            part.strand = 1
+        if part.strand == -1:
+            seq_parts.append(str(seq[part.start:part.end].reverse_complement()))
+        else:
+            seq_parts.append(str(seq[part.start:part.end]))
+    fas_seq = "".join(seq_parts)
     return fas_seq
 
 
@@ -68,12 +80,17 @@ def process_gb_file(args):
     
     try:
         seq_record = SeqIO.read(Path(in_path) / gb_file_name, "gb")
+        from Bio.Seq import UndefinedSequenceError
+        try:
+            str(seq_record.seq)
+        except UndefinedSequenceError:
+            return df0_row, df1_row, sequences
         for feature in seq_record.features:
             if feature.type not in ("CDS", "rRNA"):
                 continue
             process_feature(seq_record, feature, df0_row, df1_row, sequences)
     except Exception as e:
-        print(f"Error processing file: {e} - {gb_file_name}")
+        print(f"Error extracting: {e} - {gb_file_name}\n")
     
     df1_row["cds_num"] = str(df0_row["cds_num"])
     return df0_row, df1_row, sequences
@@ -106,7 +123,7 @@ def get_cds(in_path, out_path, threads=3):
     
     gb_file_list = [f.name for f in in_path.iterdir() if f.suffix.lower() in {".gb", ".gbf", ".gbk"}]
     
-    print(f"Start extracting in {len(gb_file_list)} gb files...")
+    print(f"Start extracting CDS in {len(gb_file_list)} gb files...")
     
     df0 = pd.DataFrame(0, index=[Path(x).stem for x in gb_file_list], columns=_cds_list+['cds_num'], dtype=int)
     df1 = pd.DataFrame("", index=[Path(x).stem for x in gb_file_list], columns=_cds_list+['cds_num'], dtype=str)
@@ -130,13 +147,32 @@ def get_cds(in_path, out_path, threads=3):
                 for gene, seq_list in sequences.items():
                     all_sequences[gene].extend(seq_list)
             except Exception as e:
-                print(f"Error collecting results for {gb_name}: {e}")
+                print(f"Error collecting results for {gb_name}: {e}\n")
     
 
     for gene, seq_list in all_sequences.items():
         if seq_list:
-            with open(out_path / f"{gene}.fasta", "w") as fw:
-                fw.write("\n".join(f"{desc}\n{seq}" for desc, seq in seq_list) + "\n")
+            from Bio.Seq import Seq
+            id_seq_dict = {}
+            for desc, seq in seq_list:
+                if not seq:
+                    continue
+                header = desc.lstrip('>')
+                if header in id_seq_dict:
+                    if len(seq) > len(id_seq_dict[header]):
+                        id_seq_dict[header] = seq
+                else:
+                    id_seq_dict[header] = seq
+            records = []
+            for header, seq in id_seq_dict.items():
+                record = SeqIO.SeqRecord(
+                    seq=Seq(seq),
+                    id=header,
+                    description='',
+                )
+                records.append(record)
+            if records:
+                SeqIO.write(records, out_path / f"{gene}.fasta", "fasta")
     
 
     df_info = pd.read_csv(in_path / "gb_info.csv", usecols=['filename', 'organism'])

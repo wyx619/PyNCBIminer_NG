@@ -7,7 +7,8 @@ from Bio import SeqIO
 from datetime import datetime
 import pandas as pd
 import multiprocessing
-
+import warnings
+warnings.filterwarnings("ignore")
 
 def process_single_file(file_path, out_folder_path, cds_threshold, ambig_threshold):
     """处理单个GB文件的辅助函数"""
@@ -50,12 +51,10 @@ def process_single_file(file_path, out_folder_path, cds_threshold, ambig_thresho
             is_problematic = True
             out_file = Path(out_folder_path) / (file_path.stem + "_reannoated.fasta")
             try:
-                with open(out_file, "w") as fw:
-                    fw.write(
-                        f">{record.id}|{record.annotations.get('organism', '')}|{record.description}\n"
-                    )
-                    fw.write(str(record.seq) + "\n")
-                #file_path.unlink()
+                record.id = file_path.stem
+                record.description = f"{record.annotations.get('organism', '')}|{record.description}"
+                SeqIO.write([record], out_file, "fasta")
+
             except Exception as e:
                 print(f"Error saving {file_path}: {str(e)}")
                 results["error"] = f"Save failed: {str(e)}"

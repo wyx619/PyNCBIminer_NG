@@ -1,9 +1,3 @@
-# *-* coding:utf-8 *-*
-# @Time:2024/2/2 14:44
-# @Author:Ruijing Cheng
-# @File:iterated_blast.py
-# @Software:PyCharm
-
 import pandas as pd
 import numpy as np
 from pathlib import Path

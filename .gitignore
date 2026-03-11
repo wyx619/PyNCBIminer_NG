@@ -15,7 +15,7 @@ filtered_seqs/
 runtime_hooks/
 faba/
 filtered_seqs/
-
+/*.log
 /*.py
 /*.bat
 htmlout/
@@ -25,4 +25,5 @@ medicago
 tests/
 /*.7z
 /CPminer_*
+
 

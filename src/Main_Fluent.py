@@ -4,6 +4,7 @@ from pathlib import Path
 
 from PySide6.QtCore import (
     QDate,
+    QDateTime,
     QEasingCurve,
     QEventLoop,
     QObject,
@@ -100,16 +101,34 @@ class LogWidget(CardWidget):
         self.textEdit.setPlaceholderText(
             "Welcome to PyNCBIminer-NG! Output will appear here..."
         )
+        self.auto_scroll = True
+        self.last_user_scroll_time = 0
+        self.auto_scroll_delay = 10000
+        self.textEdit.verticalScrollBar().valueChanged.connect(self.on_user_scroll)
 
         self.vBoxLayout.addWidget(self.headerLabel)
         self.vBoxLayout.addWidget(self.textEdit)
+
+    def on_user_scroll(self, value):
+        scroll_bar = self.textEdit.verticalScrollBar()
+        if value < scroll_bar.maximum():
+            self.last_user_scroll_time = QDateTime.currentMSecsSinceEpoch()
+            self.auto_scroll = False
+        else:
+            self.auto_scroll = True
 
     def append_text(self, text):
         cursor = self.textEdit.textCursor()
         cursor.movePosition(QTextCursor.End)
         cursor.insertText(text)
         self.textEdit.setTextCursor(cursor)
-        self.textEdit.ensureCursorVisible()
+        if self.auto_scroll:
+            self.textEdit.ensureCursorVisible()
+        else:
+            current_time = QDateTime.currentMSecsSinceEpoch()
+            if current_time - self.last_user_scroll_time > self.auto_scroll_delay:
+                self.auto_scroll = True
+                self.textEdit.ensureCursorVisible()
 
 
 class RetrievalInterface(QWidget):
@@ -1214,7 +1233,7 @@ class ChloroplastMinerInterface(QWidget):
         h_select_tax.addSpacing(10)
         h_select_tax.addWidget(BodyLabel("Resolution Source:"))
         self.cds_select_tax_file = LineEdit()
-        self.cds_select_tax_file.setPlaceholderText("Select file (.csv)")
+        self.cds_select_tax_file.setPlaceholderText("Select file (.csv) [ID , organism , new_name]")
         self.cds_select_tax_file.setEnabled(False)
 
         btn_cds_select_tax_file = PushButton("Browse")
@@ -1515,6 +1534,12 @@ class ChloroplastMinerInterface(QWidget):
         if not in_folder:
             self.main_window.backend.emit_log(
                 "Please select input directory", "WARNING"
+            )
+            return
+
+        if not ori_gb_folder:
+            self.main_window.backend.emit_log(
+                "Please select original GenBank directory", "WARNING"
             )
             return
 

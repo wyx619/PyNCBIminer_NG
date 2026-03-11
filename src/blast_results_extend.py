@@ -1,9 +1,3 @@
-# *-* coding:utf-8 *-*
-# @Time:2024/2/2 15:11
-# @Author:Ruijing Cheng
-# @File:blast_results_extend.py
-# @Software:PyCharm
-
 from pathlib import Path
 import pandas as pd
 from math import floor
