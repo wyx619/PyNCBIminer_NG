@@ -1,5 +1,4 @@
 # *-* coding:utf-8 *-*
-import sys
 import threading
 from pathlib import Path
 
@@ -8,6 +7,7 @@ from qfluentwidgets import InfoBar, InfoBarPosition, MessageBox
 
 
 def get_resource_path(relative_path):
+    import sys
     try:
         base_path = sys._MEIPASS
     except AttributeError:
@@ -369,7 +369,6 @@ class BackendController(QObject):
         (Path(wd) / "results").mkdir(parents=True, exist_ok=True)
 
         # get entrez count
-        print(f"DEBUG submit_new_blast: date_from='{date_from}', date_to='{date_to}'")
         organisms = taxonomy.splitlines()
         organisms = [x for x in organisms if len(x) > 0]
         count = entrez_count(email, organisms, qualifier, date_from, date_to)

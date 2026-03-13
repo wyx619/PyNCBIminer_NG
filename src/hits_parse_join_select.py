@@ -1,9 +1,3 @@
-# *-* coding:utf-8 *-*
-# @Time:2024/2/2 15:00
-# @Author:Ruijing Cheng
-# @File:hits_parse_join_select.py
-# @Software:PyCharm
-
 import re
 import pandas as pd
 import numpy as np

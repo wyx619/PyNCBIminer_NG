@@ -176,5 +176,6 @@ if __name__ == "__main__":
     """
 
     spliter = Sequence_indexer(len_kmer=7)
-    test_record = SeqRecord("AATTNAATTATATYACCGCGCNNCNCCGAGACNC")
+    test_record = SeqRecord(Seq("AATTNAATTATATYACCGCGCNNCNCCGAGACNC"))
     index_array = spliter.index_record(test_record)
+    print(index_array)

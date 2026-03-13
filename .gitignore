@@ -25,5 +25,5 @@ medicago
 tests/
 /*.7z
 /CPminer_*
-
+old/
 

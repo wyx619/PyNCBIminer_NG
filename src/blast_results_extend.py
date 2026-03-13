@@ -44,10 +44,7 @@ def add_all_queries2(wd):
         ref_msa_file = "msa_queries_1_to_%d.fasta" % len(queries_file_list)
         ref_msa_dir = Path(wd) / Path("parameters") / Path("ref_msa")
         ref_msa_path = ref_msa_dir / ref_msa_file
-        print(f"Expected MSA file: {ref_msa_file}")
-        print(f"MSA file exists: {ref_msa_path.exists()}")
-        if ref_msa_path.exists():
-            print(f"MSA file size: {ref_msa_path.stat().st_size}")
+
         if not ref_msa_path.exists() or ref_msa_path.stat().st_size == 0:
             for n in range(2, len(queries_file_list) + 1):
                 queries_file = Path(wd) / Path("parameters") / Path("ref_seq") / Path("queries_%d.fasta" % n)

@@ -220,8 +220,7 @@ def iterated_blast_main(
             "Sequence",
             "Sequence_length",
             "blast_round",
-            "Missing_left",
-            "Missing_right",
+
         ]
         sum_mat = np.zeros((len(queries), len(column_list)), dtype=str)
         sum_table = pd.DataFrame(sum_mat, columns=column_list, dtype=str)
@@ -232,8 +231,7 @@ def iterated_blast_main(
             sum_table.loc[i, "Sequence"] = str(queries[key].seq.upper())
             sum_table.loc[i, "Sequence_length"] = len(sum_table.loc[i, "Sequence"])
             sum_table.loc[i, "blast_round"] = blast_round
-            sum_table.loc[i, "Missing_left"] = ""
-            sum_table.loc[i, "Missing_right"] = ""
+
         if not (Path(wd) / Path("parameters") / Path("all_queries_info.txt")).exists():
             sum_table.to_csv(
                 Path(wd) / Path("parameters") / Path("all_queries_info.txt"),
@@ -246,7 +244,7 @@ def iterated_blast_main(
                 Path(wd) / Path("parameters") / Path("all_queries_info.txt"), sep="\t"
             )
             if blast_round not in set(all_queries["blast_round"]):
-                all_queries = pd.concat([all_queries, sum_table], ignore_index=True)
+                all_queries = pd.concat([all_queries, sum_table])
                 all_queries.to_csv(
                     Path(wd) / Path("parameters") / Path("all_queries_info.txt"),
                     index=False,
@@ -272,10 +270,6 @@ def iterated_blast_main(
             nucl_reward=nucl_reward,
             nucl_penalty=nucl_penalty,
         )
-        # join and extend hits
-        # file_list = os.listdir(tmp_wd)
-        # todo: do not extend in each round of BLAST.
-        # tmp_results = hits_join_extend_main(wd=tmp_wd, max_len=max_length)
         tmp_results = hits_parse_join_select_main(wd=tmp_wd, max_len=max_length)
         tmp_results["Source"] = blast_round
         # combine results of iterated BLAST

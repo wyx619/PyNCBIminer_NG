@@ -277,29 +277,14 @@ def p_distance(wd, in_file):
 
 def my_mcl(wd, df, table):
     # Nodes are considered adjacent if the distance between them is <= 0.3 units
-    matrix = np.array(df)
-    
-    if matrix.ndim < 2 or matrix.shape[0] < 2 or matrix.shape[1] < 2:
-        print("Distance matrix too small for MCL clustering (%s). Skipping MCL..." % str(matrix.shape))
-        return None
-    
+    matrix = np.array(df)    
     matrix[matrix == 0] = 1
-    adjacent = matrix <= 0.3
+    adjacent = (matrix <= 0.3)
     matrix[adjacent] = 1
     matrix[~adjacent] = 0
     matrix = csr_matrix(matrix)
-    
-    try:
-        result = mc.run_mcl(matrix)
-        clusters = mc.get_clusters(result)
-    except Exception as e:
-        print("MCL clustering failed: %s" % str(e))
-        return None
-    
-    if len(clusters) == 0 or (len(clusters) > 0 and len(clusters[0]) == 0):
-        print("MCL returned empty clusters. Skipping MCL...")
-        return None
-    # mc.draw_graph(matrix, clusters, node_size=10, with_labels=True, edge_color="silver")
+    result = mc.run_mcl(matrix)
+    clusters = mc.get_clusters(result)
 
     df1 = pd.read_table(Path(wd) / Path(table), sep="\t", engine="python")
     df1["scluster"] = -1
@@ -311,14 +296,6 @@ def my_mcl(wd, df, table):
             df1.loc[list(cluster)].sort_values(by="seq_len", ascending=False).index[0]
         )
     df1.to_csv(Path(wd) / Path(table), index=False, sep="\t")
-    # for i in range(len(clusters)):
-    #     # print("select one sequence from cluster %d" % i)
-    #     cluster = df1.iloc[list(clusters[i])]
-    #     cluster = cluster.sort_values(by=["sum_hits_alignlen", "sum_hits_score"], ascending=[False, False])
-    #     # cluster = cluster.sort_values(by="real_seq_len", ascending=False)
-    #     index_list.append(cluster.index[0])
-
-    # todo: restrict number of new reference sequences
     print("get %d clusters" % len(index_list))
     df2 = df1.iloc[index_list]
     df2 = df2.sort_values(by="subject_acc.ver")
@@ -359,11 +336,6 @@ def cluster_sequences_main(wd, fasta_file=r"hits_clustered_filtered.fasta"):
         )
         table = r"hits_clustered_filtered.txt"
         seq_clustered = my_mcl(wd, seq_distance, table)
-        if seq_clustered is None:
-            print("MCL clustering skipped. Using all filtered sequences.")
-            seq_clustered = pd.read_table(
-                Path(wd) / Path("hits_clustered_filtered.txt"), sep="\t"
-            )
         seq_clustered.to_csv(
             Path(wd) / Path("sequences_clustered.txt"), index=False, sep="\t"
         )
@@ -405,23 +377,11 @@ def cluster_sequences(wd, fasta_file=r"hits_clustered_filtered.fasta"):
             sep="\t",
         )
         table = r"hits_clustered_filtered.txt"
-        # seq_clustered = my_mcl(wd, seq_distance, table)  # my_mcl(wd, df, table)
-        
-        matrix = np.array(seq_distance)
-        matrix_shape = matrix.shape
-        if matrix.ndim < 2 or matrix_shape[0] < 2 or matrix_shape[1] < 2:
-            print("Distance matrix too small for MCL (%s). Using all filtered sequences." % str(matrix_shape))
-            seq_clustered = pd.read_table(
-                Path(wd) / Path("hits_clustered_filtered.txt"), sep="\t"
-            )
-            seq_clustered.to_csv(
-                Path(wd) / Path("sequences_clustered.txt"), index=False, sep="\t"
-            )
-            return seq_clustered
-            
+        # seq_clustered = my_mcl(wd, seq_distance, table)  # my_mcl(wd, df, table) 
         try:
+            matrix = np.array(seq_distance)
             matrix[matrix == 0] = 1
-            adjacent = matrix <= 0.3
+            adjacent =( matrix <= 0.3)
             matrix[adjacent] = 1
             matrix[~adjacent] = 0
             matrix = csr_matrix(matrix)

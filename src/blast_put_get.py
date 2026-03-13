@@ -1,9 +1,3 @@
-# *-* coding:utf-8 *-*
-# @Time:2024/2/2 14:57
-# @Author:Ruijing Cheng
-# @File:blast_put_get.py
-# @Software:PyCharm
-
 import re
 import time
 import pandas as pd
@@ -157,29 +151,11 @@ def put_blast(
             sum_table.loc[i, "Description"] = queries[key].description
             sum_table.loc[i, "Sequence"] = str(queries[key].seq.upper())
             sum_table.loc[i, "Sequence_length"] = len(sum_table.loc[i, "Sequence"])
-            # print(key)
-            # print(queries[key].description)
-            # print(str(queries[key].seq.upper()))
-
-        # for i in range(len(queries)):
-        #     sum_table.loc[i, "ID"] = queries[i].id
-        #     sum_table.loc[i, "Description"] = queries[i].description
-        #     seq = str(queries[i].seq.upper())
-        #     sum_table.loc[i, "Sequence"] = seq.replace("-", "")
-        #     sum_table.loc[i, "Sequence_length"] = len(sum_table.loc[i, "Sequence"])
-        # left = [seq.find("A"), seq.find("T"), seq.find("C"), seq.find("G")]
-        # right = [seq.rfind("A"), seq.rfind("T"), seq.rfind("C"), seq.rfind("G")]
-        # sum_table.loc[i, "Missing_left"] = min(left)
-        # sum_table.loc[i, "Missing_right"] = len(seq) - max(right) - 1
-
-        # Parameters taken from http://www.ncbi.nlm.nih.gov/BLAST/Doc/node5.html on 9 July 2007
-        # new website: https://ncbi.github.io/blast-cloud/dev/api.html (2023/06/12)
 
         for index in sum_table.index:
             sequence = sum_table.loc[index, "Sequence"]
             parameters = [
                 ("HITLIST_SIZE", alignments),
-                # ("ALIGNMENTS", alignments),
                 ("DATABASE", database),
                 ("ENTREZ_QUERY", entrez_query),
                 ("EXPECT", expect),
@@ -198,13 +174,7 @@ def put_blast(
             Path(wd) / Path(table), index=False, sep="\t"
         )  # save parameters
         print("Information of initial query saved in %s" % table)
-    # queries_info = sum_table[["ID", "Description", "Sequence", "Sequence_length"]].copy()
-    # queries_info["blast_round"] = blast_round
 
-    # Note the NCBI do not currently impose a rate limit here,
-    # other than the request not to make say 50 queries at once using multiple threads.
-    # ua = UserAgent()
-    # header = {"User-Agent": ua.random}
     indices = sum_table[sum_table["RID"] == ""].index
     while len(indices) > 0:
         for n in range(len(indices)):
@@ -213,10 +183,6 @@ def put_blast(
                 message = sum_table.loc[index, "Message_put"]
                 message = message.encode()
                 print("Try submitting Query %s..." % sum_table.loc[index, "ID"])
-                # request = Request(url_base, message, {"User-Agent": "BiopythonClient"})
-                # # request = Request(url_base, message, headers=header)
-                # handle = urlopen(request) # get rid and rtoe
-                # rid, rtoe = _parse_qblast_ref_page(handle)
                 rid, rtoe = put_blast_requests(
                     url_base, message, {"User-Agent": "BiopythonClient"}
                 )
@@ -279,7 +245,6 @@ def get_blast(
         rid = sum_table.loc[index, "RID"]
         parameters = [
             ("HITLIST_SIZE", alignments),
-            # ("ALIGNMENTS", alignments),
             ("FORMAT_TYPE", format_type),
             ("RID", rid),
             ("CMD", "Get"),
@@ -287,19 +252,6 @@ def get_blast(
         query = [x for x in parameters if x[1] is not None]
         message = urlencode(query)
         sum_table.loc[index, "Message_get"] = message
-
-    # Poll NCBI until the results are ready.
-    # https://blast.ncbi.nlm.nih.gov/Blast.cgi?CMD=Web&PAGE_TYPE=BlastDocs&DOC_TYPE=DeveloperInfo
-    # 1. Do not contact the server more often than once every 10 seconds.
-    # 2. Do not poll for any single RID more often than once a minute.
-    # 3. Use the URL parameter email and tool, so that the NCBI
-    #    can contact you if there is a problem.
-    # 4. Run scripts weekends or between 9 pm and 5 am Eastern time
-    #    on weekdays if more than 50 searches will be submitted.
-    # --
-    # Could start with a 10s delay, but expect most short queries
-    # will take longer thus at least 70s with delay. Therefore,
-    # start with 20s delay, thereafter once a minute.
 
     previous = 0
     delay = 20  # seconds
