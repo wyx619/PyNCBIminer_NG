@@ -4,7 +4,6 @@ from pathlib import Path
 
 from PySide6.QtCore import (
     QDate,
-    QDateTime,
     QEasingCurve,
     QEventLoop,
     QObject,
@@ -101,34 +100,16 @@ class LogWidget(CardWidget):
         self.textEdit.setPlaceholderText(
             "Welcome to PyNCBIminer-NG! Output will appear here..."
         )
-        self.auto_scroll = True
-        self.last_user_scroll_time = 0
-        self.auto_scroll_delay = 10000
-        self.textEdit.verticalScrollBar().valueChanged.connect(self.on_user_scroll)
 
         self.vBoxLayout.addWidget(self.headerLabel)
         self.vBoxLayout.addWidget(self.textEdit)
-
-    def on_user_scroll(self, value):
-        scroll_bar = self.textEdit.verticalScrollBar()
-        if value < scroll_bar.maximum():
-            self.last_user_scroll_time = QDateTime.currentMSecsSinceEpoch()
-            self.auto_scroll = False
-        else:
-            self.auto_scroll = True
 
     def append_text(self, text):
         cursor = self.textEdit.textCursor()
         cursor.movePosition(QTextCursor.End)
         cursor.insertText(text)
         self.textEdit.setTextCursor(cursor)
-        if self.auto_scroll:
-            self.textEdit.ensureCursorVisible()
-        else:
-            current_time = QDateTime.currentMSecsSinceEpoch()
-            if current_time - self.last_user_scroll_time > self.auto_scroll_delay:
-                self.auto_scroll = True
-                self.textEdit.ensureCursorVisible()
+        self.textEdit.ensureCursorVisible()
 
 
 class RetrievalInterface(QWidget):
