@@ -1,9 +1,3 @@
-# *-* coding:utf-8 *-*
-# @Time:2024/2/2 14:50
-# @Author:Ruijing Cheng
-# @File:seq_check_download.py
-# @Software:PyCharm
-
 import urllib.error
 import func_timeout.exceptions
 import shutil
@@ -16,7 +10,7 @@ import pandas as pd
 from main_utils import get_query_accession
 
 
-@func_set_timeout(600)
+@func_set_timeout(120)
 def my_efetch(accession, strand, seq_start, seq_stop):
     handle = Entrez.efetch(
         db="nucleotide",
@@ -219,8 +213,12 @@ def seq_check_download(
     # todo: use user provided email
     Entrez.email = entrez_email
     acc_list = list(acc_file.index)
+    max_retries = 3
+    retry_count = {}
     while len(acc_list) != 0:
         accession = acc_list[0]
+        if accession not in retry_count:
+            retry_count[accession] = 0
         try:
             t0 = datetime.now()
             seq_start = int(acc_file.loc[accession, "start"])
@@ -287,9 +285,23 @@ def seq_check_download(
                 fw.write(accession + "\n")
             print("Bad request: %s. Move on to the next sequence." % accession)
         except func_timeout.exceptions.FunctionTimedOut:
-            print("Time out, try downloading %s again..." % accession)
+            retry_count[accession] += 1
+            if retry_count[accession] < max_retries:
+                print("Time out, retrying %s (%d/%d)..." % (accession, retry_count[accession], max_retries))
+            else:
+                acc_list.pop(0)
+                print("Time out, skipped %s after %d attempts." % (accession, max_retries))
+                with open(Path(wd) / Path("bad_request_list.txt"), "a") as fw:
+                    fw.write(accession + "\n")
         except Exception as result:
-            print("Error: %s, try downloading %s again..." % (result, accession))
+            retry_count[accession] += 1
+            if retry_count[accession] < max_retries:
+                print("Error: %s, retrying %s (%d/%d)..." % (result, accession, retry_count[accession], max_retries))
+            else:
+                acc_list.pop(0)
+                print("Error: %s, skipped %s after %d attempts." % (result, accession, max_retries))
+                with open(Path(wd) / Path("bad_request_list.txt"), "a") as fw:
+                    fw.write(accession + "\n")
 
 
 def seq_check_download_main(

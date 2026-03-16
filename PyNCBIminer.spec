@@ -2,6 +2,7 @@
 
 import sys
 import os
+import warnings
 from pathlib import Path
 
 # 获取项目根目录（使用当前工作目录）
@@ -9,6 +10,9 @@ project_root = Path.cwd()
 
 # 版本信息文件
 version_info_file = str(project_root / "version_info.txt")
+
+# 过滤 markov-clustering 的 matplotlib 警告
+warnings.filterwarnings('ignore', message='.*Matplotlib not present.*')
 
 # 分析主程序
 a = Analysis(
@@ -80,12 +84,13 @@ a = Analysis(
         'PIL.Image',
         'PIL._tkinter_finder',
         # 排除测试模块
-        'pandas.tests','pandas.tests', 'pandas.io.formats.style',
+        'pandas.tests',
+        'pandas.io.formats.style',
         'numpy.tests',
         'scipy.tests',
         'scikit-learn.tests',
         'networkx.tests',
-        'Bio.tests','numpy.f2py',' numpy.testing','numpy.typing',
+        'Bio.tests',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
@@ -106,11 +111,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    upx_exclude=[
-    'python3.dll',
-    'libcrypto-3-x64.dll',
-    'libssl-3-x64.dll',
-    'api-ms-win-*.dll',],
+    upx_exclude=[],
     runtime_tmpdir=None,
     console=False,
     disable_windowed_traceback=False,

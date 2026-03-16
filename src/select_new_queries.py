@@ -346,7 +346,7 @@ def cluster_sequences(wd, fasta_file=r"hits_clustered_filtered.fasta"):
     print("Clustering sequences...")
     msa_file = "msa_" + fasta_file
     # todo: if hits_clustered_filtered.fasta only has two sequence
-    if (Path(wd) / fasta_file).stat().st_size > 0:
+    if (Path(wd) / fasta_file).exists() and (Path(wd) / fasta_file).stat().st_size > 0:
         n_seq = 0
         for record in SeqIO.parse(Path(wd) / Path(fasta_file), "fasta"):
             n_seq += 1
@@ -366,9 +366,10 @@ def cluster_sequences(wd, fasta_file=r"hits_clustered_filtered.fasta"):
         command = f"{mafft_exe} --localpair --maxiterate 1000 {Path(wd) / fasta_file} > {Path(wd) / msa_file}"
         run_command(command)
     else:
+        print("Warning: %s does not exist or is empty." % fasta_file)
         return None
 
-    if (Path(wd) / Path(msa_file)).stat().st_size > 0:
+    if (Path(wd) / Path(msa_file)).exists() and (Path(wd) / Path(msa_file)).stat().st_size > 0:
         seq_distance = p_distance(wd, msa_file)
         # todo: what if no return
         seq_distance.to_csv(
@@ -377,17 +378,59 @@ def cluster_sequences(wd, fasta_file=r"hits_clustered_filtered.fasta"):
             sep="\t",
         )
         table = r"hits_clustered_filtered.txt"
-        # seq_clustered = my_mcl(wd, seq_distance, table)  # my_mcl(wd, df, table) 
+        # seq_clustered = my_mcl(wd, seq_distance, table)  # my_mcl(wd, df, table)
+        
+        # 检查 seq_distance 是否为空或维度不足
+        if seq_distance is None or len(seq_distance) == 0:
+            print("Warning: Distance matrix is empty. Using all filtered sequences.")
+            seq_clustered = pd.read_table(
+                Path(wd) / Path("hits_clustered_filtered.txt"), sep="\t"
+            )
+            seq_clustered.to_csv(
+                Path(wd) / Path("sequences_clustered.txt"), index=False, sep="\t"
+            )
+            return seq_clustered
+        
         try:
             matrix = np.array(seq_distance)
+            
+            # 检查矩阵维度
+            if matrix.ndim < 2 or matrix.shape[0] < 2 or matrix.shape[1] < 2:
+                print("Warning: Distance matrix has insufficient dimensions (%s). Using all filtered sequences." % str(matrix.shape))
+                seq_clustered = pd.read_table(
+                    Path(wd) / Path("hits_clustered_filtered.txt"), sep="\t"
+                )
+                seq_clustered.to_csv(
+                    Path(wd) / Path("sequences_clustered.txt"), index=False, sep="\t"
+                )
+                return seq_clustered
+            
+            # 转换为 float64 避免精度问题
+            matrix = matrix.astype(np.float64)
             matrix[matrix == 0] = 1
-            adjacent =( matrix <= 0.3)
+            adjacent = (matrix <= 0.3)
             matrix[adjacent] = 1
             matrix[~adjacent] = 0
-            matrix = csr_matrix(matrix)
-            result = mc.run_mcl(matrix)  # run MCL with default parameters
-            clusters = mc.get_clusters(result)  # 4 clusters, 11 clusters
-            # mc.draw_graph(matrix, clusters, node_size=10, with_labels=True, edge_color="silver")
+            
+            # 使用 lil_matrix 以提高效率，然后转换为 csr_matrix
+            from scipy.sparse import lil_matrix
+            lil_mat = lil_matrix(matrix)
+            matrix = lil_mat.tocsr()
+            
+            # 运行 MCL，添加错误处理
+            result = mc.run_mcl(matrix)
+            clusters = mc.get_clusters(result)
+            
+            # 检查聚类结果是否为空
+            if clusters is None or len(clusters) == 0:
+                print("Warning: MCL returned no clusters. Using all filtered sequences.")
+                seq_clustered = pd.read_table(
+                    Path(wd) / Path("hits_clustered_filtered.txt"), sep="\t"
+                )
+                seq_clustered.to_csv(
+                    Path(wd) / Path("sequences_clustered.txt"), index=False, sep="\t"
+                )
+                return seq_clustered
 
             df1 = pd.read_table(Path(wd) / Path(table), sep="\t", engine="python")
             df1["scluster"] = -1
@@ -410,16 +453,20 @@ def cluster_sequences(wd, fasta_file=r"hits_clustered_filtered.fasta"):
                 Path(wd) / Path("sequences_clustered.txt"), index=False, sep="\t"
             )
             return df2
-        except Exception as result:
+        except Exception as e:
             print("MCL step2 clustering according to sequence distance failed.")
             print("Select one sequence randomly from MCL step1.")
+            print("Error: %s" % str(e))
             df1 = pd.read_table(Path(wd) / Path(table), sep="\t", engine="python")
-            df2 = df1.loc[np.random.choice(df1.index, 1, replace=False)[0]].to_frame().T
-            df2.to_csv(
-                Path(wd) / Path("sequences_clustered.txt"), index=False, sep="\t"
-            )
-            print(result)
-            return df2
+            if len(df1) > 0:
+                df2 = df1.loc[np.random.choice(df1.index, 1, replace=False)[0]].to_frame().T
+                df2.to_csv(
+                    Path(wd) / Path("sequences_clustered.txt"), index=False, sep="\t"
+                )
+                return df2
+            else:
+                print("Error: No sequences available for random selection.")
+                return None
 
 
 def select_new_queries(tmp_wd, blast_round, ref_number):

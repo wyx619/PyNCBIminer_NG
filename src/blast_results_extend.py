@@ -38,7 +38,10 @@ def add_all_queries2(wd):
         )
         generated_msa = Path(wd) / Path("parameters") / Path("ref_msa") / Path("queries_1.fasta")
         if generated_msa.exists():
-            generated_msa.rename(msa_path)
+            # 如果目标文件已存在，先删除再移动
+            if msa_path.exists():
+                msa_path.unlink()
+            shutil.move(str(generated_msa), str(msa_path))
 
     if len(queries_file_list) > 1:
         ref_msa_file = "msa_queries_1_to_%d.fasta" % len(queries_file_list)
@@ -173,13 +176,26 @@ def calculate_missing_length(wd, ref_msa_file):
         Path(wd) / Path("parameters") / Path("all_queries_info.txt"), sep="\t"
     )
     all_queries_info.index = all_queries_info["ID"]
+    
+    # 检查是否已经有 Missing_left 和 Missing_right 列
+    if "Missing_left" in all_queries_info.columns and "Missing_right" in all_queries_info.columns:
+        print("Missing length information already exists in all_queries_info.txt")
+        return
+    
+    # 预先添加列，避免 KeyError
+    all_queries_info["Missing_left"] = 0
+    all_queries_info["Missing_right"] = 0
+    
     for key in seq_dict.keys():
         if key in all_queries_info.index:
             seq = seq_dict[key].seq.upper()
             left = [seq.find("A"), seq.find("T"), seq.find("C"), seq.find("G")]
             right = [seq.rfind("A"), seq.rfind("T"), seq.rfind("C"), seq.rfind("G")]
-            all_queries_info.loc[key, "Missing_left"] = min(left)
-            all_queries_info.loc[key, "Missing_right"] = len(seq) - max(right) - 1
+            # 确保找到的不是 -1（未找到）
+            min_left = min([x for x in left if x >= 0]) if any(x >= 0 for x in left) else 0
+            max_right = max([x for x in right if x >= 0]) if any(x >= 0 for x in right) else len(seq)
+            all_queries_info.loc[key, "Missing_left"] = min_left
+            all_queries_info.loc[key, "Missing_right"] = len(seq) - max_right - 1
         else:
             print(f"Warning: {key} not found in all_queries_info.txt, skipping...")
     all_queries_info.to_csv(
@@ -192,7 +208,7 @@ def calculate_missing_length(wd, ref_msa_file):
 def blast_results_extend_main(wd, max_len):
     ref_msa_file = add_all_queries2(wd)
     calculate_missing_length(wd, ref_msa_file)
-    # todo: "query_acc.ver"改成ID？
+    # todo: "query_acc.ver"改成 ID？
     blast_results = pd.read_table(
         Path(wd) / Path("results") / Path("blast_results.txt"),
         sep="\t",
@@ -205,6 +221,15 @@ def blast_results_extend_main(wd, max_len):
         sep="\t",
         engine="python",
     )
+    
+    # 检查必要的列是否存在
+    required_columns = ["ID", "Sequence_length", "Missing_left", "Missing_right"]
+    missing_columns = [col for col in required_columns if col not in ref_info.columns]
+    if missing_columns:
+        print("Error: Missing required columns in all_queries_info.txt: %s" % ", ".join(missing_columns))
+        print("Skipping sequence extension.")
+        return
+    
     extended_blast_results = []
     for blast_round in blast_results["Source"].value_counts().index:
         tmp_df = blast_results[blast_results["Source"] == blast_round].copy()
@@ -228,16 +253,24 @@ def blast_results_extend_main(wd, max_len):
                 ref_id = name
             # print(ref_id)
 
-            qreflen = ref_info[ref_info["ID"] == ref_id].iloc[0]["Sequence_length"]
-            missing_left = ref_info[ref_info["ID"] == ref_id].iloc[0]["Missing_left"]
-            missing_right = ref_info[ref_info["ID"] == ref_id].iloc[0]["Missing_right"]
+            # 检查 ref_id 是否在 ref_info 中
+            if ref_id not in ref_info["ID"].values:
+                print("Warning: Reference ID %s not found in all_queries_info.txt, skipping..." % ref_id)
+                continue
+            
+            ref_data = ref_info[ref_info["ID"] == ref_id].iloc[0]
+            qreflen = ref_data["Sequence_length"]
+            missing_left = ref_data["Missing_left"]
+            missing_right = ref_data["Missing_right"]
             print("Extending sequences found by %s..." % ref_id)
             extended_hit_tables.append(
                 extend_hits(group, max_len, qreflen, missing_left, missing_right)
             )
-        extended_hit_tables = pd.concat(extended_hit_tables)
-        extended_blast_results.append(extended_hit_tables)
-    extended_blast_results = pd.concat(extended_blast_results)
-    extended_blast_results.to_csv(
-        Path(wd) / Path("results") / Path("blast_results.txt"), index=False, sep="\t"
-    )
+        if extended_hit_tables:  # 只有在有数据时才 concat
+            extended_blast_results.append(pd.concat(extended_hit_tables))
+    
+    if extended_blast_results:
+        extended_blast_results = pd.concat(extended_blast_results)
+        extended_blast_results.to_csv(
+            Path(wd) / Path("results") / Path("blast_results.txt"), index=False, sep="\t"
+        )
