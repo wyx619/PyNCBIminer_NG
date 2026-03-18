@@ -10,8 +10,9 @@ import pandas as pd
 from main_utils import get_query_accession
 
 
-@func_set_timeout(120)
+@func_set_timeout(180)
 def my_efetch(accession, strand, seq_start, seq_stop):
+    """Fetch sequence from NCBI with timeout protection."""
     handle = Entrez.efetch(
         db="nucleotide",
         rettype="gb",
@@ -23,8 +24,17 @@ def my_efetch(accession, strand, seq_start, seq_stop):
     )
     print("Extended start: %d, " % seq_start, end="")
     print("Extended end: %d, " % seq_stop, end="")
-    print("Strand: %d, " % strand, end="")
+    print("Strand: %d" % strand)
     return handle
+
+
+@func_set_timeout(180)
+def parse_gb_record(handle, accession):
+    """Parse GenBank record with timeout protection."""
+    print("Parsing GenBank record for %s..." % accession)
+    record = SeqIO.read(handle, "gb")
+    print("Successfully parsed record for %s" % accession)
+    return record
 
 
 def filter_duplicate_key(wd, file):
@@ -234,7 +244,10 @@ def seq_check_download(
                 seq_start=seq_start,
                 seq_stop=seq_stop,
             )
-            record = SeqIO.read(handle, "gb")
+            try:
+                record = parse_gb_record(handle, accession)
+            finally:
+                handle.close()
             print("Actual sequence length: %d" % len(record.seq))
             feature_list = []
             for feature in record.features:
@@ -271,13 +284,13 @@ def seq_check_download(
             t1 = datetime.now()
             print("%s downloaded in %s seconds" % (accession, t1 - t0))
             acc_list.pop(0)
-        except ValueError:  # features location no correct
+        except ValueError as e:  # features location no correct or SeqIO parsing error
             acc_list.pop(0)
             with open(Path(wd) / Path("value_error_list.txt"), "a") as fw:
                 fw.write(accession + "\n")
             print(
-                "ValueError: CompoundLocation should have at least 2 parts, skip %s"
-                % accession
+                "ValueError: %s, skip %s"
+                % (str(e), accession)
             )
         except urllib.error.HTTPError:  # HTTP Error 400, wrongly parsed accession
             acc_list.pop(0)

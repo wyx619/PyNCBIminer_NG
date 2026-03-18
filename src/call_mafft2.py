@@ -211,7 +211,6 @@ def mafft(
             in_file = str(Path(in_path) / file)
             out_file = str(Path(out_path) / file)
             command = f"{mafft_exe} --quiet --auto --thread {thread} {'--reorder' * reorder} {additional_params} {in_file} > {out_file}"
-            # print(command)
             print("Aligning %s..." % in_file)
             if progress_callback:
                 progress_callback(f"Aligning {file}...")

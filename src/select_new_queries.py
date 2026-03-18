@@ -4,7 +4,6 @@ import numpy as np
 from Bio import AlignIO
 from pathlib import Path
 from datetime import datetime
-from scipy.sparse import csr_matrix
 from Bio import SeqIO
 from main_utils import get_query_accession
 from seq_check_download import seq_check_download_main
@@ -56,33 +55,14 @@ def cluster_queries(wd, ref_list=None):
                 print("remove the sequences with too high or too low bit-score")
                 high_score = group["sum_hits_score"].quantile(0.75)
                 low_score = group["sum_hits_score"].quantile(0.25)
-                group_filtered = group[group["sum_hits_score"] <= high_score]
-                group_filtered = group_filtered[
-                    group_filtered["sum_hits_score"] >= low_score
-                ]  # 228 -> 173
+                group = group[group["sum_hits_score"] <= high_score]
+                group = group[group["sum_hits_score"] >= low_score]
 
-                if len(group_filtered) < 3:
-                    print(
-                        "After bit-score filtering, only %d sequences left. Selecting one randomly..."
-                        % len(group_filtered)
-                    )
-                    if len(group_filtered) > 0:
-                        index_list.append(
-                            np.random.choice(group_filtered.index, 1, replace=False)[0]
-                        )
-                    else:
-                        index_list.append(
-                            np.random.choice(group.index, 1, replace=False)[0]
-                        )
-                    continue
-
-                if len(group_filtered) > 1000:
+                if len(group) > 1000:
                     print("Selecting 1000 sequences randomly...")
-                    group = group_filtered.loc[
-                        np.random.choice(group_filtered.index, 1000, replace=False)
+                    group = group.loc[
+                        np.random.choice(group.index, 1000, replace=False)
                     ]
-                else:
-                    group = group_filtered
                 time0 = datetime.now()
                 print("Extracting positions...", end="")
                 positions = {
@@ -101,69 +81,33 @@ def cluster_queries(wd, ref_list=None):
                 matrix = nx.to_scipy_sparse_array(network)
                 time3 = datetime.now()
                 print("running time: %s Seconds" % (time3 - time2))
-
-                matrix_shape = matrix.shape if hasattr(matrix, 'shape') else (matrix.toarray().shape if hasattr(matrix, 'toarray') else (0, 0))
-                if matrix_shape[0] < 2 or matrix_shape[1] < 2:
-                    print(
-                        "Network matrix too small (%s). Selecting one sequence randomly..."
-                        % str(matrix_shape)
-                    )
-                    index_list.append(
-                        np.random.choice(group.index, 1, replace=False)[0]
-                    )
-                    continue
-
                 print("Running MCL...", end="")
-                try:
-                    result = mc.run_mcl(matrix)
-                    time4 = datetime.now()
-                    print("running time: %s Seconds" % (time4 - time3))
-                    print("Getting clusters...", end="")
-                    clusters = mc.get_clusters(result)
-                    time5 = datetime.now()
-                    print("running time: %s Seconds" % (time5 - time4))
-                    print("Total running time: %s Seconds" % (time5 - time0))
-                    print("get %d clusters" % len(clusters))
 
-                    if len(clusters) == 0 or len(clusters[0]) == 0:
-                        print(
-                            "MCL returned empty clusters. Selecting one sequence randomly..."
-                        )
-                        index_list.append(
-                            np.random.choice(group.index, 1, replace=False)[0]
-                        )
-                        continue
-
-                    print(
-                        "Selecting the sequence with the longest align length from each cluster..."
-                    )
-                    for i, cluster in enumerate(clusters):
-                        print("cluster %d, %d sequences" % (i, len(cluster)))
-                        indices = group.iloc[list(cluster)].index
-                        df.loc[indices, "qcluster"] = i
-                        index_list.append(
-                            df.loc[indices]
-                            .sort_values(
-                                by=["sum_hits_alignlen", "sum_hits_score"],
-                                ascending=[False, True],
-                            )
-                            .index[0]
-                        )
-                except Exception as e:
-                    print("MCL clustering failed: %s" % str(e))
-                    print("Selecting one sequence randomly as fallback...")
+                result = mc.run_mcl(matrix)
+                time4 = datetime.now()
+                print("running time: %s Seconds" % (time4 - time3))
+                print("Getting clusters...", end="")
+                clusters = mc.get_clusters(result)
+                time5 = datetime.now()
+                print("running time: %s Seconds" % (time5 - time4))
+                print("Total running time: %s Seconds" % (time5 - time0))
+                print("get %d clusters" % len(clusters))
+                print("Selecting the sequence with the longest align length from each cluster...")
+                for i, cluster in enumerate(clusters):
+                    print("cluster %d, %d sequences" % (i, len(cluster)))
+                    indices = group.iloc[list(cluster)].index
+                    df.loc[indices, "qcluster"] = i
                     index_list.append(
-                        np.random.choice(group.index, 1, replace=False)[0]
+                        df.loc[indices]
+                        .sort_values(
+                            by=["sum_hits_alignlen", "sum_hits_score"],
+                            ascending=[False, True],).index[0]
                     )
-                    continue
-
                 df.to_csv(
                     Path(wd) / Path("hits_selected_clusters.txt"), index=False, sep="\t"
                 )
         except Exception as result:
             print(result)
-            # print("Selecting one sequence found by this query randomly ...")
-            # index_list.append(np.random.choice(group.index, 1, replace=False)[0])
 
     df1 = df.loc[index_list]
     df1 = df1.drop_duplicates(
@@ -185,7 +129,6 @@ def filter_seq(
 ):
     def get_accession(record):
         parts = record.description.split(":")
-        # assert len(parts) == 2
         return parts[0]
 
     df = pd.read_table(Path(wd) / Path(table), sep="\t", engine="python")
@@ -219,8 +162,7 @@ def filter_seq(
     with open(Path(wd) / Path("hits_clustered_filtered.fasta"), "w") as fw:
         for record in scluster:
             index = record.description.split(":")[0]
-            # print(index)
-            # print(record.description.split("|")[1].replace("_", " "))
+
             df.loc[index, "organism"] = record.description.split("|")[1].replace(
                 "_", " "
             )
@@ -233,240 +175,177 @@ def filter_seq(
             elif seq_len < 0.995 * len(record.seq):
                 print("Removed sequence with too many ambiguous bases: " + index)
                 n += 1
-            # # in theory, the subject will be the same as query
+
             elif (ref_seq_list is not None) and (record.seq in ref_seq_list):
                 print("Removed duplicate sequence: " + index)
                 n += 1
             else:
-                # print(record.description)
+
                 SeqIO.write(record, fw, "fasta")
                 index_list.append(index)
-    # df.to_csv(Path(wd) / Path("hits_clustered.txt"), index=False, sep="\t")
+
     df1 = df.loc[index_list]
     df1.to_csv(Path(wd) / Path("hits_clustered_filtered.txt"), index=False, sep="\t")
     print("Deleted %d sequences." % n)
     print("Filtered sequences saved in hits_clustered_filtered.fasta")
-    # todo: what if no sequence left after filtering? Stop iteration.
+
     return len(df1)
 
 
 def p_distance(wd, in_file):
-    # alignment = AlignIO.read(Path(wd)/Path("msa_hits_clustered.fasta"), "fasta")
+    from scipy.spatial.distance import pdist, squareform
+    
     alignment = AlignIO.read(Path(wd) / Path(in_file), "fasta")
-
-    r = len(alignment)  # number of rows
-    c = len(alignment[0])  # number of columns
-    arr = np.zeros((r, r), dtype=float)
-    df = pd.DataFrame(arr, dtype=float)
-    for i in range(r):
-        for j in range(i, r):
-            different = 0
-            # gap = 0
-            for k in range(c):
-                # if alignment[i][k] == "-" and alignment[j][k] == "-":
-                #     gap += 1
-                if alignment[i][k] != alignment[j][k]:
-                    different += 1
-            # df.iloc[i, j] = different/(c-gap)
-            df.iloc[i, j] = different / c
-            df.iloc[j, i] = df.iloc[i, j]
-    # df.to_csv(Path(wd)/Path("Sequences_distance.csv"), index=True, sep=",")
-
+    
+    # 将序列转换为数值数组（A=0, T=1, C=2, G=3, -=4, 其他=5）
+    # 使用向量化操作提高性能
+    base_to_int = np.array([0] * 256, dtype=np.int8)  # 查找表
+    for i, base in enumerate(b'ATCG'):
+        base_to_int[base] = i
+    base_to_int[ord('-')] = 4
+    base_to_int[ord('N')] = 5
+    
+    # 转换为数值矩阵
+    seq_array = np.zeros((len(alignment), len(alignment[0])), dtype=np.int8)
+    for i, record in enumerate(alignment):
+        seq_bytes = str(record.seq).upper().encode('ascii', errors='replace')
+        seq_array[i, :len(seq_bytes)] = [base_to_int[b] for b in seq_bytes]
+    
+    # 使用 pdist 计算 p-distance（Hamming 距离归一化）
+    distances = pdist(seq_array, metric='hamming')
+    
+    # 转换为方阵
+    distance_matrix = squareform(distances)
+    
+    # 转换为 DataFrame
+    df = pd.DataFrame(distance_matrix)
+    
     return df
 
 
 def my_mcl(wd, df, table):
+    from scipy.sparse import lil_matrix
+    
+    # 检查输入是否为空
+    if df is None or len(df) == 0:
+        print("Warning: Distance matrix is empty.")
+        return None
+    
     # Nodes are considered adjacent if the distance between them is <= 0.3 units
-    matrix = np.array(df)    
-    matrix[matrix == 0] = 1
-    adjacent = (matrix <= 0.3)
-    matrix[adjacent] = 1
-    matrix[~adjacent] = 0
-    matrix = csr_matrix(matrix)
-    result = mc.run_mcl(matrix)
-    clusters = mc.get_clusters(result)
+    matrix = np.array(df)
+    
+    # 检查矩阵维度
+    if matrix.ndim < 2 or matrix.shape[0] < 2 or matrix.shape[1] < 2:
+        print("Warning: Distance matrix has insufficient dimensions (%s)." % str(matrix.shape))
+        return None
+    
+    # 构建邻接矩阵：距离 <= 0.3 为相邻
+    adj_matrix = (matrix <= 0.3).astype(int)
+    np.fill_diagonal(adj_matrix, 1)  # 对角线设为 1
+    
+    # 转换为稀疏矩阵
+    lil_mat = lil_matrix(adj_matrix)
+    sparse_matrix = lil_mat.tocsr()
+    
+    try:
+        # 运行 MCL 聚类
+        result = mc.run_mcl(sparse_matrix)
+        clusters = mc.get_clusters(result)
+        
+        # 检查聚类结果是否为空
+        if clusters is None or len(clusters) == 0:
+            print("Warning: MCL returned no clusters.")
+            return None
+        
+        # 读取表格并处理
+        df1 = pd.read_table(Path(wd) / Path(table), sep="\t", engine="python")
+        df1["scluster"] = -1
+        
+        # 从每个聚类中选择序列
+        index_list = []
+        for i, cluster in enumerate(clusters):
+            cluster_indices = list(cluster)
+            df1.loc[cluster_indices, "scluster"] = i
+            
+            # 选择该聚类中最长的序列
+            selected_idx = df1.loc[cluster_indices].sort_values(
+                by="seq_len", ascending=False
+            ).index[0]
+            index_list.append(selected_idx)
+        
+        # 保存聚类结果
+        df1.to_csv(Path(wd) / Path(table), index=False, sep="\t")
+        
+        # 返回选中的序列
+        print("get %d clusters" % len(index_list))
+        df2 = df1.iloc[index_list].sort_values(by="subject_acc.ver")
+        return df2
+        
+    except Exception as e:
+        print("MCL clustering failed: %s" % str(e))
+        return None
 
-    df1 = pd.read_table(Path(wd) / Path(table), sep="\t", engine="python")
-    df1["scluster"] = -1
-    index_list = []
-    for i, cluster in enumerate(clusters):
-        df1.loc[list(cluster), "scluster"] = i
-        # index_list.append(np.random.choice(cluster, 1, replace=False)[0])
-        index_list.append(
-            df1.loc[list(cluster)].sort_values(by="seq_len", ascending=False).index[0]
-        )
-    df1.to_csv(Path(wd) / Path(table), index=False, sep="\t")
-    print("get %d clusters" % len(index_list))
-    df2 = df1.iloc[index_list]
-    df2 = df2.sort_values(by="subject_acc.ver")
-    return df2
 
-
-def cluster_sequences_main(wd, fasta_file=r"hits_clustered_filtered.fasta"):
-    print("Clustering sequences...")
-    msa_file = "msa_" + fasta_file
-    # todo: if hits_clustered_filtered.fasta only has two sequence
-    if (Path(wd) / Path(fasta_file)).stat().st_size > 0:
-        n_seq = 0
-        for record in SeqIO.parse(Path(wd) / Path(fasta_file), "fasta"):
-            n_seq += 1
-        if n_seq < 5:
-            seq_clustered = pd.read_table(
-                Path(wd) / Path("hits_clustered_filtered.txt"), sep="\t"
-            )
-            seq_clustered.to_csv(
-                Path(wd) / Path("sequences_clustered.txt"), index=False, sep="\t"
-            )
-            print(
-                "Only %d sequences left after filtering. No need to do MCL step2."
-                % n_seq
-            )
-            return seq_clustered
-        mafft_exe = get_mafft_path()
-        command = f"{mafft_exe} --localpair --maxiterate 1000 {Path(wd) / fasta_file} > {Path(wd) / msa_file}"
-        run_command(command)
-
-    if (Path(wd) / Path(msa_file)).stat().st_size > 0:
-        seq_distance = p_distance(wd, msa_file)
-        # todo: what if no return
-        seq_distance.to_csv(
-            Path(wd) / Path(Path(msa_file).stem + "_distance.txt"),
-            index=True,
-            sep="\t",
-        )
-        table = r"hits_clustered_filtered.txt"
-        seq_clustered = my_mcl(wd, seq_distance, table)
-        seq_clustered.to_csv(
-            Path(wd) / Path("sequences_clustered.txt"), index=False, sep="\t"
-        )
-        return seq_clustered
 
 
 def cluster_sequences(wd, fasta_file=r"hits_clustered_filtered.fasta"):
     print("Clustering sequences...")
     msa_file = "msa_" + fasta_file
-    # todo: if hits_clustered_filtered.fasta only has two sequence
-    if (Path(wd) / fasta_file).exists() and (Path(wd) / fasta_file).stat().st_size > 0:
-        n_seq = 0
-        for record in SeqIO.parse(Path(wd) / Path(fasta_file), "fasta"):
-            n_seq += 1
-        if n_seq < 5:
-            seq_clustered = pd.read_table(
-                Path(wd) / Path("hits_clustered_filtered.txt"), sep="\t"
-            )
-            seq_clustered.to_csv(
-                Path(wd) / Path("sequences_clustered.txt"), index=False, sep="\t"
-            )
-            print(
-                "Only %d sequences left after filtering. No need to do MCL step2."
-                % n_seq
-            )
-            return seq_clustered
-        mafft_exe = get_mafft_path()
-        command = f"{mafft_exe} --localpair --maxiterate 1000 {Path(wd) / fasta_file} > {Path(wd) / msa_file}"
-        run_command(command)
-    else:
+    table_file = Path(wd) / Path("hits_clustered_filtered.txt")
+    output_file = Path(wd) / Path("sequences_clustered.txt")
+    
+    # 检查输入文件
+    fasta_path = Path(wd) / Path(fasta_file)
+    if not fasta_path.exists() or fasta_path.stat().st_size == 0:
         print("Warning: %s does not exist or is empty." % fasta_file)
         return None
-
-    if (Path(wd) / Path(msa_file)).exists() and (Path(wd) / Path(msa_file)).stat().st_size > 0:
-        seq_distance = p_distance(wd, msa_file)
-        # todo: what if no return
-        seq_distance.to_csv(
-            Path(wd) / Path(Path(msa_file).stem + "_distance.txt"),
-            index=True,
-            sep="\t",
-        )
-        table = r"hits_clustered_filtered.txt"
-        # seq_clustered = my_mcl(wd, seq_distance, table)  # my_mcl(wd, df, table)
-        
-        # 检查 seq_distance 是否为空或维度不足
-        if seq_distance is None or len(seq_distance) == 0:
-            print("Warning: Distance matrix is empty. Using all filtered sequences.")
-            seq_clustered = pd.read_table(
-                Path(wd) / Path("hits_clustered_filtered.txt"), sep="\t"
-            )
-            seq_clustered.to_csv(
-                Path(wd) / Path("sequences_clustered.txt"), index=False, sep="\t"
-            )
-            return seq_clustered
-        
-        try:
-            matrix = np.array(seq_distance)
-            
-            # 检查矩阵维度
-            if matrix.ndim < 2 or matrix.shape[0] < 2 or matrix.shape[1] < 2:
-                print("Warning: Distance matrix has insufficient dimensions (%s). Using all filtered sequences." % str(matrix.shape))
-                seq_clustered = pd.read_table(
-                    Path(wd) / Path("hits_clustered_filtered.txt"), sep="\t"
-                )
-                seq_clustered.to_csv(
-                    Path(wd) / Path("sequences_clustered.txt"), index=False, sep="\t"
-                )
-                return seq_clustered
-            
-            # 转换为 float64 避免精度问题
-            matrix = matrix.astype(np.float64)
-            matrix[matrix == 0] = 1
-            adjacent = (matrix <= 0.3)
-            matrix[adjacent] = 1
-            matrix[~adjacent] = 0
-            
-            # 使用 lil_matrix 以提高效率，然后转换为 csr_matrix
-            from scipy.sparse import lil_matrix
-            lil_mat = lil_matrix(matrix)
-            matrix = lil_mat.tocsr()
-            
-            # 运行 MCL，添加错误处理
-            result = mc.run_mcl(matrix)
-            clusters = mc.get_clusters(result)
-            
-            # 检查聚类结果是否为空
-            if clusters is None or len(clusters) == 0:
-                print("Warning: MCL returned no clusters. Using all filtered sequences.")
-                seq_clustered = pd.read_table(
-                    Path(wd) / Path("hits_clustered_filtered.txt"), sep="\t"
-                )
-                seq_clustered.to_csv(
-                    Path(wd) / Path("sequences_clustered.txt"), index=False, sep="\t"
-                )
-                return seq_clustered
-
-            df1 = pd.read_table(Path(wd) / Path(table), sep="\t", engine="python")
-            df1["scluster"] = -1
-            index_list = []
-            for i, cluster in enumerate(clusters):
-                df1.loc[list(cluster), "scluster"] = i
-                # index_list.append(np.random.choice(cluster, 1, replace=False)[0])
-                index_list.append(
-                    df1.loc[list(cluster)]
-                    .sort_values(by="seq_len", ascending=False)
-                    .index[0]
-                )
-            df1.to_csv(Path(wd) / Path(table), index=False, sep="\t")
-
-            # todo: if only get one cluster? or if clustering failed?
-            print("get %d clusters" % len(index_list))
-            df2 = df1.iloc[index_list]
-            df2 = df2.sort_values(by="subject_acc.ver")
-            df2.to_csv(
-                Path(wd) / Path("sequences_clustered.txt"), index=False, sep="\t"
-            )
-            return df2
-        except Exception as e:
-            print("MCL step2 clustering according to sequence distance failed.")
-            print("Select one sequence randomly from MCL step1.")
-            print("Error: %s" % str(e))
-            df1 = pd.read_table(Path(wd) / Path(table), sep="\t", engine="python")
-            if len(df1) > 0:
-                df2 = df1.loc[np.random.choice(df1.index, 1, replace=False)[0]].to_frame().T
-                df2.to_csv(
-                    Path(wd) / Path("sequences_clustered.txt"), index=False, sep="\t"
-                )
-                return df2
-            else:
-                print("Error: No sequences available for random selection.")
-                return None
+    
+    # 统计序列数
+    n_seq = sum(1 for _ in SeqIO.parse(fasta_path, "fasta"))
+    
+    # 序列数 < 5，跳过 MCL
+    if n_seq < 5:
+        print("Only %d sequences left after filtering. No need to do MCL step2." % n_seq)
+        seq_clustered = pd.read_table(table_file, sep="\t")
+        seq_clustered.to_csv(output_file, index=False, sep="\t")
+        return seq_clustered
+    
+    # 运行 MAFFT
+    print("Running MAFFT L-INS-i alignment...")
+    mafft_exe = get_mafft_path()
+    command = f"{mafft_exe} --localpair --maxiterate 1000 {fasta_path} > {Path(wd) / msa_file}"
+    run_command(command)
+    
+    # 检查 MAFFT 结果
+    msa_path = Path(wd) / Path(msa_file)
+    if not msa_path.exists() or msa_path.stat().st_size == 0:
+        print("Warning: MAFFT failed to generate alignment.")
+        seq_clustered = pd.read_table(table_file, sep="\t")
+        seq_clustered.to_csv(output_file, index=False, sep="\t")
+        return seq_clustered
+    
+    # 计算 p-distance
+    print("Calculating p-distance matrix...")
+    seq_distance = p_distance(wd, msa_file)
+    seq_distance.to_csv(
+        Path(wd) / Path(Path(msa_file).stem + "_distance.txt"),
+        index=True, sep="\t"
+    )
+    
+    # 运行 MCL（带错误处理）
+    print("Running MCL clustering...")
+    table = r"hits_clustered_filtered.txt"
+    
+    # 尝试调用 my_mcl
+    seq_clustered = my_mcl(wd, seq_distance, table)
+    
+    # Fallback：如果 MCL 失败，使用所有序列
+    if seq_clustered is None:
+        print("MCL failed, using all filtered sequences.")
+        seq_clustered = pd.read_table(table_file, sep="\t")
+    
+    seq_clustered.to_csv(output_file, index=False, sep="\t")
+    return seq_clustered
 
 
 def select_new_queries(tmp_wd, blast_round, ref_number):
@@ -474,7 +353,7 @@ def select_new_queries(tmp_wd, blast_round, ref_number):
         Path(tmp_wd) / Path(r"sequences_clustered.txt"), sep="\t", engine="python"
     )
     seq_clustered.index = seq_clustered["subject_acc.ver"]
-    # file_list = os.listdir(Path(wd) / Path("parameters"))
+
     """
     if "all_new_queries_info.txt" in file_list:
         all_new_queries = pd.read_table(Path(wd) / Path("parameters") / Path(r"all_new_queries_info.txt"), sep='\t',
@@ -495,24 +374,16 @@ def select_new_queries(tmp_wd, blast_round, ref_number):
             range(seq_clustered.shape[0]), ref_number, replace=False
         )
         seq_clustered = seq_clustered.iloc[index_list]
-        # print("Selecting %d longest sequences..." % ref_number)
-        # seq_clustered = seq_clustered.sort_values(by="seq_len", ascending=False)
-        # seq_clustered = seq_clustered.iloc[range(ref_number)]
+
 
     seq_clustered["blast_round"] = blast_round
-    # seq_clustered = seq_clustered.sort_values(by="subject_acc.ver")
-    # ValueError: 'subject_acc.ver' is both an index level and a column label, which is ambiguous.
+
     """
     if all_queries is None:
         all_queries = seq_clustered
     else:
         all_queries = all_queries.append(seq_clustered)
     """
-
-    # def get_accession(record):
-    #     parts = record.description.split(":")
-    #     # assert len(parts) == 2
-    #     return parts[0]
 
     fw = open(Path(tmp_wd) / Path("new_queries.fasta"), "w")
     fw.close()
@@ -533,7 +404,7 @@ def select_new_queries(tmp_wd, blast_round, ref_number):
     # all_new_queries.to_csv(Path(wd) / Path("parameters") / Path("all_queries_info.txt"), index=False, sep="\t")
 
     return seq_clustered.shape[0]
-
+    
 
 def select_new_queries_main(
     wd,
@@ -546,15 +417,11 @@ def select_new_queries_main(
     ref_number,
 ):
     file_list = [f.name for f in Path(tmp_wd).iterdir()]
-    # select new reference sequences from different clusters
+
     if "hits_clustered.txt" not in file_list:
         print("Selecting new references...")
         file_list = [f.name for f in (Path(wd) / "parameters").iterdir()]
-        # if os.path.exists(Path(wd) / Path("parameters") / Path("all_new_queries_info.txt")):
-        #     all_new_queries = pd.read_table(Path(wd) / Path("parameters") / Path(r"all_new_queries_info.txt"),
-        #                                     sep='\t', engine='python')
-        #     all_new_queries_list = all_new_queries["subject_acc.ver"]
-        #     cluster_queries(wd=tmp_wd, ref_list=all_new_queries_list)
+
         if (Path(wd) / "parameters" / "all_queries_info.txt").exists():
             all_queries = pd.read_table(
                 Path(wd) / Path("parameters") / Path(r"all_queries_info.txt"),

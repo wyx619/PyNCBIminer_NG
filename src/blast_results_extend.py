@@ -1,3 +1,4 @@
+from nt import error
 from pathlib import Path
 import pandas as pd
 from math import floor
@@ -58,17 +59,12 @@ def add_all_queries2(wd):
                 out_msa = Path(wd) / Path("parameters") / Path("ref_msa") / Path("msa_queries_1_to_%d.fasta" % n)
 
                 print(f"Processing queries_{n}.fasta")
-                print(f"  queries_file exists: {queries_file.exists()}")
-                print(f"  prev_msa: {prev_msa.name}")
-                print(f"  prev_msa exists: {prev_msa.exists()}")
                 if not queries_file.exists():
-                    print(f"  Skipping queries_{n}.fasta (file not found)")
-                    continue
+                    error(f"  Skipping queries_{n}.fasta (file not found)")
                 if not prev_msa.exists():
-                    print(f"  Skipping queries_{n}.fasta (previous MSA not found)")
-                    continue
+                    error(f"  Skipping queries_{n}.fasta (previous MSA not found)")
 
-                print("Aligning %s with mafft..." % queries_file.name)
+                print(f"Aligning {queries_file.name} with mafft...")
                 with tempfile.TemporaryDirectory(dir=ref_msa_dir) as tmp_dir:
                     mafft(
                         in_path=str(prev_msa),
