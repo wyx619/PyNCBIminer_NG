@@ -1,16 +1,33 @@
+
+import re
+import shutil
+import time
 from pathlib import Path
+
+import pandas as pd
 from Bio import SeqIO
 from Bio.Seq import Seq
-import pandas as pd
-import shutil
-import re
-
-import time
 
 from functional import create_folder
 from nt_calculator import nt_Calculator
-from call_mafft2 import mafft
+import os
+import sys
 
+
+
+try:
+    DEVNULL = os.devnull
+except Exception:
+    DEVNULL = "nul"
+
+if sys.stdout is None:
+    sys.stdout = open(DEVNULL, "w")
+if sys.stderr is None:
+    sys.stderr = open(DEVNULL, "w")
+
+
+from call_mafft2 import get_mafft_path
+mafft_exe = get_mafft_path()
 
 class Miner_filter:
     """CLass Miner_filter - filter retrieved seqs, including three main functions:
@@ -106,7 +123,7 @@ class Miner_filter:
                 shutil.move(self.__out_path / "results" / file, backup_folder / file)
 
         tmp_files = [
-            "consensus_calculation",
+            #"consensus_calculation",
             "blast_result_kept.txt",
             "blast_result_long.fasta",
             "blast_result_long.txt",
@@ -184,21 +201,17 @@ class Miner_filter:
 
         ## STEP 3: keep seqs other than sequences with specified token or lower than length threshold
         record_iter = SeqIO.parse(this_in_path, "fasta")
+        accession_to_organism = dict(
+            zip(df_records_info["accession"].values, df_records_info["organism"].values)
+        )
         filtered_records = []
         for record in record_iter:
             if ignore_gap:
                 record.seq = Seq(str(record.seq).replace("-", ""))
 
             accession = record.description.split("|")[0].split(":")[0]
-            # print(df_records_info.loc[df_records_info["accession"]==accession]["organism"])
-            frame = list(
-                df_records_info.loc[df_records_info["accession"] == accession][
-                    "organism"
-                ]
-            )
-            if len(frame) == 1:
-                organism = frame[0]
-            else:
+            organism = accession_to_organism.get(accession)
+            if organism is None:
                 continue
 
             organism = organism.replace(" ", "_")
@@ -245,15 +258,20 @@ class Miner_filter:
             combine_list.append(" f ")
 
         ## STEP 3: modify the info csv (blast_results_checked_seq_info.txt)
+        rows_to_drop = []
         for i in df_records_info.index:
+            organism = df_records_info.loc[i, "organism"]
+            if not isinstance(organism, str):
+                rows_to_drop.append(i)
+                continue
             for word in combine_list:
-                if not isinstance(df_records_info["organism"][i], str):
-                    df_records_info.drop(i, axis=0, inplace=True)
+                if word in organism:
+                    df_records_info.loc[i, "organism"] = organism[
+                        : organism.index(word)
+                    ]
                     break
-                if word in df_records_info["organism"][i]:
-                    organism = df_records_info["organism"][i]
-                    organism = organism[: organism.index(word)]
-                    df_records_info.loc[i, "organism"] = organism
+
+        df_records_info.drop(rows_to_drop, axis=0, inplace=True)
 
         csv_out_path = (
             self.__in_path / "results" / "blast_results_checked_seq_info_modified.txt"
@@ -308,10 +326,7 @@ class Miner_filter:
             ignore_gap=ignore_gap,
         )
         self.remove_duplicate()
-        if not (
-            (max_insertion_length <= 0 or max_insertion_num <= 0)
-            and not self.__count_consensus_value
-        ):
+        if self.__count_consensus_value:
             self.__calculate_consensus_dict(
                 length_threshold=max_insertion_length, taxa_threshold=max_insertion_num
             )
@@ -335,29 +350,35 @@ class Miner_filter:
         df_records_info["specimen_voucher"] = df_records_info[
             "specimen_voucher"
         ].fillna("unknown")
+
+        accession_set = set(df_records_info["accession"])
         record_iter = [
             record
             for record in record_iter
-            if record.description.split("|")[0].split(":")[0]
-            in list(df_records_info["accession"])
+            if record.description.split("|")[0].split(":")[0] in accession_set
         ]
+
+        accession_to_voucher = dict(
+            zip(
+                df_records_info["accession"].values,
+                df_records_info["specimen_voucher"].values,
+            )
+        )
+        accession_to_organism = dict(
+            zip(df_records_info["accession"].values, df_records_info["organism"].values)
+        )
 
         record_iter = sorted(
             list(record_iter),
-            key=lambda record: list(
-                df_records_info.loc[
-                    df_records_info["accession"]
-                    == record.description.split("|")[0].split(":")[0]
-                ]["specimen_voucher"]
-            )[0],
+            key=lambda record: accession_to_voucher.get(
+                record.description.split("|")[0].split(":")[0], "      "
+            ),
         )
+
         vouchers = [
-            list(
-                df_records_info.loc[
-                    df_records_info["accession"]
-                    == record.description.split("|")[0].split(":")[0]
-                ]["specimen_voucher"]
-            )[0]
+            accession_to_voucher.get(
+                record.description.split("|")[0].split(":")[0], "      "
+            )
             for record in record_iter
         ]
         vouchers = [
@@ -365,12 +386,7 @@ class Miner_filter:
         ]
 
         organisms = [
-            list(
-                df_records_info.loc[
-                    df_records_info["accession"]
-                    == record.description.split("|")[0].split(":")[0]
-                ]["organism"]
-            )[0]
+            accession_to_organism.get(record.description.split("|")[0].split(":")[0])
             for record in record_iter
         ]
 
@@ -443,7 +459,7 @@ class Miner_filter:
         - matching_filename - the most valid (suitable) filename as input fasta file
         """
         path = self.__in_path / "results"
-        existing_files = [f.name for f in path.iterdir()]
+        existing_files = set(f.name for f in path.iterdir())
         files = [
             "blast_results_checked.fasta",
             "blast_results_controlled.fasta",
@@ -488,11 +504,102 @@ class Miner_filter:
         Returns
         - seq_length - the length of the sequence (not counting wobbles like WSPYN...)
         """
-        sequence = record.seq.upper()
-        for wobble in "RYKMSWBDHVN":
-            sequence = str(sequence).replace(wobble, "")
-        seq_length = len(sequence)
-        return seq_length
+        seq_str = str(record.seq).upper()
+        trans_table = str.maketrans("", "", "RYKMSWBDHVN-")
+        return len(seq_str.translate(trans_table))
+
+    @staticmethod
+    def __remove_minor_large_insertion(record_path, length_threshold=20, taxa_threshold=1, keep_tmp=False):
+        import numpy as np
+
+        ## STEP 1: load related information
+        record_iter = list(SeqIO.parse(record_path, "fasta"))
+        records = np.array([list(str(record.seq).upper()) for record in record_iter])
+        
+        ## STEP 2: record minor large insertion (in list remove_ends)
+        single_insertion_columns = []
+        num_taxa = records.shape[0]
+        for col in range(records.shape[1]):
+            if np.sum(records[:,col]=="-") >= num_taxa-taxa_threshold:
+                single_insertion_columns.append(col)
+                
+        if not single_insertion_columns:
+            return []
+            
+        prev_col = single_insertion_columns[0]
+        final_col = single_insertion_columns[-1]
+        start = single_insertion_columns[0]
+        remove_ends = [] # [[0,50], [start2, end2]] means 0~50 bp and start2~end2 bp will be removed
+        count = 1
+        
+        for col in single_insertion_columns[1:]:
+            
+            if col-prev_col==1 and col!=final_col:
+                count += 1
+            elif col-prev_col==1 and col==final_col:
+                count += 1
+                if count >= length_threshold:
+                    remove_ends.append([start, col])
+                count = 1
+                start = col
+            else:
+                if count >= length_threshold:
+                    remove_ends.append([start, prev_col])
+                count = 1
+                start = col
+                    
+            prev_col = col
+            
+        ## STEP 3: remove those recorded insertion in both msa file and unaligned file
+        ## substep 1: remove those insertion in all records
+        for record in record_iter:
+            if not remove_ends:
+                return []
+            if keep_tmp and Path(record_path).is_file():
+                shutil.copy(record_path, record_path.replace(".fasta","_backup.fasta"))
+                shutil.copy(record_path.replace("_msa.fasta",".fasta"), record_path.replace("_msa.fasta","_backup.fasta"))
+            for ends in remove_ends:
+                sequence = record.seq
+                sequence = sequence[:ends[0]] + "-"*(ends[1]-ends[0]+1) + sequence[ends[1]+1:]
+            sequence = Seq(str(sequence).replace("-",""))
+            record.seq = sequence
+
+
+        ## substep 2: write into unaligned file
+
+        SeqIO.write(record_iter, record_path, "fasta")
+
+
+        ## substep 3: write into msa file (直接使用 subprocess)
+        import subprocess
+        
+        temp_output = str(record_path).replace(".fasta", "_temp.fasta")
+        
+        record_path_str = Path(record_path).as_posix()
+        temp_output_str = Path(temp_output).as_posix()
+        mafft_exe_str = Path(mafft_exe).as_posix()
+        
+        commandstr = f'"{mafft_exe_str}" --auto --quiet "{record_path_str}" > "{temp_output_str}"'
+        
+        result = subprocess.run(
+            commandstr,
+            shell=True,
+            capture_output=True,
+            text=True
+        )
+        
+        if result.returncode != 0:
+            raise RuntimeError(f"MAFFT failed: {result.stderr}")
+        
+        if not Path(temp_output).exists():
+            raise RuntimeError("MAFFT output file not created")
+        
+        Path(temp_output).replace(record_path)
+        size2 = record_path.stat().st_size
+        if size2 == 0:
+            raise ValueError(f"MAFFT failed to align {record_path}")
+        
+        return remove_ends
 
     def __calculate_consensus_dict(self, length_threshold=20, taxa_threshold=1):
         """calculate consensus sequence for each taxon and store to a dictionary
@@ -509,52 +616,103 @@ class Miner_filter:
             self.__in_path / "results" / self.__get_info_csv(), sep="\t"
         )
         record_iter = SeqIO.parse(in_path / self.__get_input_filename(), "fasta")
+
+        accession_to_organism = dict(
+            zip(df_records_info["accession"].values, df_records_info["organism"].values)
+        )
+
         records_grouped = {}  # {"Magnolia coco":[SeqRecord1, SeqRecord2], "taxon 2": [SeqRecord1], ...}
         records_consensus = {}  # {"Magnolia coco": "AATTCCGG", "taxon 2": "AATCGCCTT", ...}
 
         for record in record_iter:
             accession = record.description.split("|")[0].split(":")[0]
-            organism = list(
-                df_records_info.loc[df_records_info["accession"] == accession][
-                    "organism"
-                ]
-            )[0]
+            organism = accession_to_organism.get(accession, "")
+            if not organism:
+                continue
             organism = organism.replace(" ", "_")
             records_grouped.setdefault(organism, [])
             records_grouped[organism].append(record)
 
-        for taxon in records_grouped.keys():
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        taxon_list = [(taxon, records) for taxon, records in records_grouped.items() if len(records) > 3]
+        total_taxa = len(taxon_list)
+
+        for (taxon, records) in taxon_list:
             records_path = tmp_path / f"{taxon}.fasta"
-            msa_path = tmp_path / f"{taxon}_msa.fasta"
-
-            records = records_grouped[taxon]
-            if len(records) <= 3:
+            if records_path.exists() and records_path.stat().st_size>0:
                 continue
-            SeqIO.write(records, records_path, "fasta")
+            else:
+                SeqIO.write(records, records_path, "fasta")
 
-            mafft(
-                in_path=str(records_path),
-                out_path=str(tmp_path),
-                algorithm="auto",
-                thread=-1,
-                reorder=True,
+        create_folder(f"{tmp_path}/msa")
+
+
+        def run_mafft_and_rename(taxon):
+            import subprocess
+            
+            msa_file = tmp_path / "msa" / f"{taxon}_msa.fasta"
+            if msa_file.exists():
+                if msa_file.stat().st_size == 0:
+                    msa_file.unlink()
+                else:
+                    return taxon
+            
+            in_file = tmp_path / f"{taxon}.fasta"
+            out_file = tmp_path / "msa" / f"{taxon}_msa.fasta"
+            temp_out = tmp_path / "msa" / f"{taxon}_msa_temp.fasta"
+            
+            in_file_str = in_file.as_posix()
+            temp_out_str = temp_out.as_posix()
+            mafft_exe_str = Path(mafft_exe).as_posix()
+            
+            commandstr = f'"{mafft_exe_str}" --auto --quiet "{in_file_str}" > "{temp_out_str}"'
+            
+            result = subprocess.run(
+                commandstr,
+                shell=True,
+                capture_output=True,
+                text=True
             )
+            
+            if result.returncode != 0:
+                raise RuntimeError(f"MAFFT failed: {result.stderr}")
+            
+            if temp_out.exists():
+                temp_out.rename(out_file)
+            
+            return taxon
 
-            msa_output_path = tmp_path / f"{taxon}.fasta"
-            if msa_output_path.exists():
-                msa_output_path.rename(msa_path)
-
-            self.__remove_long_insertion(taxon, length_threshold, taxa_threshold)
-
-        for taxon in records_grouped.keys():
-            records = records_grouped[taxon]
-            if len(records) <= 3:
-                continue
-            msa_path = tmp_path / f"{taxon}_msa.fasta"
+        completed = 0
+        with ThreadPoolExecutor(max_workers=min(total_taxa, 12, os.cpu_count())) as executor:
+            futures = {executor.submit(run_mafft_and_rename, taxon): taxon for taxon, _ in taxon_list}
+            for future in as_completed(futures):
+                taxon = future.result()
+                completed += 1
+                print(f"MAFFT: {completed}/{total_taxa} - {taxon}")
+             
+        def remove_insertion(taxon):
+            temp_output_file = tmp_path / "msa" / f"{taxon}_msa.fasta"
+            self.__remove_minor_large_insertion(
+                temp_output_file,
+                length_threshold=length_threshold,
+                taxa_threshold=taxa_threshold,
+                keep_tmp=self.DEBUG_MODE,
+            )
             consensus_sequence = self.__nt_calculator.get_consensus_sequence(
-                SeqIO.parse(msa_path, "fasta")
+                SeqIO.parse(temp_output_file, "fasta")
             )
-            records_consensus[taxon] = consensus_sequence
+            return taxon, consensus_sequence
+
+        completed = 0
+        with ThreadPoolExecutor(max_workers=min(total_taxa, 12, os.cpu_count())) as executor:
+            futures = {executor.submit(remove_insertion, taxon): taxon for taxon, _ in taxon_list}
+            for future in as_completed(futures):
+                taxon, consensus_sequence = future.result()
+                records_consensus[taxon] = consensus_sequence
+                completed += 1
+                if completed%100==0 and completed!=total_taxa:
+                    print(f"Consensus: {completed}/{total_taxa} - {taxon}")
 
         self.__taxa_consensus_dict = records_consensus
 
@@ -594,26 +752,27 @@ class Miner_filter:
 
         # substep 2: create a file consisting of acc_num and taxon_name
         record_taxon_info = []
+
+        accession_to_organism = dict(
+            zip(df_records_info["accession"].values, df_records_info["organism"].values)
+        )
+
         record_iter = sorted(
             list(SeqIO.parse(blast_result, "fasta")),
-            key=lambda record: list(
-                df_records_info.loc[
-                    df_records_info["accession"]
-                    == record.description.split("|")[0].split(":")[0]
-                ]["organism"]
-            )[0],
+            key=lambda record: accession_to_organism.get(
+                record.description.split("|")[0].split(":")[0], ""
+            ),
         )
         curr_taxon = ""
-        consensus_msa_path = self.__in_path / "tmp_files/consensus_calculation"
+        consensus_msa_path = self.__in_path / "tmp_files/consensus_calculation/msa"
 
         for record in record_iter:
             subject_acc_ver = str(record.description.split("|")[0].split(":")[0])
-            organism = list(
-                df_records_info.loc[df_records_info["accession"] == subject_acc_ver][
-                    "organism"
-                ]
-            )[0]
-            organism = organism.replace(" ", "_")
+            organism = accession_to_organism.get(subject_acc_ver, "")
+            if not organism:
+                organism = ""
+            else:
+                organism = organism.replace(" ", "_")
             record_length = self.__get_length_without_wobble(
                 record
             )  # length without wobble
@@ -709,18 +868,15 @@ class Miner_filter:
         creteria = list(creteria.keys())
 
         if "specimen_voucher" in creteria:
-            for i in df.index:
-                if df.loc[i, "specimen_voucher"].lower() == "unknown":
-                    df.loc[i, "specimen_voucher"] = "       "
+            df.loc[
+                df["specimen_voucher"].str.lower() == "unknown", "specimen_voucher"
+            ] = "       "
 
         if "journal" in creteria:
             unpublished = ["unknown", "unpublished", "published only in database"]
-            for i in df.index:
-                journal = df.loc[i, "journal"].lower()
-                for word in unpublished:
-                    if word in journal:
-                        df.loc[i, ""] = "       "
-                        break
+            pattern = "|".join(unpublished)
+            mask = df["journal"].str.lower().str.contains(pattern, na=False)
+            df.loc[mask, "journal"] = "       "
 
         if "date" in creteria:
             df["date_f"] = pd.to_datetime(
@@ -796,24 +952,6 @@ class Miner_filter:
         blast_result_kept_txt = self.__out_path / "results" / "blast_result_kept.txt"
         df.to_csv(blast_result_kept_txt, sep="\t", index=False)
 
-    def __remove_long_insertion(self, taxon, length_threshold=20, taxa_threshold=1):
-        """if there are large insertion in an MSA, remove the insertion fragment
-        ----------
-        Parameters
-        - taxon - the taxon name to remove insertion
-        - length_threshold - insertion longer than this threshold will be removed
-        - taxa_threshold - if insertion in at most [taxa_threshold] taxa, then remove, else ignore
-        """
-        consensus_calculation_folder = self.__tmp_path / "consensus_calculation"
-        for file in [f.name for f in Path(consensus_calculation_folder).iterdir()]:
-            if file.endswith("_msa.fasta"):
-                self.__nt_calculator.remove_minor_large_insertion(
-                    consensus_calculation_folder / file,
-                    length_threshold=length_threshold,
-                    taxa_threshold=taxa_threshold,
-                    keep_tmp=self.DEBUG_MODE,
-                )
-
     @staticmethod
     def __filter_on_voucher_info(df):
         """if all records have no voucher info, do nothing, else delete ones without voucher info
@@ -824,8 +962,8 @@ class Miner_filter:
         Returns
         - df - the filtered dataframe
         """
-        voucher_set = list(set(list(df["specimen_voucher"])))
-        if voucher_set == ["       "]:
+        voucher_set = set(df["specimen_voucher"])
+        if voucher_set == {"       "}:
             return df
         else:
             df = df.loc[df["specimen_voucher"] != "       "]
@@ -841,8 +979,8 @@ class Miner_filter:
         Returns
         - df - the filtered dataframe
         """
-        journal_set = list(set(list(df["journal"])))
-        if journal_set == ["       "]:
+        journal_set = set(df["journal"])
+        if journal_set == {"       "}:
             return df
         else:
             df = df.loc[df["journal"] != "       "]
@@ -858,7 +996,10 @@ class Miner_filter:
         Returns
         - df - the filtered dataframe
         """
-        df = df.loc[df["date_f"] == max(df["date_f"])]
+        max_date = max(df["date_f"])
+        if pd.isna(max_date):
+            return df
+        df = df.loc[df["date_f"] == max_date]
         return df
 
     def __save_selected_seqs(self):
@@ -912,7 +1053,7 @@ class Miner_filter:
         SeqIO.write(keeping_records, filtered_records, "fasta")
 
         # write log file
-        msg = "in <func> save_selected_seqs:\n  Most qualified sequence for each taxon is saved to 'blast_results_filtered.fasta'"
+        msg = "Most qualified sequence for each taxon is saved to 'blast_results_filtered.fasta'"
         print(f"INFO: {msg}")
 
     ## ===========================================================================================================
@@ -1051,15 +1192,12 @@ class Miner_filter:
                 shutil.copyfile(file_path, out_path / file_path.name)
 
     def __align_subset(self, add_threshold=5):
+        import subprocess
         """align the subsets
         ----------
         Parameters
         - add_threshold - files contain seqs less than this number will use --add (refer to another MSA)
         """
-        from functional import create_folder
-        import shutil
-        from Bio import SeqIO
-        from pathlib import Path
 
         in_path = self.__in_path / "tmp_files" / "extension_control" / "split_by_genus"
         out_path = self.__out_path / "tmp_files" / "extension_control" / "subset_MSA"
@@ -1081,13 +1219,30 @@ class Miner_filter:
             record_count = len(list(SeqIO.parse(file_abs_path, "fasta")))
 
             if record_count > add_threshold:
-                mafft(
-                    in_path=str(file_abs_path),
-                    out_path=str(out_path),
-                    algorithm="auto",
-                    thread=-1,
-                    reorder=True,
+                temp_output_dir = out_path / f"temp_{Path(file).stem}"
+                temp_output_dir.mkdir(parents=True, exist_ok=True)
+                
+                in_file_str = file_abs_path.as_posix()
+                out_file = temp_output_dir / file
+                out_file_str = out_file.as_posix()
+                mafft_exe_str = Path(mafft_exe).as_posix()
+                
+                commandstr = f'"{mafft_exe_str}" --auto --thread -1 --reorder "{in_file_str}" > "{out_file_str}"'
+                
+                result = subprocess.run(
+                    commandstr,
+                    shell=True,
+                    capture_output=True,
+                    text=True
                 )
+                
+                if result.returncode != 0:
+                    raise RuntimeError(f"MAFFT failed: {result.stderr}")
+                
+                if out_file.exists():
+                    shutil.move(str(out_file), str(file_out_path))
+                if temp_output_dir.exists():
+                    shutil.rmtree(temp_output_dir)
             else:
                 file_waiting_list.append(file)
 
@@ -1133,20 +1288,31 @@ class Miner_filter:
                 print(f"WARNING: Reference alignment not found for {file}")
                 continue
 
-            mafft(
-                in_path=str(file_abs_path),
-                out_path=str(out_path),
-                add_choice="add",
-                add_path=str(ref_aligned_path),
-                algorithm="auto",
-                thread=-1,
-                reorder=True,
+            temp_output_dir = out_path / f"temp_{Path(file).stem}"
+            temp_output_dir.mkdir(parents=True, exist_ok=True)
+            
+            in_file_str = file_abs_path.as_posix()
+            out_file = temp_output_dir / file
+            out_file_str = out_file.as_posix()
+            ref_aligned_str = ref_aligned_path.as_posix()
+            mafft_exe_str = Path(mafft_exe).as_posix()
+            
+            commandstr = f'"{mafft_exe_str}" --quiet --auto --add "{ref_aligned_str}" --thread -1 --reorder "{in_file_str}" > "{out_file_str}"'
+            
+            result = subprocess.run(
+                commandstr,
+                shell=True,
+                capture_output=True,
+                text=True
             )
-
-            msa_file = out_path / f"msa_{file}"
-            if msa_file.exists():
-                shutil.move(str(msa_file), str(file_out_path))
-
+            
+            if result.returncode != 0:
+                raise RuntimeError(f"MAFFT --add failed: {result.stderr}")
+            
+            if out_file.exists():
+                shutil.move(str(out_file), str(file_out_path))
+            if temp_output_dir.exists():
+                shutil.rmtree(temp_output_dir)
         pass
 
     def __remove_erroneous_extension(self, gappyness_threshold=0.5):

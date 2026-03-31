@@ -12,7 +12,7 @@ from format_wizard import check_outpath_validity, create_folder, get_file_handle
 
 
 def _run_silent(command):
-    """静默执行命令，不输出任何内容到控制台"""
+
     if sys.platform == "win32":
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
@@ -106,19 +106,15 @@ def trimal(
     # STEP 2: get parameters and call trimal
     total_time = 0.0
     for in_file in file_handles:
-        print("Trimming %s..." % in_file)
-        if progress_callback:
-            progress_callback(f"Trimming {Path(in_file).name}...")
-        t0 = datetime.now()
         basename = Path(in_file).name
+        print(f"Trimming {basename}...")
+        if progress_callback:
+            progress_callback(f"Trimming {basename}...")
+        t0 = datetime.now()
         out_file = Path(out_path) / f"trim_{basename}"
         in_file_str = str(Path(in_file))
         out_file_str = str(out_file)
-        print(f"Input file: {in_file_str}")
-        print(f"Output file: {out_file_str}")
-
         trimal_exe = get_trimal_path()
-        print(f"Using trimal: {trimal_exe}")
 
         command_parts = [
             f'"{trimal_exe}"',

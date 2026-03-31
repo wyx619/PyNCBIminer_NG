@@ -1,4 +1,5 @@
 from itertools import product
+from os import path
 from Bio import SeqIO
 from Bio.Seq import Seq
 import numpy as np
@@ -704,92 +705,6 @@ class nt_Calculator:
 
         return [five_end, three_end]
 
-    @staticmethod
-    def remove_minor_large_insertion(
-        record_path, length_threshold=20, taxa_threshold=1, keep_tmp=False
-    ):
-        ## STEP 1: load related information
-        record_iter = list(SeqIO.parse(record_path, "fasta"))
-        if not record_iter:
-            return []
-        records = np.array([list(str(record.seq).upper()) for record in record_iter])
-
-        if records.ndim == 1 or records.shape[1] == 0:
-            return []
-
-        ## STEP 2: record minor large insertion (in list remove_ends)
-        single_insertion_columns = []
-        num_taxa = records.shape[0]
-        for col in range(records.shape[1]):
-            if np.sum(records[:, col] == "-") >= num_taxa - taxa_threshold:
-                single_insertion_columns.append(col)
-
-        if not single_insertion_columns:
-            return []
-
-        prev_col = single_insertion_columns[0]
-        final_col = single_insertion_columns[-1]
-        start = single_insertion_columns[0]
-        remove_ends = []  # [[0,50], [start2, end2]] means 0~50 bp and start2~end2 bp will be removed
-        count = 1
-
-        for col in single_insertion_columns[1:]:
-            if col - prev_col == 1 and col != final_col:
-                count += 1
-            elif col - prev_col == 1 and col == final_col:
-                count += 1
-                if count >= length_threshold:
-                    remove_ends.append([start, col])
-                count = 1
-                start = col
-            else:
-                if count >= length_threshold:
-                    remove_ends.append([start, prev_col])
-                count = 1
-                start = col
-
-            prev_col = col
-
-        ## STEP 3: remove those recorded insertion in both msa file and unaligned file
-        ## substep 1: remove those insertion in all records
-        for record in record_iter:
-            if not remove_ends:
-                return []
-            if keep_tmp and Path(record_path).is_file():
-                shutil.copy(record_path, record_path.replace(".fasta", "_backup.fasta"))
-                shutil.copy(
-                    record_path.replace("_msa.fasta", ".fasta"),
-                    record_path.replace("_msa.fasta", "_backup.fasta"),
-                )
-            for ends in remove_ends:
-                sequence = record.seq
-                sequence = (
-                    sequence[: ends[0]]
-                    + "-" * (ends[1] - ends[0] + 1)
-                    + sequence[ends[1] + 1 :]
-                )
-            sequence = Seq(str(sequence).replace("-", ""))
-            record.seq = sequence
-
-        ## substep 2: write into unaligned file
-        out_path = record_path.parent / (record_path.name.replace("_msa.fasta", ".fasta"))
-        SeqIO.write(record_iter, out_path, "fasta")
-
-        ## substep 3: write into msa file
-        mafft(
-            in_path=str(out_path),
-            out_path=str(record_path.parent),
-            algorithm="auto",
-            reorder=True,
-        )
-
-        msa_output_path = record_path.parent / out_path.name
-        if msa_output_path.exists():
-            if record_path.exists():
-                record_path.unlink()
-            msa_output_path.rename(record_path)
-
-        return remove_ends
 
     def get_kmer_similarity_matrix(self, records, k):
         """using kmer_similarity to evaluate simiarlity matrix of a list of records

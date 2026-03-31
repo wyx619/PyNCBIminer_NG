@@ -413,7 +413,7 @@ class RetrievalInterface(QWidget):
         # self.len_thresh.setFixedWidth(240)
         row2.addWidget(self.len_thresh)
         row2.addSpacing(40)
-        self.chk_consensus = CheckBox("Abnormal Index (Consensus)", card_opts)
+        self.chk_consensus = CheckBox("Calculate Consensus", card_opts)
         self.chk_consensus.setChecked(True)
         self.chk_consensus.setEnabled(False)
         row2.addWidget(self.chk_consensus)
@@ -422,7 +422,7 @@ class RetrievalInterface(QWidget):
         row3 = QHBoxLayout()
         self.filter_in = LineEdit()
         self.filter_in.setPlaceholderText(
-            "One working directory or the parent directory of multiple working directories"
+            "One working directory"
         )
         btn_in = PushButton("Browse")
         btn_in.setIcon(FIF.FOLDER)
@@ -1221,7 +1221,7 @@ class ChloroplastMinerInterface(QWidget):
         btn_cds_select_tax_file.setIcon(FIF.FOLDER)
         btn_cds_select_tax_file.setEnabled(False)
         btn_cds_select_tax_file.clicked.connect(
-            lambda: self.browse_file(self.cds_select_tax_file)
+            lambda: self.browse_csv_file(self.cds_select_tax_file)
         )
         h_select_tax.addWidget(self.cds_select_tax_file)
         h_select_tax.addWidget(btn_cds_select_tax_file)
@@ -1253,6 +1253,11 @@ class ChloroplastMinerInterface(QWidget):
 
     def browse_file(self, line_edit):
         path, _ = QFileDialog.getOpenFileName(self, "Select File")
+        if path:
+            line_edit.setText(path)
+
+    def browse_csv_file(self, line_edit):
+        path, _ = QFileDialog.getOpenFileName(self, "Select CSV File", "", "CSV Files (*.csv)")
         if path:
             line_edit.setText(path)
 

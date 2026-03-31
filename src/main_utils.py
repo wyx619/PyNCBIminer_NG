@@ -762,13 +762,10 @@ class BackendController(QObject):
         self.emit_log("Running MAFFT...")
 
         def run_mafft_thread():
-            import shutil
-            import tempfile
-
-            with tempfile.TemporaryDirectory() as temp_dir:
+            try:
                 _, total_time = mafft(
                     in_path,
-                    temp_dir,
+                    str(out_path),
                     "",
                     "",
                     algo,
@@ -783,10 +780,11 @@ class BackendController(QObject):
                     self.emit_log(
                         f"MAFFT completed in {total_time:.2f} seconds", "SUCCESS"
                     )
-                    for file in Path(temp_dir).glob("*.fasta"):
-                        new_name = "msa_" + file.name
-                        shutil.move(str(file), Path(out_path) / new_name)
-                        self.emit_log(f"Output: {new_name}", "INFO")
+
+            finally:
+                for file in Path(out_path).glob("*"):
+                    if not file.name.startswith("msa"):
+                        file.rename(Path(out_path) / f"msa_{file.name}")
 
         thread = threading.Thread(target=run_mafft_thread)
         thread.daemon = True
@@ -848,7 +846,7 @@ class BackendController(QObject):
             _, total_time = trimal(
                 in_path,
                 out_path,
-                True,
+                False,
                 False,
                 met,
                 gt_val,

@@ -32,7 +32,7 @@ def rename_results(wd):
 
 
 def combine_keep_records(wd_list, out_path):
-    print("Combining keep records...")
+    #print("Combining keep records...")
     combined_records = None
     col_list = ["taxon_name"]
     out_path = Path(out_path)
@@ -69,7 +69,7 @@ def combine_keep_records(wd_list, out_path):
         combined_records.to_csv(
             out_path / "combined_records.txt", index=False, sep="\t"
         )
-        print("Combined records save in %s" % out_path)
+        print(f"Combined records save in {out_path / 'combined_records.txt'}")
     else:
         print("No records found to combine.")
 

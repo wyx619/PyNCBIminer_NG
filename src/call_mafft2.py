@@ -29,89 +29,55 @@ def get_mafft_path():
 
 
 def mafft_add(in_path, in_file, out_path, cmd_str):
-    print("Aligning %s..." % Path(in_path) / Path(in_file))
-    len_list = []
-    for record in SeqIO.parse(Path(in_path) / Path(in_file), "fasta"):
-        len_list.append((record.description, len(record.seq)))
-
-    def take_2(elem):
-        return elem[1]
-
-    len_list.sort(key=take_2, reverse=True)
+    print(f"Aligning {in_file}...")
+    
+    in_file_path = Path(in_path) / in_file
+    records = list(SeqIO.parse(in_file_path, "fasta"))
+    len_list = [(rec.description, len(rec.seq)) for rec in records]
+    len_list.sort(key=lambda x: x[1], reverse=True)
 
     if len(len_list) > 100:
-        # if len(len_list) > 100:
         a = len_list[99][1]
         b = a * 0.5
 
-        file1 = Path(out_path) / Path("long_" + in_file)
-        file2 = Path(out_path) / Path("add1_" + in_file)
-        file3 = Path(out_path) / Path("add2_" + in_file)
+        file1 = Path(out_path) / f"long_{in_file}"
+        file2 = Path(out_path) / f"add1_{in_file}"
+        file3 = Path(out_path) / f"add2_{in_file}"
 
-        fw1 = open(file1, "w")
-        fw2 = open(file2, "w")
-        fw3 = open(file3, "w")
+        with open(file1, "w") as fw1, open(file2, "w") as fw2, open(file3, "w") as fw3:
+            long_count = 0
+            for record in records:
+                seq_len = len(record.seq)
+                if seq_len >= a and long_count < 100:
+                    SeqIO.write(record, fw1, "fasta")
+                    long_count += 1
+                elif seq_len > b:
+                    SeqIO.write(record, fw3, "fasta")
+                else:
+                    SeqIO.write(record, fw2, "fasta")
 
-        # for record in SeqIO.parse(Path(in_path)/Path(in_file), "fasta"):
-        #     if len(record.seq) >= a:
-        #         SeqIO.write(record, fw1, "fasta")
-        #     elif len(record.seq) > b:
-        #         SeqIO.write(record, fw2, "fasta")
-        #     else:
-        #         SeqIO.write(record, fw3, "fasta")
+        msa1 = Path(out_path) / f"step1_{in_file}"
+        msa2 = Path(out_path) / f"step2_{in_file}"
+        msa3 = Path(out_path) / f"step3_{in_file}"
 
-        # addfragments first
-        long_count = 0
-        for record in SeqIO.parse(Path(in_path) / Path(in_file), "fasta"):
-            if len(record.seq) >= a and long_count < 100:
-                SeqIO.write(record, fw1, "fasta")
-                long_count += 1
-            elif len(record.seq) > b:
-                SeqIO.write(record, fw3, "fasta")
-            else:
-                SeqIO.write(record, fw2, "fasta")
-
-        fw1.close()
-        fw2.close()
-        fw3.close()
-
-        msa1 = Path(out_path) / Path(in_file)
-        msa2 = Path(out_path) / Path(in_file)
-        msa3 = Path(out_path) / Path(in_file)
-
-        # run_command("mafft --localpair --maxiterate 1000 %s > %s" % (file1, msa1))
-        # run_command("mafft --auto --add %s %s > %s" % (file2, msa1, msa2))  # FFT - NS - 2(Fast but rough)
-        # run_command("mafft --auto --addfragments %s %s > %s" % (file3, msa2, msa3))  # Multi-INS-fragment
-        run_command(" %s --quiet %s > %s" % (cmd_str[0], file1, msa1))
-
-        # run_command("%s --auto --add %s %s > %s" % (cmd_str[1], file2,  msa1, msa2))  # FFT - NS - 2(Fast but rough)
-        # run_command("%s --auto --addfragments %s %s > %s" % (cmd_str[2], file3, msa2, msa3))  # Multi-INS-fragment
-
-        # add fragments first
-        run_command(
-            "%s --quiet --auto --addfragments %s %s > %s" % (cmd_str[1], file2, msa1, msa2)
-        )  # FFT - NS - 2(Fast but rough)
+        run_command(f"{cmd_str[0]} --quiet {file1} > {msa1}")
+        run_command(f"{cmd_str[1]} --quiet --auto --addfragments {file2} {msa1} > {msa2}")
+        
         if msa2.stat().st_size == 0:
-            run_command("%s --quiet --auto --add %s %s > %s" % (cmd_str[1], file2, msa1, msa2))
-        run_command(
-            "%s --quiet --auto --add %s %s > %s" % (cmd_str[2], file3, msa2, msa3)
-        )  # Multi-INS-fragment
+            run_command(f"{cmd_str[1]} --quiet --auto --add {file2} {msa1} > {msa2}")
+        
+        run_command(f"{cmd_str[2]} --quiet --auto --add {file3} {msa2} > {msa3}")
 
-        file1.unlink()
-        file2.unlink()
-        file3.unlink()
-        msa1.unlink()
-        msa2.unlink()
-        # print("Aligned results: %s" % msa3)
+        file1.unlink(missing_ok=True)
+        file2.unlink(missing_ok=True)
+        file3.unlink(missing_ok=True)
+        msa1.unlink(missing_ok=True)
+        msa2.unlink(missing_ok=True)
+        
+        shutil.move(str(msa3), str(Path(out_path) / in_file))
     else:
-        run_command(
-            " %s --quiet %s > %s"
-            % (
-                cmd_str[0],
-                Path(in_path) / Path(in_file),
-                Path(out_path) / Path(in_file),
-            )
-        )
+        out_file = Path(out_path) / in_file
+        run_command(f"{cmd_str[0]} --quiet {in_file_path} > {out_file}")
 
 
 def mafft(
@@ -126,6 +92,7 @@ def mafft(
     pure_command_mode=False,
     pure_command="",
     progress_callback=None,
+    message=True,
 ):
     """
     call mafft to do multiple sequence alignment
@@ -167,7 +134,8 @@ def mafft(
 
     # STEP 2: get parameters and call mafft
     mafft_exe = get_mafft_path()
-    print(f"Using MAFFT: {mafft_exe}")
+    if message:
+        print(f"Using MAFFT: {mafft_exe}")
 
     # for in_file in file_handles:
     #     basename = os.path.basename(in_file)
@@ -197,28 +165,32 @@ def mafft(
             in_file = str(Path(in_path) / file)
             out_file = str(Path(out_path) / file)
             command = f"{mafft_exe} --quiet --{algorithm} --{add_choice} {add_path} --thread {thread} {'--reorder' * reorder} {additional_params} {in_file} > {out_file}"
-            print("Aligning %s..." % in_file)
+            if message:
+                print(f"Aligning {file}...")
             if progress_callback:
                 progress_callback(f"Aligning {file}...")
             run_command(command)
             t1 = datetime.now()
             elapsed = (t1 - t0).total_seconds()
             total_time += elapsed
-            print("MAFFT Running time: %s seconds" % elapsed)
+            if message:
+                print(f"MAFFT Used: {elapsed:.2f} seconds")
     elif algorithm == "auto":
         for file in file_list:
             t0 = datetime.now()
             in_file = str(Path(in_path) / file)
             out_file = str(Path(out_path) / file)
             command = f"{mafft_exe} --quiet --auto --thread {thread} {'--reorder' * reorder} {additional_params} {in_file} > {out_file}"
-            print("Aligning %s..." % in_file)
+            if message:
+                print(f"Aligning {file}...")
             if progress_callback:
                 progress_callback(f"Aligning {file}...")
             run_command(command)
             t1 = datetime.now()
             elapsed = (t1 - t0).total_seconds()
             total_time += elapsed
-            print("MAFFT Running time: %s seconds" % elapsed)
+            if message:
+                print(f"MAFFT Used: {elapsed:.2f} seconds")
     else:
         command1 = f"{mafft_exe} --quiet --localpair --maxiterate 1000 --thread {thread} {'--reorder' * reorder} {additional_params}"
         command2 = f"{mafft_exe} --quiet --thread {thread} {'--reorder' * reorder} {additional_params}"
@@ -231,7 +203,7 @@ def mafft(
             t1 = datetime.now()
             elapsed = (t1 - t0).total_seconds()
             total_time += elapsed
-            print("MAFFT Running time: %s seconds" % elapsed)
+            print(f"MAFFT Used: {elapsed:.2f} seconds")
 
     return file_handles, total_time
 
