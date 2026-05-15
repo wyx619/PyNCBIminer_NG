@@ -829,11 +829,14 @@ class ChloroplastMinerInterface(QWidget):
         self.pivot.addItem(routeKey=objectName, text=text)
 
     def create_search_page(self):
-        w = QWidget()
-        layout = QVBoxLayout(w)
-        layout.setContentsMargins(5, 20, 5, 20)
+        w = SingleDirectionScrollArea()
+        w.setWidgetResizable(True)
+        view = QWidget()
+        layout = QVBoxLayout(view)
+        layout.setContentsMargins(5, 20, 20, 20)
+        layout.setSpacing(20)
 
-        grp_search = SettingCardGroup("Search", w)
+        grp_search = SettingCardGroup("Search", view)
 
         card = CardWidget()
         card.setFixedHeight(230)
@@ -880,7 +883,7 @@ class ChloroplastMinerInterface(QWidget):
         grp_search.addSettingCard(card)
         layout.addWidget(grp_search)
 
-        grp_download = SettingCardGroup("Download", w)
+        grp_download = SettingCardGroup("Download", view)
 
         card_download = CardWidget()
         card_download.setFixedHeight(220)
@@ -933,7 +936,69 @@ class ChloroplastMinerInterface(QWidget):
 
         grp_download.addSettingCard(card_download)
         layout.addWidget(grp_download)
+
+        grp_prefilter = SettingCardGroup("Pre-filter", view)
+
+        card_prefilter = CardWidget()
+        card_prefilter.setFixedHeight(240)
+        prefilter_layout = QVBoxLayout(card_prefilter)
+        prefilter_layout.setContentsMargins(15, 10, 15, 10)
+
+        self.prefilter_in_edit = LineEdit()
+        self.prefilter_in_edit.setPlaceholderText("Input directory with downloaded GeneBank files")
+        btn_prefilter_in = PushButton("Browse")
+        btn_prefilter_in.setIcon(FIF.FOLDER)
+        btn_prefilter_in.clicked.connect(lambda: self.browse_folder(self.prefilter_in_edit))
+
+        h_pf_in = QHBoxLayout()
+        h_pf_in.addWidget(BodyLabel("Input Directory:"))
+        h_pf_in.addWidget(self.prefilter_in_edit)
+        h_pf_in.addWidget(btn_prefilter_in)
+        prefilter_layout.addLayout(h_pf_in)
+
+        self.chloro_download_dir_edit.textChanged.connect(
+            lambda text: self.prefilter_in_edit.setText(text)
+        )
+
+        self.prefilter_out_edit = LineEdit()
+        self.prefilter_out_edit.setPlaceholderText("Output directory for filtered GeneBank files")
+        btn_prefilter_out = PushButton("Browse")
+        btn_prefilter_out.setIcon(FIF.FOLDER)
+        btn_prefilter_out.clicked.connect(lambda: self.browse_folder(self.prefilter_out_edit))
+
+        h_pf_out = QHBoxLayout()
+        h_pf_out.addWidget(BodyLabel("Output Directory:"))
+        h_pf_out.addWidget(self.prefilter_out_edit)
+        h_pf_out.addWidget(btn_prefilter_out)
+        prefilter_layout.addLayout(h_pf_out)
+
+        h_pf_opts = QHBoxLayout()
+        self.prefilter_species_switch = SwitchButton()
+        self.prefilter_species_switch.setChecked(False)
+        h_pf_opts.addWidget(BodyLabel("Species Level Merge:"))
+        h_pf_opts.addWidget(self.prefilter_species_switch)
+        h_pf_opts.addSpacing(20)
+        h_pf_opts.addWidget(BodyLabel("Keep per taxon:"))
+        self.prefilter_keep_edit = LineEdit()
+        self.prefilter_keep_edit.setText("3")
+        self.prefilter_keep_edit.setFixedWidth(40)
+        h_pf_opts.addWidget(self.prefilter_keep_edit)
+        h_pf_opts.addStretch()
+        prefilter_layout.addLayout(h_pf_opts)
+
+        self.btn_chloro_prefilter = PushButton("Run Pre-filter")
+        self.btn_chloro_prefilter.setIcon(FIF.FILTER)
+        self.btn_chloro_prefilter.clicked.connect(self.on_chloro_prefilter)
+        prefilter_layout.addWidget(self.btn_chloro_prefilter)
+
+        grp_prefilter.addSettingCard(card_prefilter)
+        layout.addWidget(grp_prefilter)
         layout.addStretch(1)
+
+        w.setWidget(view)
+        w.setObjectName("search_page")
+        w.setStyleSheet("QScrollArea {border: none; background:transparent}")
+        view.setStyleSheet("QWidget {background:transparent}")
         return w
 
     def create_extract_page(self):
@@ -950,7 +1015,7 @@ class ChloroplastMinerInterface(QWidget):
 
         h_input = QHBoxLayout()
         self.chloro_qc_in = LineEdit()
-        self.chloro_qc_in.setPlaceholderText("Input directory containing GenBank files")
+        self.chloro_qc_in.setPlaceholderText("Input directory containing pre-filtered GenBank files")
         btn_chloro_qc_in = PushButton("Browse")
         btn_chloro_qc_in.setIcon(FIF.FOLDER)
         btn_chloro_qc_in.clicked.connect(lambda: self.browse_folder(self.chloro_qc_in))
@@ -978,7 +1043,7 @@ class ChloroplastMinerInterface(QWidget):
         self.chloro_cds_thresh = LineEdit()
         self.chloro_cds_thresh.setText("75")
         self.chloro_ambig_thresh = LineEdit()
-        self.chloro_ambig_thresh.setText("0.2")
+        self.chloro_ambig_thresh.setText("0.1")
 
         h_threshold = QHBoxLayout()
         h_threshold.addWidget(BodyLabel("CDS Threshold:"))
@@ -1286,6 +1351,34 @@ class ChloroplastMinerInterface(QWidget):
 
         self.main_window.backend.download_chloroplast_genomes(email, in_path, out_path)
 
+    def on_chloro_prefilter(self):
+        in_folder = self.prefilter_in_edit.text().strip()
+        out_folder = self.prefilter_out_edit.text().strip()
+
+        if not in_folder or not out_folder:
+            self.main_window.backend.emit_log(
+                "Please select both input and output directories for pre-filter",
+                "WARNING",
+            )
+            return
+
+        species_level = self.prefilter_species_switch.isChecked()
+
+        try:
+            keep_latest = int(self.prefilter_keep_edit.text().strip())
+            if keep_latest < 1:
+                raise ValueError
+        except ValueError:
+            self.main_window.backend.emit_log(
+                "Keep per taxon must be a positive integer", "WARNING"
+            )
+            return
+
+        self.main_window.backend.emit_log("Pre-filter started...", "INFO")
+        self.main_window.backend.run_prefilter(
+            in_folder, out_folder, keep_latest=keep_latest, species_level=species_level
+        )
+
     def on_chloro_date_from_changed(self, date):
         if date.isValid():
             self.chloro_date_from_cleared = False
@@ -1373,7 +1466,7 @@ class ChloroplastMinerInterface(QWidget):
             )
             return
 
-        cds_threshold = 80
+        cds_threshold = 75
         try:
             cds_threshold = int(self.chloro_cds_thresh.text().strip())
             if cds_threshold < 0:
@@ -1385,7 +1478,7 @@ class ChloroplastMinerInterface(QWidget):
             self.main_window.backend.emit_log("Invalid CDS threshold value", "WARNING")
             return
 
-        ambig_threshold = 0.2
+        ambig_threshold = 0.1
         try:
             ambig_threshold = float(self.chloro_ambig_thresh.text().strip())
             if ambig_threshold < 0 or ambig_threshold > 1:

@@ -7,7 +7,7 @@
 
 
 from pathlib import Path
-import numpy as np
+
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from Bio import Entrez, SeqIO
 import func_timeout

@@ -5,9 +5,11 @@ import pandas as pd
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import multiprocessing
+from Chloroplast.PPA_80_CDS import PPA_80_CDS
 
 import warnings
 warnings.filterwarnings("ignore")
+
 
 
 
@@ -104,19 +106,9 @@ def get_cds(in_path, out_path, threads=3):
     
     out_path.mkdir(parents=True, exist_ok=True)
     
-    _cds_list = ['accD', 'atpA', 'atpB', 'atpE', 'atpF', 'atpH', 'atpI', 'ccsA', 'cemA',
-                 'clpP', 'infA', 'matK', 'ndhA', 'ndhB', 'ndhC', 'ndhD', 'ndhE', 'ndhF', 'ndhG', 'ndhH', 'ndhI',
-                 'ndhJ', 'ndhK', 'petA', 'petB', 'petD', 'petG', 'petL', 'petN', 'psaA', 'psaB', 'psaC', 'psaI',
-                 'psaJ', 'psbA', 'psbB', 'psbC', 'psbD', 'psbE', 'psbF', 'psbH', 'psbI', 'psbJ', 'psbK', 'psbL',
-                 'psbM', 'psbN', 'psbT', 'psbZ', 'rbcL', 'rpl14', 'rpl16', 'rpl2', 'rpl20', 'rpl22', 'rpl23',
-                 'rpl32', 'rpl33', 'rpl36', 'rpoA', 'rpoB', 'rpoC1', 'rpoC2', 'rps11', 'rps12', 'rps14', 'rps15',
-                 'rps16', 'rps18', 'rps19', 'rps2', 'rps3', 'rps4', 'rps7', 'rps8', 'rrn16', 'rrn23', 'rrn4.5',
-                 'rrn5', 'ycf1', 'ycf15', 'ycf2', 'ycf3', 'ycf4', 'ycf68']
+    _cds_list = sorted(set(PPA_80_CDS.values()))
 
-    _alternative_name = {'16S ribosomal RNA': 'rrn16', '23S ribosomal RNA': 'rrn23',
-                        '4.5S ribosomal RNA': 'rrn4.5', '5S ribosomal RNA': 'rrn5',
-                        'rrn16S': 'rrn16', 'rrn23S': 'rrn23',
-                        'rrn4.5S': 'rrn4.5', 'rrn5S': 'rrn5'}
+    _alternative_name = {k: v for k, v in PPA_80_CDS.items() if k != v}
     
     for cds in _cds_list:
         (out_path / f"{cds}.fasta").touch()

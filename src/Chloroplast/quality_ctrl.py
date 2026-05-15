@@ -10,6 +10,8 @@ import multiprocessing
 import warnings
 warnings.filterwarnings("ignore")
 
+from Chloroplast.PPA_80_CDS import PPA_80_CDS
+
 def process_single_file(file_path, out_folder_path, cds_threshold, ambig_threshold):
     """处理单个GB文件的辅助函数"""
     #print(f"Collect information of : {file_path.name}\n")
@@ -42,6 +44,11 @@ def process_single_file(file_path, out_folder_path, cds_threshold, ambig_thresho
         for feature in record.features:
             if feature.type == "gene":
                 results["gene_count"] += 1
+            elif feature.type == "CDS":
+                gene = feature.qualifiers.get("gene", [""])[0]
+                std_name = PPA_80_CDS.get(gene)
+                if std_name is not None:
+                    feature_counts["CDS"] += 1
             elif feature.type in feature_counts:
                 feature_counts[feature.type] += 1
 
@@ -49,7 +56,7 @@ def process_single_file(file_path, out_folder_path, cds_threshold, ambig_thresho
 
         if results["CDS"] < cds_threshold or results["unclear_ratio"] > ambig_threshold:
             is_problematic = True
-            out_file = Path(out_folder_path) / (file_path.stem + "_reannoated.fasta")
+            out_file = Path(out_folder_path) / (file_path.stem + "_reannotated.fasta")
             try:
                 record.id = file_path.stem
                 record.description = f"{record.annotations.get('organism', '')}|{record.description}"
@@ -84,6 +91,10 @@ def generate_genome_report(
     print(f"Found {len(gb_files)} GenBank files in {in_folder_path}")
 
     Path(out_folder_path).mkdir(parents=True, exist_ok=True)
+
+    for stale in Path(out_folder_path).glob("*_reannotated.fasta"):
+        stale.unlink()
+        print(f"Cleared stale file: {stale.name}")
 
     all_results = []
     import  math

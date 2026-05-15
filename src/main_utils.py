@@ -1042,6 +1042,38 @@ class BackendController(QObject):
         thread.daemon = True
         thread.start()
 
+    def run_prefilter(
+        self, in_folder, out_folder, keep_latest=3, species_level=False
+    ):
+        from pathlib import Path
+
+        from Chloroplast.pre_filter_gb_file import pre_filter
+
+        in_folder = Path(in_folder)
+        out_folder = Path(out_folder)
+
+        def run_pf():
+            try:
+                df = pre_filter(
+                    str(in_folder),
+                    out_path=str(out_folder),
+                    keep_latest=keep_latest,
+                    species_level=species_level,
+                )
+                n_kept = df["keep"].sum()
+                n_total = len(df)
+                n_rejected = df["reject"].sum()
+                self.emit_log(
+                    f"Pre-filter: {n_kept}/{n_total} kept, {n_rejected} rejected by quality"
+                )
+                self.emit_log("Pre-filter completed successfully!", "SUCCESS")
+            except Exception as e:
+                self.emit_log(f"Pre-filter failed: {e}", "WARNING")
+
+        thread = threading.Thread(target=run_pf)
+        thread.daemon = True
+        thread.start()
+
     def run_get_cds(self, in_folder, out_folder, threads=3):
         from pathlib import Path
 
