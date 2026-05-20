@@ -978,7 +978,7 @@ class ChloroplastMinerInterface(QWidget):
         h_pf_opts.addWidget(BodyLabel("Species Level Merge:"))
         h_pf_opts.addWidget(self.prefilter_species_switch)
         h_pf_opts.addSpacing(20)
-        h_pf_opts.addWidget(BodyLabel("Keep per taxon:"))
+        h_pf_opts.addWidget(BodyLabel("Records Kept for Each Taxon:"))
         self.prefilter_keep_edit = LineEdit()
         self.prefilter_keep_edit.setText("3")
         self.prefilter_keep_edit.setFixedWidth(40)

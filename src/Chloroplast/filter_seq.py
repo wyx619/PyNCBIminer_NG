@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from Bio import SeqIO
 
-from Chloroplast.PPA_80_CDS import PPA_80_CDS, ANG_REF_LEN, GYM_REF_LEN
+from Chloroplast.PPA_80_CDS import ANG_REF_LEN, GYM_REF_LEN
 
 
 _ref_len_dict = None
@@ -52,7 +52,7 @@ def process_file(args):
     in_path, out_path, file = args
     global _ref_len_dict, _lower_bound, _upper_bound
     gene = Path(file).stem
-    print(f"Filter record of : {gene} by length")
+    #print(f"Filter record of : {gene} by length")
 
     try:
         seq_dict = create_seq_dict(Path(in_path) / file)

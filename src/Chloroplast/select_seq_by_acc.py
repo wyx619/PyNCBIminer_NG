@@ -103,7 +103,7 @@ def make_tab(in_path, file_organism_name=None, on_duplicates="keep_longest"):
             print(f"          Found columns: {set(df_rename.columns)}")
             print("          Skipping standardization...")
         else:
-            df1 = pd.merge(df1, df_rename, on="organism", how="left")
+            df1 = pd.merge(df1, df_rename, on="organism", how="inner")
             df1["organism"] = df1["new_name"]
             df1 = df1.drop(columns=["ID", "new_name"])
             print("Organism name standardization completed")

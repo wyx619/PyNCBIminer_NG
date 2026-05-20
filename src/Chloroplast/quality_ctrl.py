@@ -7,11 +7,11 @@ from Bio import SeqIO
 from datetime import datetime
 import pandas as pd
 import multiprocessing
-import warnings
-warnings.filterwarnings("ignore")
+
 
 from Chloroplast.PPA_80_CDS import PPA_80_CDS
-
+import warnings
+warnings.filterwarnings("ignore")
 def process_single_file(file_path, out_folder_path, cds_threshold, ambig_threshold):
     """处理单个GB文件的辅助函数"""
     #print(f"Collect information of : {file_path.name}\n")
@@ -94,7 +94,7 @@ def generate_genome_report(
 
     for stale in Path(out_folder_path).glob("*_reannotated.fasta"):
         stale.unlink()
-        print(f"Cleared stale file: {stale.name}")
+        #print(f"Cleared stale file: {stale.name}")
 
     all_results = []
     import  math
