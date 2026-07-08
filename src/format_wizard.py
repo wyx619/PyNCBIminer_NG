@@ -271,10 +271,24 @@ def taxon_completion(in_path, out_path="./"):
     total_taxa = list(set(total_taxa))  # remove duplicates
     total_taxa.sort()
 
-    # STEP 2: copy source files to out_path
+    # STEP 2: copy source files to out_path, deduplicating by description
+    dedup_stats = {}
     for in_file in file_handles:
         try:
-            shutil.copyfile(in_file, out_path / Path(in_file).name)
+            records = list(SeqIO.parse(in_file, "fasta"))
+            seen = set()
+            unique_records = []
+            dup_count = 0
+            for rec in records:
+                if rec.description not in seen:
+                    seen.add(rec.description)
+                    unique_records.append(rec)
+                else:
+                    dup_count += 1
+            SeqIO.write(unique_records, out_path / Path(in_file).name, "fasta")
+            if dup_count > 0:
+                dedup_stats[Path(in_file).name] = dup_count
+                print(f"Deduplicated {dup_count} duplicate(s) in {Path(in_file).name}")
         except IOError as e:
             print("Unable to copy file. %s" % e)
         except Exception:

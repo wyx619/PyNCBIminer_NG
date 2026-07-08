@@ -311,14 +311,39 @@ def my_concatenation(in_path, out_path, emit_log):
         fw = open(Path(in_path) / file, "w")
         fw.write(records)
         fw.close()
-    taxon_completion(in_path=in_path, out_path=out_path)
-    emit_log(f"Completion log written to {out_path}/completion/completion.log")
-    concat(in_path=str(Path(out_path) / "completion"), out_path=out_path)
-    emit_log(f"Concatenated file written to {out_path}/concat/concat.fasta")
-    emit_log(f"Config file written to {out_path}/concat/concat.cfg")
-    emit_log(f"Part file written to {out_path}/concat/part.txt")
-    fas2phy(in_path=str(Path(out_path) / "concat" / "concat.fasta"), out_path=out_path)
-    emit_log(f"Phylip file written to {out_path}/phylip/concat.phy")
+    missing = taxon_completion(in_path=in_path, out_path=out_path)
+    if missing:
+        emit_log(f"Completion log written to {out_path}/completion/completion.log")
+    else:
+        emit_log("Warning: no taxa were completed (input may be empty)", "WARNING")
+
+    marker_record = concat(
+        in_path=str(Path(out_path) / "completion"), out_path=out_path
+    )
+    if marker_record:
+        emit_log(
+            f"Concatenated file written to {out_path}/concat/concat.fasta"
+        )
+        emit_log(f"Config file written to {out_path}/concat/concat.cfg")
+        emit_log(f"Part file written to {out_path}/concat/part.txt")
+    else:
+        emit_log(
+            "Concatenation failed: check that all input files have identical"
+            " taxon sets and equal sequence lengths within each file",
+            "ERROR",
+        )
+        t1 = datetime.now()
+        emit_log(f"Running time: {t1 - t0} seconds")
+        return
+
+    written = fas2phy(
+        in_path=str(Path(out_path) / "concat" / "concat.fasta"), out_path=out_path
+    )
+    if written:
+        emit_log(f"Phylip file written to {out_path}/phylip/concat.phy")
+    else:
+        emit_log("Phylip conversion produced no output", "WARNING")
+
     t1 = datetime.now()
     emit_log(f"Running time: {t1 - t0} seconds")
     emit_log("Concatenation completed successfully!", "SUCCESS")
