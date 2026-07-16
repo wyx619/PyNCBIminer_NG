@@ -415,6 +415,7 @@ def select_new_queries_main(
     max_length,
     blast_round,
     ref_number,
+    allowed_taxa,
 ):
     file_list = [f.name for f in Path(tmp_wd).iterdir()]
 
@@ -452,6 +453,7 @@ def select_new_queries_main(
             key_annotations=key_annotations,
             exclude_sources=exclude_sources,
             entrez_email=entrez_email,
+            allowed_taxa=allowed_taxa,
         )
         if (Path(wd) / "parameters" / "ref_seq").exists():
             ref_file_list = [

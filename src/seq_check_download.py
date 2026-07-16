@@ -22,18 +22,18 @@ def my_efetch(accession, strand, seq_start, seq_stop):
         seq_start=seq_start,
         seq_stop=seq_stop,
     )
-    print("Extended start: %d, " % seq_start, end="")
-    print("Extended end: %d, " % seq_stop, end="")
-    print("Strand: %d" % strand)
+    print(f"Extended start: {seq_start}, ", end="")
+    print(f"Extended end: {seq_stop}, ", end="")
+    print(f"Strand: {strand}")
     return handle
 
 
 @func_set_timeout(180)
 def parse_gb_record(handle, accession):
     """Parse GenBank record with timeout protection."""
-    print("Parsing GenBank record for %s..." % accession)
+    print(f"Parsing GenBank record for {accession}...")
     record = SeqIO.read(handle, "gb")
-    print("Successfully parsed record for %s" % accession)
+    print(f"Successfully parsed record for {accession}")
     return record
 
 
@@ -49,8 +49,29 @@ def filter_duplicate_key(wd, file):
                 fw.write(str(record.seq) + "\n")
                 key_list.append(record.description)
             else:
-                print("Filtered duplicate sequence: %s" % record.description)
+                print(f"Filtered duplicate sequence: {record.description}")
     tmp_file.unlink(missing_ok=True)
+
+
+def normalize_allowed_taxa(allowed_taxa):
+    """Normalize allowed taxonomy list, raise ValueError if empty."""
+    if allowed_taxa is None:
+        raise ValueError("allowed_taxa is required and must not be empty")
+    taxa = [str(x).strip() for x in allowed_taxa if str(x).strip()]
+    if not taxa:
+        raise ValueError("allowed_taxa is required and must not be empty")
+    return taxa
+
+
+def check_taxonomy(record, allowed_taxa):
+    """Check if record taxonomy matches allowed taxa (exact set intersection)."""
+    taxa = normalize_allowed_taxa(allowed_taxa)
+    lineage = {x.lower() for x in record.annotations.get("taxonomy", []) if x}
+    organism = record.annotations.get("organism", "")
+    if organism:
+        lineage.add(organism.lower())
+    allowed = {x.lower() for x in taxa}
+    return bool(lineage & allowed)
 
 
 def check_annotation(feature_list, key_annotations, exclude_sources):
@@ -187,25 +208,15 @@ def write_fas_file(record, start, end, strand, wd, file):
         # if start <= 0:
         #     start = 1
         # end = len(record.seq) + start - 1
-        fas_description = ">%s:%d-%d|%s|%s" % (
-            record.id,
-            start,
-            end,
-            organism,
-            description,
-        )
+        fas_description = f">{record.id}:{start}-{end}|{organism}|{description}"
         fas_seq = str(record.seq)
     else:
         # if end <= 0:
         #     end = 1
         # start = len(record.seq) + end - 1
-        # fas_description = ">%s:%d-%d_reverse_complement|%s|%s" % (record.id, end, start, organism, description)
-        fas_description = ">%s:%d-%d_reverse_complement|%s|%s" % (
-            record.id,
-            start,
-            end,
-            organism,
-            description,
+        # fas_description = f">{record.id}:{end}-{start}_reverse_complement|{organism}|{description}"
+        fas_description = (
+            f">{record.id}:{start}-{end}_reverse_complement|{organism}|{description}"
         )
         fas_seq = str(record.seq)  # 659
     with open(Path(wd) / Path(file), "a") as fw:
@@ -217,7 +228,7 @@ def write_fas_file(record, start, end, strand, wd, file):
 
 
 def seq_check_download(
-    wd, acc_file, out_file, key_annotations, exclude_sources, entrez_email
+    wd, acc_file, out_file, key_annotations, exclude_sources, entrez_email, allowed_taxa
 ):
     """download fasta files from Genbank according to given accessions"""
     # todo: use user provided email
@@ -225,6 +236,7 @@ def seq_check_download(
     acc_list = list(acc_file.index)
     max_retries = 3
     retry_count = {}
+    print(f"Taxonomy whitelist: {allowed_taxa}")
     while len(acc_list) != 0:
         accession = acc_list[0]
         if accession not in retry_count:
@@ -236,8 +248,8 @@ def seq_check_download(
             strand = int(acc_file.loc[accession, "strand"])
             if strand == 2:
                 seq_start, seq_stop = (seq_stop, seq_start)
-            # print("start： %d" % start)
-            # print("end： %d" % end)
+            # print(f"start: {start}")
+            # print(f"end: {end}")
             handle = my_efetch(
                 accession=accession,
                 strand=strand,
@@ -248,7 +260,7 @@ def seq_check_download(
                 record = parse_gb_record(handle, accession)
             finally:
                 handle.close()
-            print("Actual sequence length: %d" % len(record.seq))
+            print(f"Actual sequence length: {len(record.seq)}")
             feature_list = []
             for feature in record.features:
                 feature_list.extend(feature.qualifiers.values())
@@ -256,7 +268,9 @@ def seq_check_download(
             feature_list = [x[0].replace(" ", "").lower() for x in feature_list]
             key_annotations = [x.replace(" ", "").lower() for x in key_annotations]
             exclude_sources = [x.replace(" ", "").lower() for x in exclude_sources]
-            if check_annotation(feature_list, key_annotations, exclude_sources):
+            anno_ok = check_annotation(feature_list, key_annotations, exclude_sources)
+            tax_ok = check_taxonomy(record, allowed_taxa)
+            if anno_ok and tax_ok:
                 write_fas_file(record, seq_start, seq_stop, strand, wd, file=out_file)
             else:
                 if not (
@@ -282,45 +296,51 @@ def seq_check_download(
                     file="erroneous_" + out_file,
                 )
             t1 = datetime.now()
-            print("%s downloaded in %s seconds" % (accession, t1 - t0))
+            print(f"{accession} downloaded in {t1 - t0} seconds")
             acc_list.pop(0)
         except ValueError as e:  # features location no correct or SeqIO parsing error
             acc_list.pop(0)
             with open(Path(wd) / Path("value_error_list.txt"), "a") as fw:
                 fw.write(accession + "\n")
-            print(
-                "ValueError: %s, skip %s"
-                % (str(e), accession)
-            )
+            print(f"ValueError: {e}, skip {accession}")
         except urllib.error.HTTPError:  # HTTP Error 400, wrongly parsed accession
             acc_list.pop(0)
             with open(Path(wd) / Path("bad_request_list.txt"), "a") as fw:
                 fw.write(accession + "\n")
-            print("Bad request: %s. Move on to the next sequence." % accession)
+            print(f"Bad request: {accession}. Move on to the next sequence.")
         except func_timeout.exceptions.FunctionTimedOut:
             retry_count[accession] += 1
             if retry_count[accession] < max_retries:
-                print("Time out, retrying %s (%d/%d)..." % (accession, retry_count[accession], max_retries))
+                print(
+                    f"Time out, retrying {accession} "
+                    f"({retry_count[accession]}/{max_retries})..."
+                )
             else:
                 acc_list.pop(0)
-                print("Time out, skipped %s after %d attempts." % (accession, max_retries))
+                print(
+                    f"Time out, skipped {accession} after {max_retries} attempts."
+                )
                 with open(Path(wd) / Path("bad_request_list.txt"), "a") as fw:
                     fw.write(accession + "\n")
         except Exception as result:
             retry_count[accession] += 1
             if retry_count[accession] < max_retries:
-                print("Error: %s, retrying %s (%d/%d)..." % (result, accession, retry_count[accession], max_retries))
+                print(
+                    f"Error: {result}, retrying {accession} "
+                    f"({retry_count[accession]}/{max_retries})..."
+                )
             else:
                 acc_list.pop(0)
-                print("Error: %s, skipped %s after %d attempts." % (result, accession, max_retries))
+                print(
+                    f"Error: {result}, skipped {accession} after {max_retries} attempts."
+                )
                 with open(Path(wd) / Path("bad_request_list.txt"), "a") as fw:
                     fw.write(accession + "\n")
 
 
 def seq_check_download_main(
-    wd, acc_file, out_file, key_annotations, exclude_sources, entrez_email, extend=False
+    wd, acc_file, out_file, key_annotations, exclude_sources, entrez_email, allowed_taxa, extend=False
 ):
-
     print("Downloading sequences...")
     df = pd.read_table(Path(wd) / Path(acc_file), sep="\t", engine="python")
     # drop duplicate
@@ -338,7 +358,7 @@ def seq_check_download_main(
             SeqIO.parse(Path(wd) / Path(out_file), "fasta"),
             key_function=get_query_accession,
         )
-        print("Correct sequences already downloaded: %d" % len(seq_dict.keys()))
+        print(f"Correct sequences already downloaded: {len(seq_dict.keys())}")
         index_list = list(set(index_list) - set(seq_dict.keys()))
     if "erroneous_" + out_file in file_list:
         filter_duplicate_key(wd, "erroneous_" + out_file)
@@ -346,7 +366,7 @@ def seq_check_download_main(
             SeqIO.parse(Path(wd) / Path("erroneous_" + out_file), "fasta"),
             key_function=get_query_accession,
         )
-        print("Erroneous sequences already downloaded: %d" % len(seq_dict.keys()))
+        print(f"Erroneous sequences already downloaded: {len(seq_dict.keys())}")
         index_list = list(set(index_list) - set(seq_dict.keys()))
     if Path(out_file).stem + "_seq_info.txt" not in file_list:
         with open(Path(wd) / Path(Path(out_file).stem + "_seq_info.txt"), "w") as fw:
@@ -357,20 +377,27 @@ def seq_check_download_main(
             fw.write("specimen_voucher\tcountry\tlat_lon\t")
             fw.write("collection_date\tcollected_by\tidentified_by\n")
     else:
-        seq_info = pd.read_table(
-            Path(wd) / Path(Path(out_file).stem + "_seq_info.txt"),
-            sep="\t",
-            engine="python",
-        )
-        seq_info.drop_duplicates(subset=["accession"], keep="first", inplace=True)
-        seq_info.to_csv(
-            Path(wd) / Path(Path(out_file).stem + "_seq_info.txt"),
-            sep="\t",
-            index=False,
-        )
+        seq_info_path = Path(wd) / Path(Path(out_file).stem + "_seq_info.txt")
+        try:
+            seq_info = pd.read_table(seq_info_path, sep="\t", engine="python")
+            seq_info.drop_duplicates(subset=["accession"], keep="first", inplace=True)
+            seq_info.to_csv(seq_info_path, sep="\t", index=False)
+        except PermissionError:
+            print(
+                f"WARNING: Permission denied when updating {seq_info_path.name}. "
+                "Close the file if it is open in another program, then retry. "
+                "Download aborted."
+            )
+            return
+        except Exception as e:
+            print(
+                f"WARNING: Failed to deduplicate {seq_info_path.name}: {e}. "
+                "Download aborted."
+            )
+            return
 
     index_list.sort()
-    print("Sequences to download: %d" % len(index_list))
+    print(f"Sequences to download: {len(index_list)}")
     if not extend:
         df1 = df.loc[index_list][["s_start", "s_end", "s_strand"]].copy()
     else:
@@ -390,23 +417,24 @@ def seq_check_download_main(
         key_annotations=key_annotations,
         exclude_sources=exclude_sources,
         entrez_email=entrez_email,
+        allowed_taxa=allowed_taxa,
     )
 
     with open(Path(wd) / Path("value_error_list.txt"), "r") as fw:
         value_error_list = fw.read().splitlines()
         if len(value_error_list) > 0:
             print(
-                "%d value errors, the accession numbers were save in value_error_list.txt"
-                % len(value_error_list)
+                f"{len(value_error_list)} value errors, "
+                "the accession numbers were save in value_error_list.txt"
             )
     with open(Path(wd) / Path("bad_request_list.txt"), "r") as fw:
         bad_request_list = fw.read().splitlines()
         if len(bad_request_list) > 0:
             print(
-                "%d bad requests, the accession numbers were save in bad_request_list.txt"
-                % len(bad_request_list)
+                f"{len(bad_request_list)} bad requests, "
+                "the accession numbers were save in bad_request_list.txt"
             )
 
     print("All sequences successfully downloaded!")
-    print("Correct sequences were saved in %s." % out_file)
-    print("Erroneous sequences were saved in %s" % "erroneous_" + out_file)
+    print(f"Correct sequences were saved in {out_file}.")
+    print(f"Erroneous sequences were saved in erroneous_{out_file}")

@@ -311,6 +311,7 @@ def iterated_blast_main(
             max_length,
             blast_round,
             ref_number,
+            allowed_taxa=organisms,
         )
         if new_quereis_num is None:
             break
@@ -325,6 +326,7 @@ def iterated_blast_main(
         key_annotations=key_annotations,
         exclude_sources=exclude_sources,
         entrez_email=entrez_email,
+        allowed_taxa=organisms,
         extend=True,
     )
     print("Stop thread.")
