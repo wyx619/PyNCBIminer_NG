@@ -222,51 +222,68 @@ class RetrievalInterface(QWidget):
         basic_group.addSettingCard(region_card)
 
         entrez_card = CardWidget(view)
-        entrez_card.setFixedHeight(230)
-        ent_layout = QVBoxLayout(entrez_card)
+        entrez_card.setFixedHeight(160)
+        ent_layout = QHBoxLayout(entrez_card)
         ent_layout.setContentsMargins(15, 10, 15, 10)
+        ent_layout.setSpacing(20)
 
-        row1 = QHBoxLayout()
+        left_col = QVBoxLayout()
+        left_col.setContentsMargins(0, 0, 0, 0)
+        left_col.setSpacing(6)
+        left_col.addWidget(BodyLabel("Entrez Qualifier:"))
         self.entrez_qualifier = PlainTextEdit(entrez_card)
-        ent_layout.addWidget(BodyLabel("Entrez Qualifier:"))
         self.entrez_qualifier.setPlaceholderText(
             "Constraint on BLAST search (Entrez Qualifier)"
         )
-        self.entrez_qualifier.setFixedHeight(100)
-        row1.addWidget(self.entrez_qualifier)
-        ent_layout.addLayout(row1)
+        left_col.addWidget(self.entrez_qualifier, 1)
+        ent_layout.addLayout(left_col, 1)
 
-        row2 = QHBoxLayout()
+        right_col = QVBoxLayout()
+        right_col.setContentsMargins(0, 0, 0, 0)
+        right_col.setSpacing(8)
+        right_col.addStretch(1)
+
+        label_w = 80
+        lbl_email = BodyLabel("Email:")
+        lbl_email.setFixedWidth(label_w)
+        lbl_from = BodyLabel("Date From:")
+        lbl_from.setFixedWidth(label_w)
+        lbl_to = BodyLabel("Date To:")
+        lbl_to.setFixedWidth(label_w)
+
+        row_email = QHBoxLayout()
         self.email_edit = LineEdit(entrez_card)
         self.email_edit.setPlaceholderText("User's Email")
-        row2.addWidget(BodyLabel("Email:"))
-        row2.addWidget(self.email_edit)
-        ent_layout.addLayout(row2)
+        row_email.addWidget(lbl_email)
+        row_email.addWidget(self.email_edit, 1)
+        right_col.addLayout(row_email)
 
-        row3 = QHBoxLayout()
+        row_from = QHBoxLayout()
         self.date_from = DatePicker(entrez_card)
         self.date_from.setDate(QDate())
         self.date_from_cleared = True
         self.date_from.dateChanged.connect(self.on_date_from_changed)
         self.btn_clear_from = PushButton("Reset", entrez_card)
-
         self.btn_clear_from.clicked.connect(self.clear_date_from)
-        row3.addWidget(BodyLabel("Date From:"))
-        row3.addWidget(self.date_from)
-        row3.addWidget(self.btn_clear_from)
-        row3.addStretch()
+        row_from.addWidget(lbl_from)
+        row_from.addWidget(self.date_from, 1)
+        row_from.addWidget(self.btn_clear_from)
+        right_col.addLayout(row_from)
 
+        row_to = QHBoxLayout()
         self.date_to = DatePicker(entrez_card)
         self.date_to.setDate(QDate())
         self.date_to_cleared = True
         self.date_to.dateChanged.connect(self.on_date_to_changed)
         self.btn_clear_to = PushButton("Reset", entrez_card)
-
         self.btn_clear_to.clicked.connect(self.clear_date_to)
-        row3.addWidget(BodyLabel("Date To:"))
-        row3.addWidget(self.date_to)
-        row3.addWidget(self.btn_clear_to)
-        ent_layout.addLayout(row3)
+        row_to.addWidget(lbl_to)
+        row_to.addWidget(self.date_to, 1)
+        row_to.addWidget(self.btn_clear_to)
+        right_col.addLayout(row_to)
+        right_col.addStretch(1)
+
+        ent_layout.addLayout(right_col, 1)
 
         basic_group.addSettingCard(entrez_card)
 
@@ -384,7 +401,7 @@ class RetrievalInterface(QWidget):
         layout = QVBoxLayout(w)
         layout.setContentsMargins(5, 20, 5, 20)
 
-        grp = SettingCardGroup("Sequence Filtering", w)
+        grp = SettingCardGroup("Filtering Parameters", w)
 
         card_opts = CardWidget()
         card_opts.setFixedHeight(220)
@@ -468,11 +485,13 @@ class RetrievalInterface(QWidget):
             self.wd_edit.setText(path)
 
     def clear_date_from(self):
-        self.date_from.setDate(QDate())
+        self.date_from.reset()
+        self.date_from._date = QDate()
         self.date_from_cleared = True
 
     def clear_date_to(self):
-        self.date_to.setDate(QDate())
+        self.date_to.reset()
+        self.date_to._date = QDate()
         self.date_to_cleared = True
 
     def on_date_from_changed(self, date):
@@ -494,10 +513,12 @@ class ConstructionInterface(QWidget):
         self.pivot = SegmentedWidget(self)
         self.stackedWidget = QStackedWidget(self)
 
+        self.page_replace = self.create_replacement_page()
         self.page_align = self.create_alignment_page()
         self.page_trim = self.create_trimming_page()
         self.page_concat = self.create_concat_page()
 
+        self.addSubInterface(self.page_replace, "replace", "Replacement")
         self.addSubInterface(self.page_align, "align", "Alignment")
         self.addSubInterface(self.page_trim, "trim", "Trimming")
         self.addSubInterface(self.page_concat, "concat", "Concatenation")
@@ -516,6 +537,76 @@ class ConstructionInterface(QWidget):
         widget.setObjectName(objectName)
         self.stackedWidget.addWidget(widget)
         self.pivot.addItem(routeKey=objectName, text=text)
+
+    def create_replacement_page(self):
+        w = QWidget()
+        layout = QVBoxLayout(w)
+        layout.setContentsMargins(5, 20, 5, 20)
+
+        grp = SettingCardGroup("Replacement", w)
+        card = CardWidget()
+        card.setFixedHeight(180)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(15, 10, 15, 10)
+        card_layout.setSpacing(10)
+
+        label_w = 190
+        lbl_cp = BodyLabel("Gene from Chloroplasts:")
+        lbl_cp.setFixedWidth(label_w)
+        lbl_frag = BodyLabel("Gene from Fragments:")
+        lbl_frag.setFixedWidth(label_w)
+        lbl_out = BodyLabel("Output Folder:")
+        lbl_out.setFixedWidth(label_w)
+
+        self.replace_cp_file = LineEdit()
+        self.replace_cp_file.setPlaceholderText("Select a fa/fas/fasta file")
+        btn_cp = PushButton("Browse")
+        btn_cp.setIcon(FIF.FOLDER)
+        btn_cp.clicked.connect(self.browse_replace_cp_file)
+
+        self.replace_frag_file = LineEdit()
+        self.replace_frag_file.setPlaceholderText("Select a fa/fas/fasta file")
+        btn_frag = PushButton("Browse")
+        btn_frag.setIcon(FIF.FOLDER)
+        btn_frag.clicked.connect(self.browse_replace_frag_file)
+
+        self.replace_out = LineEdit()
+        self.replace_out.setPlaceholderText(
+            "one folder to save the replacement results, create a new one if does not exists"
+        )
+        btn_out = PushButton("Browse")
+        btn_out.setIcon(FIF.FOLDER)
+        btn_out.clicked.connect(lambda: self.browse_dir(self.replace_out))
+
+        self.replace_cp_file.textChanged.connect(self.on_replace_cp_file_changed)
+
+        h1 = QHBoxLayout()
+        h1.addWidget(lbl_cp)
+        h1.addWidget(self.replace_cp_file, 1)
+        h1.addWidget(btn_cp)
+
+        h2 = QHBoxLayout()
+        h2.addWidget(lbl_frag)
+        h2.addWidget(self.replace_frag_file, 1)
+        h2.addWidget(btn_frag)
+
+        h3 = QHBoxLayout()
+        h3.addWidget(lbl_out)
+        h3.addWidget(self.replace_out, 1)
+        h3.addWidget(btn_out)
+
+        card_layout.addLayout(h1)
+        card_layout.addLayout(h2)
+        card_layout.addLayout(h3)
+        grp.addSettingCard(card)
+
+        self.btn_run_replace = PrimaryPushButton("Run Replacement")
+        self.btn_run_replace.setIcon(FIF.PLAY)
+
+        layout.addWidget(grp)
+        layout.addWidget(self.btn_run_replace)
+        layout.addStretch(1)
+        return w
 
     def create_alignment_page(self):
         w = QWidget()
@@ -728,7 +819,7 @@ class ConstructionInterface(QWidget):
 
         self.concat_in = LineEdit()
         self.concat_in.setPlaceholderText(
-            "the folder path that contains multiple fasta files"
+            "the folder path that contains multiple trimmed fasta files"
         )
         btn_in = PushButton("Browse")
         btn_in.setIcon(FIF.FOLDER)
@@ -782,6 +873,27 @@ class ConstructionInterface(QWidget):
             path = QFileDialog.getExistingDirectory(self, "Select Directory")
         if path:
             line_edit.setText(path)
+
+    def browse_fasta_file(self, line_edit):
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select FASTA File",
+            "",
+            "FASTA Files (*.fa *.fas *.fasta);;All Files (*)",
+        )
+        if path:
+            line_edit.setText(path)
+
+    def browse_replace_cp_file(self):
+        self.browse_fasta_file(self.replace_cp_file)
+
+    def browse_replace_frag_file(self):
+        self.browse_fasta_file(self.replace_frag_file)
+
+    def on_replace_cp_file_changed(self, text):
+        path = Path(text.strip())
+        if text.strip() and path.suffix.lower() in {".fa", ".fas", ".fasta"}:
+            self.replace_out.setText(str(path.parent))
 
 
 class ChloroplastMinerInterface(QWidget):
@@ -839,41 +951,62 @@ class ChloroplastMinerInterface(QWidget):
         grp_search = SettingCardGroup("Search", view)
 
         card = CardWidget()
-        card.setFixedHeight(230)
+        card.setFixedHeight(160)
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(15, 10, 15, 10)
+        card_layout.setSpacing(10)
 
-        self.chloro_tax_edit = PlainTextEdit()
+        content_row = QHBoxLayout()
+        content_row.setContentsMargins(0, 0, 0, 0)
+        content_row.setSpacing(20)
+
+        left_col = QVBoxLayout()
+        left_col.setContentsMargins(0, 0, 0, 0)
+        left_col.setSpacing(6)
+        left_col.addWidget(BodyLabel("Target Taxa:"))
+        self.chloro_tax_edit = PlainTextEdit(card)
         self.chloro_tax_edit.setPlaceholderText("Enter taxon names (one per line)")
-        self.chloro_tax_edit.setFixedHeight(80)
-        card_layout.addWidget(BodyLabel("Target Taxa:"))
-        card_layout.addWidget(self.chloro_tax_edit)
-        card_layout.addSpacing(10)
+        left_col.addWidget(self.chloro_tax_edit, 1)
+        content_row.addLayout(left_col, 1)
 
+        right_col = QVBoxLayout()
+        right_col.setContentsMargins(0, 0, 0, 0)
+        right_col.setSpacing(8)
+        right_col.addStretch(1)
+
+        label_w = 80
+        lbl_from = BodyLabel("Date From:")
+        lbl_from.setFixedWidth(label_w)
+        lbl_to = BodyLabel("Date To:")
+        lbl_to.setFixedWidth(label_w)
+
+        row_from = QHBoxLayout()
         self.chloro_date_from = DatePicker(card)
         self.chloro_date_from.setDate(QDate())
         self.chloro_date_from_cleared = True
         self.chloro_date_from.dateChanged.connect(self.on_chloro_date_from_changed)
         self.chloro_btn_clear_from = PushButton("Reset", card)
         self.chloro_btn_clear_from.clicked.connect(self.clear_chloro_date_from)
+        row_from.addWidget(lbl_from)
+        row_from.addWidget(self.chloro_date_from, 1)
+        row_from.addWidget(self.chloro_btn_clear_from)
+        right_col.addLayout(row_from)
 
+        row_to = QHBoxLayout()
         self.chloro_date_to = DatePicker(card)
         self.chloro_date_to.setDate(QDate())
         self.chloro_date_to_cleared = True
         self.chloro_date_to.dateChanged.connect(self.on_chloro_date_to_changed)
         self.chloro_btn_clear_to = PushButton("Reset", card)
         self.chloro_btn_clear_to.clicked.connect(self.clear_chloro_date_to)
+        row_to.addWidget(lbl_to)
+        row_to.addWidget(self.chloro_date_to, 1)
+        row_to.addWidget(self.chloro_btn_clear_to)
+        right_col.addLayout(row_to)
+        right_col.addStretch(1)
 
-        h_date = QHBoxLayout()
-        h_date.addWidget(BodyLabel("Date From:"))
-        h_date.addWidget(self.chloro_date_from)
-        h_date.addWidget(self.chloro_btn_clear_from)
-        h_date.addStretch()
-        h_date.addWidget(BodyLabel("Date To:"))
-        h_date.addWidget(self.chloro_date_to)
-        h_date.addWidget(self.chloro_btn_clear_to)
-        card_layout.addLayout(h_date)
-        card_layout.addSpacing(10)
+        content_row.addLayout(right_col, 1)
+        card_layout.addLayout(content_row, 1)
 
         self.btn_chloro_search = PushButton("Search", self)
         self.btn_chloro_search.setIcon(FIF.GLOBE)
@@ -1388,11 +1521,13 @@ class ChloroplastMinerInterface(QWidget):
             self.chloro_date_to_cleared = False
 
     def clear_chloro_date_from(self):
-        self.chloro_date_from.setDate(QDate())
+        self.chloro_date_from.reset()
+        self.chloro_date_from._date = QDate()
         self.chloro_date_from_cleared = True
 
     def clear_chloro_date_to(self):
-        self.chloro_date_to.setDate(QDate())
+        self.chloro_date_to.reset()
+        self.chloro_date_to._date = QDate()
         self.chloro_date_to_cleared = True
 
     def on_chloro_search(self):
@@ -1644,7 +1779,7 @@ class DependenciesInterface(QWidget):
         layout = QVBoxLayout(w)
         layout.setContentsMargins(30, 30, 30, 30)
 
-        grp = SettingCardGroup("Dependencies Installation", w)
+        grp = SettingCardGroup("Dependencies", w)
 
         card_install = CardWidget()
         card_install.setFixedHeight(80)
@@ -1669,7 +1804,7 @@ class DependenciesInterface(QWidget):
 
         layout.addSpacing(20)
 
-        app_settings_grp = SettingCardGroup("Application Settings", w)
+        app_settings_grp = SettingCardGroup("Themes", w)
 
         card_theme = CardWidget()
         card_theme.setFixedHeight(80)
@@ -1699,18 +1834,29 @@ class DependenciesInterface(QWidget):
         color_layout.addWidget(self.color_picker)
         h_theme.addWidget(color_container, 1)
 
-        about_container = QWidget(card_theme)
-        about_layout = QHBoxLayout(about_container)
-        about_layout.setContentsMargins(0, 0, 0, 0)
-        about_layout.addWidget(BodyLabel("About:"))
-        btn_about = PushButton("About PyNCBIminer-NG", card_theme)
-        btn_about.setIcon(FIF.INFO)
-        btn_about.clicked.connect(main_window.show_about)
-        about_layout.addWidget(btn_about)
-        h_theme.addWidget(about_container, 1)
-
         app_settings_grp.addSettingCard(card_theme)
         layout.addWidget(app_settings_grp)
+
+        layout.addSpacing(20)
+
+        about_grp = SettingCardGroup("About", w)
+        card_about = CardWidget()
+        card_about.setFixedHeight(80)
+        h_about = QHBoxLayout(card_about)
+        h_about.setContentsMargins(15, 10, 15, 10)
+        h_about.setSpacing(20)
+
+        h_about.addWidget(BodyLabel("Developed by Ruijing Cheng & Yuxuan Wang under GPL v3 License"), 1)
+        #h_about.addWidget(BodyLabel("License: GPL V3"), 1)
+
+        btn_github = PushButton("View Github Page", card_about)
+        btn_github.setIcon(FIF.GITHUB)
+        btn_github.clicked.connect(main_window.open_github_page)
+        h_about.addWidget(btn_github, 1)
+
+        about_grp.addSettingCard(card_about)
+        layout.addWidget(about_grp)
+
         layout.addStretch(1)
 
         main_vbox = QVBoxLayout(self)
@@ -1775,7 +1921,7 @@ class MainWindow(FluentWindow):
         self.is_closing = False
         self.setWindowTitle("PyNCBIminer-NG")
         self.setWindowIcon(QIcon(get_resource_path("icons/app_icon.ico")))
-        self.navigationInterface.setExpandWidth(240)
+        self.navigationInterface.setExpandWidth(180)
 
         self.setMinimumWidth(600)
 
@@ -1799,15 +1945,15 @@ class MainWindow(FluentWindow):
         self.chloroplast_miner_interface = ChloroplastMinerInterface(self)
         self.dependencies_interface = DependenciesInterface(self)
 
-        self.addSubInterface(self.retrieval_interface, FIF.LIBRARY, "Fragments Miner")
+        self.addSubInterface(self.retrieval_interface, FIF.LIBRARY, "Fragments")
         self.addSubInterface(
-            self.chloroplast_miner_interface, FIF.LEAF, "Chloroplast Miner"
+            self.chloroplast_miner_interface, FIF.LEAF, "Chloroplast"
         )
         self.addSubInterface(
-            self.construction_interface, FIF.APPLICATION, "Matrix Construction"
+            self.construction_interface, FIF.APPLICATION, "Matrix"
         )
         self.addSubInterface(
-            self.dependencies_interface, FIF.SETTING, "Software Settings"
+            self.dependencies_interface, FIF.SETTING, "Settings"
         )
 
         self.console_interface = QWidget()
@@ -1818,7 +1964,7 @@ class MainWindow(FluentWindow):
         self.addSubInterface(
             self.console_interface,
             FIF.COMMAND_PROMPT,
-            "Console Output",
+            "Console",
             NavigationItemPosition.BOTTOM,
         )
 
@@ -1873,6 +2019,7 @@ class MainWindow(FluentWindow):
         ci = self.construction_interface
         ci.combo_trim_method.currentIndexChanged.connect(self.select_tri_method)
 
+        ci.btn_run_replace.clicked.connect(self.run_replacement)
         ci.btn_run_align.clicked.connect(self.run_alignment)
         ci.btn_run_trim.clicked.connect(self.run_trimming)
         ci.btn_run_concat.clicked.connect(self.run_concatenation)
@@ -2004,6 +2151,8 @@ class MainWindow(FluentWindow):
 
     def run_filtering(self):
         self.backend.run_filtering(self.retrieval_interface)
+    def run_replacement(self):
+        self.backend.run_replacement(self.construction_interface)
 
     def run_alignment(self):
         self.backend.run_alignment(self.construction_interface)
@@ -2031,9 +2180,11 @@ class MainWindow(FluentWindow):
         elif index == 2:
             setTheme(Theme.AUTO)
 
-    def show_about(self):
-        self.backend.show_about(self)
+    def open_github_page(self):
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
 
+        QDesktopServices.openUrl(QUrl("https://github.com/wyx619/PyNCBIminer_NG"))
 
 if __name__ == "__main__":
     QApplication.setHighDpiScaleFactorRoundingPolicy(

@@ -904,6 +904,60 @@ class BackendController(QObject):
         thread.daemon = True
         thread.start()
 
+    def run_replacement(self, construction_interface):
+        from replacement import FASTA_SUFFIXES, run_replacement
+
+        cp_file = construction_interface.replace_cp_file.text().strip()
+        frag_file = construction_interface.replace_frag_file.text().strip()
+        out_dir = construction_interface.replace_out.text().strip()
+
+        if not cp_file:
+            self.emit_log("Please select Gene from Chloroplast Genome file", "WARNING")
+            return
+        if Path(cp_file).suffix.lower() not in FASTA_SUFFIXES:
+            self.emit_log(
+                "Chloroplast gene file must be .fa / .fas / .fasta", "WARNING"
+            )
+            return
+        if not Path(cp_file).is_file():
+            self.emit_log(f"Chloroplast gene file does not exist: {cp_file}", "WARNING")
+            return
+
+        if not frag_file:
+            self.emit_log("Please select Gene from Fragments file", "WARNING")
+            return
+        if Path(frag_file).suffix.lower() not in FASTA_SUFFIXES:
+            self.emit_log(
+                "Fragment gene file must be .fa / .fas / .fasta", "WARNING"
+            )
+            return
+        if not Path(frag_file).is_file():
+            self.emit_log(f"Fragment gene file does not exist: {frag_file}", "WARNING")
+            return
+
+        if not out_dir:
+            out_dir = str(Path(cp_file).parent)
+            construction_interface.replace_out.setText(out_dir)
+            self.emit_log(f"Using chloroplast file directory as output: {out_dir}", "INFO")
+
+        out_path_obj = Path(out_dir)
+        if not out_path_obj.exists():
+            out_path_obj.mkdir(parents=True, exist_ok=True)
+
+        self.emit_log("Running Replacement...")
+
+        def run_replacement_thread():
+            try:
+                ok = run_replacement(cp_file, frag_file, out_dir, self.emit_log)
+                if not ok:
+                    self.emit_log("Replacement did not complete", "WARNING")
+            except Exception as e:
+                self.emit_log(f"Replacement failed: {e}", "ERROR")
+
+        thread = threading.Thread(target=run_replacement_thread)
+        thread.daemon = True
+        thread.start()
+
     def run_install_mafft(self):
         from install_dependencies import install_mafft
 

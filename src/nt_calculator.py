@@ -1,10 +1,7 @@
 from itertools import product
-from os import path
 from Bio import SeqIO
-from Bio.Seq import Seq
 import numpy as np
 from pathlib import Path
-import shutil
 from sequence_indexer import Sequence_indexer
 from call_mafft2 import mafft
 

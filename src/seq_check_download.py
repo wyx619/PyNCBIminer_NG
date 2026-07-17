@@ -273,6 +273,16 @@ def seq_check_download(
             if anno_ok and tax_ok:
                 write_fas_file(record, seq_start, seq_stop, strand, wd, file=out_file)
             else:
+                reasons = []
+                if not anno_ok:
+                    reasons.append("annotation filter failed")
+                if not tax_ok:
+                    organism = record.annotations.get("organism", "unknown")
+                    taxonomy = "; ".join(record.annotations.get("taxonomy", [])) or "unknown"
+                    reasons.append(
+                        f"taxonomy not in whitelist (organism={organism}; taxonomy={taxonomy})"
+                    )
+                print(f"{accession} rejected: {'; '.join(reasons)}")
                 if not (
                     Path(wd) / f"erroneous_{Path(out_file).stem}_seq_info.txt"
                 ).exists():
@@ -296,7 +306,8 @@ def seq_check_download(
                     file="erroneous_" + out_file,
                 )
             t1 = datetime.now()
-            print(f"{accession} downloaded in {t1 - t0} seconds")
+            elapsed = (t1 - t0).total_seconds()
+            print(f"{accession} downloaded in {elapsed:.2f} seconds.\n")
             acc_list.pop(0)
         except ValueError as e:  # features location no correct or SeqIO parsing error
             acc_list.pop(0)
