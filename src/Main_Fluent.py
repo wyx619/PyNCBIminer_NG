@@ -23,13 +23,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-try:
-    from qframelesswindow.utils import getSystemAccentColor
-
-    HAS_SYSTEM_ACCENT = True
-except ImportError:
-    HAS_SYSTEM_ACCENT = False
-
 from qfluentwidgets import (
     BodyLabel,
     CardWidget,
@@ -56,7 +49,6 @@ from qfluentwidgets import (
     Theme,
     setTheme,
     setThemeColor,
-    themeColor,
 )
 from qfluentwidgets import (
     FluentIcon as FIF,
@@ -253,7 +245,7 @@ class RetrievalInterface(QWidget):
 
         row_email = QHBoxLayout()
         self.email_edit = LineEdit(entrez_card)
-        self.email_edit.setPlaceholderText("User's Email")
+        self.email_edit.setPlaceholderText("Your Email")
         row_email.addWidget(lbl_email)
         row_email.addWidget(self.email_edit, 1)
         right_col.addLayout(row_email)
@@ -292,6 +284,11 @@ class RetrievalInterface(QWidget):
         act_layout = QHBoxLayout(action_card)
         act_layout.setContentsMargins(15, 10, 15, 10)
         self.chk_summary = CheckBox("Summarize widely used marker", action_card)
+        self.chk_summary.setToolTip(
+            "If checked, Entrez search will count records for commonly used\n"
+            "DNA barcode markers (e.g., rbcL, matK, ITS, trnH-psbA, etc.)\n"
+            "across the specified taxonomy and date range."
+        )
         self.btn_esearch = PrimaryPushButton("Entrez Search", action_card)
         self.btn_esearch.setIcon(FIF.SEARCH)
         act_layout.addWidget(self.chk_summary)
@@ -410,8 +407,16 @@ class RetrievalInterface(QWidget):
 
         row1 = QHBoxLayout()
         self.switch_ext = SwitchButton(card_opts)
-        self.switch_ext.setChecked(False)
-        row1.addWidget(BodyLabel("Extended segments refinement"))
+        self.switch_ext.setChecked(True)
+        lbl_ext = BodyLabel("Extended Segments Refinement:")
+        lbl_ext.setToolTip(
+            "Trims potentially non-homologous regions introduced by sequence extension.\n"
+            "1) Split by genus; \n"
+            "2) Align longer seqs with MAFFT, then add shorter via --addfragments;\n"
+            "3) Merge genera with <5 seqs into the largest genus of same family;\n"
+            "4) Delete extensions where gaps exceed 50%."
+        )
+        row1.addWidget(lbl_ext)
         row1.addWidget(self.switch_ext)
         row1.addStretch()
         l_opts.addLayout(row1)
@@ -420,20 +425,38 @@ class RetrievalInterface(QWidget):
         self.switch_reduce = SwitchButton(card_opts)
         self.switch_reduce.setChecked(False)
         self.switch_reduce.checkedChanged.connect(self.on_switch_reduce_changed)
-        row2.addWidget(BodyLabel("Species-level sequence selection"))
+        lbl_select = BodyLabel("Species-level Sequence Selection")
+        lbl_select.setToolTip(
+            "Select one representative sequence per species.\n"
+            "Method 1 (Abnormality Index): compares each sequence to the species consensus;\n"
+            "Method 2: balances sequence length and BLAST bit-score;\n"
+            "Preference: voucher → published → most recent → length + BLAST rank."
+        )
+        row2.addWidget(lbl_select)
         row2.addWidget(self.switch_reduce)
+
         row2.addSpacing(40)
-        row2.addWidget(BodyLabel("Length Threshold:"))
+        self.chk_consensus = CheckBox("Abnormal Index", card_opts)
+        self.chk_consensus.setToolTip(
+            "Calculates consensus sequence per species via MAFFT alignment,\n"
+            "then scores each sequence by pairwise identity (PI) against the consensus.\n"
+            "Low-PI (potentially misidentified / misannotated) sequences are deprioritized."
+        )
+        self.chk_consensus.setChecked(True)
+        self.chk_consensus.setEnabled(False)
+        row2.addWidget(self.chk_consensus)
+        row2.addSpacing(40)
+        lbl_len = BodyLabel("Length Threshold:")
+        lbl_len.setToolTip(
+            "Minimum non-ambiguous (A/T/C/G) base count for a sequence to be retained.\n"
+            "Sequences shorter than this value are removed before species-level selection."
+        )
+        row2.addWidget(lbl_len)
         self.len_thresh = LineEdit()
         self.len_thresh.setText("100")
         self.len_thresh.setEnabled(False)
         # self.len_thresh.setFixedWidth(240)
         row2.addWidget(self.len_thresh)
-        row2.addSpacing(40)
-        self.chk_consensus = CheckBox("Calculate Consensus", card_opts)
-        self.chk_consensus.setChecked(True)
-        self.chk_consensus.setEnabled(False)
-        row2.addWidget(self.chk_consensus)
         l_opts.addLayout(row2)
 
         row3 = QHBoxLayout()
@@ -444,7 +467,9 @@ class RetrievalInterface(QWidget):
         btn_in = PushButton("Browse")
         btn_in.setIcon(FIF.FOLDER)
         btn_in.clicked.connect(lambda: self.browse_dir(self.filter_in))
-        row3.addWidget(BodyLabel("Input Path:"))
+        lbl_in = BodyLabel("Input Path:")
+        lbl_in.setFixedWidth(100)
+        row3.addWidget(lbl_in)
         row3.addWidget(self.filter_in, 1)
         row3.addWidget(btn_in)
         l_opts.addLayout(row3)
@@ -455,7 +480,9 @@ class RetrievalInterface(QWidget):
         btn_out = PushButton("Browse")
         btn_out.setIcon(FIF.FOLDER)
         btn_out.clicked.connect(lambda: self.browse_dir(self.filter_out))
-        row4.addWidget(BodyLabel("Output Path:"))
+        lbl_out = BodyLabel("Output Path:")
+        lbl_out.setFixedWidth(100)
+        row4.addWidget(lbl_out)
         row4.addWidget(self.filter_out, 1)
         row4.addWidget(btn_out)
         l_opts.addLayout(row4)
@@ -553,7 +580,7 @@ class ConstructionInterface(QWidget):
         label_w = 190
         lbl_cp = BodyLabel("Gene from Chloroplasts:")
         lbl_cp.setFixedWidth(label_w)
-        lbl_frag = BodyLabel("Gene from Fragments:")
+        lbl_frag = BodyLabel("Gene from DNAseqs:")
         lbl_frag.setFixedWidth(label_w)
         lbl_out = BodyLabel("Output Folder:")
         lbl_out.setFixedWidth(label_w)
@@ -647,11 +674,15 @@ class ConstructionInterface(QWidget):
         btn_out.clicked.connect(lambda: self.browse_dir(self.align_out))
 
         h1 = QHBoxLayout()
-        h1.addWidget(BodyLabel("Input:"))
+        lbl_aln_in = BodyLabel("Input:")
+        lbl_aln_in.setFixedWidth(60)
+        h1.addWidget(lbl_aln_in)
         h1.addWidget(self.align_in)
         h1.addWidget(btn_in)
         h2 = QHBoxLayout()
-        h2.addWidget(BodyLabel("Output:"))
+        lbl_aln_out = BodyLabel("Output:")
+        lbl_aln_out.setFixedWidth(60)
+        h2.addWidget(lbl_aln_out)
         h2.addWidget(self.align_out)
         h2.addWidget(btn_out)
         l_opts.addLayout(h1)
@@ -663,8 +694,8 @@ class ConstructionInterface(QWidget):
         self.align_algo = ComboBox()
         self.align_algo.addItems(
             [
-                "auto(depends on datasize)",
-                "add(use long sequences as backbone to align fragment sequences)",
+                "auto (depends on datasize)",
+                "add (use long sequences as backbone to align sequences)",
             ]
         )
         self.chk_reorder = CheckBox("Reorder", card_opts)
@@ -704,15 +735,25 @@ class ConstructionInterface(QWidget):
         l_opts.setContentsMargins(15, 20, 15, 20)
         self.rb_trim_single = RadioButton("Input one file")
         self.rb_trim_multi = RadioButton("Input multiple files")
-        self.chk_chloroplast = CheckBox("Chloroplast Mode")
+        self.chk_chloroplast = SwitchButton()
         self.chk_chloroplast.setChecked(False)
-        self.chk_chloroplast.stateChanged.connect(self.on_chloroplast_mode_changed)
+        self.chk_chloroplast.checkedChanged.connect(self.on_chloroplast_mode_changed)
+        lbl_chloro = BodyLabel("Chloroplast Mode:")
+        lbl_chloro.setToolTip(
+            "For chloroplast multi-gene alignments where uneven annotation\n"
+            "boundaries cause ragged gap-rich ends. When enabled, trimAl first\n"
+            "strips boundary gaps at both ends of each alignment\n"
+            "(gap frequency threshold = 0.025), then applies the selected\n"
+            "trimAl method. When disabled, trimAl runs directly without\n"
+            "boundary pre-processing."
+        )
         self.rb_trim_single.setChecked(True)
         row_rb = QHBoxLayout()
         row_rb.addWidget(self.rb_trim_single)
         row_rb.addStretch(1)
         row_rb.addWidget(self.rb_trim_multi)
         row_rb.addStretch(1)
+        row_rb.addWidget(lbl_chloro)
         row_rb.addWidget(self.chk_chloroplast)
         l_opts.addLayout(row_rb)
         l_opts.addSpacing(10)
@@ -737,11 +778,15 @@ class ConstructionInterface(QWidget):
         btn_out.clicked.connect(lambda: self.browse_dir(self.trim_out))
 
         h1 = QHBoxLayout()
-        h1.addWidget(BodyLabel("Input:"))
+        lbl_trim_in = BodyLabel("Input:")
+        lbl_trim_in.setFixedWidth(60)
+        h1.addWidget(lbl_trim_in)
         h1.addWidget(self.trim_in)
         h1.addWidget(btn_in)
         h2 = QHBoxLayout()
-        h2.addWidget(BodyLabel("Output:"))
+        lbl_trim_out = BodyLabel("Output:")
+        lbl_trim_out.setFixedWidth(60)
+        h2.addWidget(lbl_trim_out)
         h2.addWidget(self.trim_out)
         h2.addWidget(btn_out)
         l_opts.addLayout(h1)
@@ -834,12 +879,16 @@ class ConstructionInterface(QWidget):
         btn_out.clicked.connect(lambda: self.browse_dir(self.concat_out))
 
         h1 = QHBoxLayout()
-        h1.addWidget(BodyLabel("Input Folder:"))
+        lbl_concat_in = BodyLabel("Input Folder:")
+        lbl_concat_in.setFixedWidth(120)
+        h1.addWidget(lbl_concat_in)
         h1.addWidget(self.concat_in)
         h1.addWidget(btn_in)
 
         h2 = QHBoxLayout()
-        h2.addWidget(BodyLabel("Output Folder:"))
+        lbl_concat_out = BodyLabel("Output Folder:")
+        lbl_concat_out.setFixedWidth(120)
+        h2.addWidget(lbl_concat_out)
         h2.addWidget(self.concat_out)
         h2.addWidget(btn_out)
 
@@ -855,10 +904,9 @@ class ConstructionInterface(QWidget):
         layout.addStretch(1)
         return w
 
-    def on_chloroplast_mode_changed(self, state):
-        is_chloroplast = state == 2
-        self.rb_trim_single.setEnabled(not is_chloroplast)
-        if is_chloroplast:
+    def on_chloroplast_mode_changed(self, checked):
+        self.rb_trim_single.setEnabled(not checked)
+        if checked:
             self.rb_trim_multi.setChecked(True)
 
     def browse_dir(self, line_edit):
@@ -946,12 +994,12 @@ class ChloroplastMinerInterface(QWidget):
         view = QWidget()
         layout = QVBoxLayout(view)
         layout.setContentsMargins(5, 20, 20, 20)
-        layout.setSpacing(20)
+        layout.setSpacing(6)
 
         grp_search = SettingCardGroup("Search", view)
 
         card = CardWidget()
-        card.setFixedHeight(160)
+        card.setFixedHeight(115)
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(15, 10, 15, 10)
         card_layout.setSpacing(10)
@@ -1008,20 +1056,22 @@ class ChloroplastMinerInterface(QWidget):
         content_row.addLayout(right_col, 1)
         card_layout.addLayout(content_row, 1)
 
-        self.btn_chloro_search = PushButton("Search", self)
-        self.btn_chloro_search.setIcon(FIF.GLOBE)
-        self.btn_chloro_search.clicked.connect(self.on_chloro_search)
-        card_layout.addWidget(self.btn_chloro_search)
-
         grp_search.addSettingCard(card)
         layout.addWidget(grp_search)
+
+        self.btn_chloro_search = PrimaryPushButton("Search", view)
+        self.btn_chloro_search.setIcon(FIF.GLOBE)
+        self.btn_chloro_search.clicked.connect(self.on_chloro_search)
+        layout.addWidget(self.btn_chloro_search)
+        layout.addSpacing(14)
 
         grp_download = SettingCardGroup("Download", view)
 
         card_download = CardWidget()
-        card_download.setFixedHeight(220)
+        card_download.setFixedHeight(150)
         download_layout = QVBoxLayout(card_download)
         download_layout.setContentsMargins(15, 10, 15, 10)
+        download_layout.setSpacing(8)
 
         self.chloro_wd_edit = LineEdit()
         self.chloro_wd_edit.setPlaceholderText("Index File Path")
@@ -1030,7 +1080,9 @@ class ChloroplastMinerInterface(QWidget):
         btn_chloro_wd.clicked.connect(lambda: self.browse_file(self.chloro_wd_edit))
 
         h_box = QHBoxLayout()
-        h_box.addWidget(BodyLabel("Index File:"))
+        lbl_index = BodyLabel("Index File:")
+        lbl_index.setFixedWidth(130)
+        h_box.addWidget(lbl_index)
         h_box.addWidget(self.chloro_wd_edit)
         h_box.addWidget(btn_chloro_wd)
 
@@ -1043,39 +1095,46 @@ class ChloroplastMinerInterface(QWidget):
         )
 
         h_box2 = QHBoxLayout()
-        h_box2.addWidget(BodyLabel("Download Directory:"))
+        lbl_dl_dir = BodyLabel("Download Directory:")
+        lbl_dl_dir.setFixedWidth(130)
+        h_box2.addWidget(lbl_dl_dir)
         h_box2.addWidget(self.chloro_download_dir_edit)
         h_box2.addWidget(btn_chloro_download_dir)
 
         self.chloro_email_edit = LineEdit()
-        self.chloro_email_edit.setPlaceholderText("Email (required for NCBI)")
+        self.chloro_email_edit.setPlaceholderText("Your Email")
 
         h_box3 = QHBoxLayout()
-        h_box3.addWidget(BodyLabel("Email:"))
+        lbl_email = BodyLabel("Email:")
+        lbl_email.setFixedWidth(130)
+        h_box3.addWidget(lbl_email)
         h_box3.addWidget(self.chloro_email_edit)
 
-        download_layout.addSpacing(10)
         download_layout.addLayout(h_box)
-        download_layout.addSpacing(10)
         download_layout.addLayout(h_box2)
-        download_layout.addSpacing(10)
         download_layout.addLayout(h_box3)
-        download_layout.addSpacing(10)
-
-        self.btn_chloro_download = PushButton("Download")
-        self.btn_chloro_download.setIcon(FIF.DOWNLOAD)
-        self.btn_chloro_download.clicked.connect(self.on_chloro_download)
-        download_layout.addWidget(self.btn_chloro_download)
 
         grp_download.addSettingCard(card_download)
         layout.addWidget(grp_download)
 
+        self.btn_chloro_download = PrimaryPushButton("Download", view)
+        self.btn_chloro_download.setIcon(FIF.DOWNLOAD)
+        self.btn_chloro_download.clicked.connect(self.on_chloro_download)
+        layout.addWidget(self.btn_chloro_download)
+        layout.addSpacing(14)
+
         grp_prefilter = SettingCardGroup("Pre-filter", view)
 
         card_prefilter = CardWidget()
-        card_prefilter.setFixedHeight(240)
-        prefilter_layout = QVBoxLayout(card_prefilter)
-        prefilter_layout.setContentsMargins(15, 10, 15, 10)
+        card_prefilter.setFixedHeight(100)
+        main_row = QHBoxLayout(card_prefilter)
+        main_row.setContentsMargins(15, 10, 15, 10)
+        main_row.setSpacing(20)
+
+        # --- Left column: input / output directories ---
+        left_col = QVBoxLayout()
+        left_col.setContentsMargins(0, 0, 0, 0)
+        left_col.setSpacing(8)
 
         self.prefilter_in_edit = LineEdit()
         self.prefilter_in_edit.setPlaceholderText("Input directory with downloaded GeneBank files")
@@ -1084,10 +1143,12 @@ class ChloroplastMinerInterface(QWidget):
         btn_prefilter_in.clicked.connect(lambda: self.browse_folder(self.prefilter_in_edit))
 
         h_pf_in = QHBoxLayout()
-        h_pf_in.addWidget(BodyLabel("Input Directory:"))
+        lbl_pf_in = BodyLabel("Input Directory:")
+        lbl_pf_in.setFixedWidth(130)
+        h_pf_in.addWidget(lbl_pf_in)
         h_pf_in.addWidget(self.prefilter_in_edit)
         h_pf_in.addWidget(btn_prefilter_in)
-        prefilter_layout.addLayout(h_pf_in)
+        left_col.addLayout(h_pf_in)
 
         self.chloro_download_dir_edit.textChanged.connect(
             lambda text: self.prefilter_in_edit.setText(text)
@@ -1100,32 +1161,56 @@ class ChloroplastMinerInterface(QWidget):
         btn_prefilter_out.clicked.connect(lambda: self.browse_folder(self.prefilter_out_edit))
 
         h_pf_out = QHBoxLayout()
-        h_pf_out.addWidget(BodyLabel("Output Directory:"))
+        lbl_pf_out = BodyLabel("Output Directory:")
+        lbl_pf_out.setFixedWidth(130)
+        h_pf_out.addWidget(lbl_pf_out)
         h_pf_out.addWidget(self.prefilter_out_edit)
         h_pf_out.addWidget(btn_prefilter_out)
-        prefilter_layout.addLayout(h_pf_out)
+        left_col.addLayout(h_pf_out)
 
-        h_pf_opts = QHBoxLayout()
+        main_row.addLayout(left_col, 2)
+
+        # --- Right column: options ---
+        right_col = QVBoxLayout()
+        right_col.setContentsMargins(0, 0, 0, 0)
+        right_col.setSpacing(16)
+
+        right_col.addStretch()
+
+        row_species = QHBoxLayout()
+        row_species.addWidget(BodyLabel("Species Level Merge:"))
+        row_species.addStretch()
         self.prefilter_species_switch = SwitchButton()
-        self.prefilter_species_switch.setChecked(False)
-        h_pf_opts.addWidget(BodyLabel("Species Level Merge:"))
-        h_pf_opts.addWidget(self.prefilter_species_switch)
-        h_pf_opts.addSpacing(20)
-        h_pf_opts.addWidget(BodyLabel("Records Kept for Each Taxon:"))
+        self.prefilter_species_switch.setChecked(True)
+        row_species.addWidget(self.prefilter_species_switch)
+        right_col.addLayout(row_species)
+
+        row_keep = QHBoxLayout()
+        self.prefilter_keep_label = BodyLabel("Records Per Taxon:")
+        row_keep.addWidget(self.prefilter_keep_label)
+        row_keep.addStretch()
         self.prefilter_keep_edit = LineEdit()
         self.prefilter_keep_edit.setText("3")
-        self.prefilter_keep_edit.setFixedWidth(40)
-        h_pf_opts.addWidget(self.prefilter_keep_edit)
-        h_pf_opts.addStretch()
-        prefilter_layout.addLayout(h_pf_opts)
+        row_keep.addWidget(self.prefilter_keep_edit)
+        right_col.addLayout(row_keep)
 
-        self.btn_chloro_prefilter = PushButton("Run Pre-filter")
-        self.btn_chloro_prefilter.setIcon(FIF.FILTER)
-        self.btn_chloro_prefilter.clicked.connect(self.on_chloro_prefilter)
-        prefilter_layout.addWidget(self.btn_chloro_prefilter)
+        self.prefilter_species_switch.checkedChanged.connect(
+            lambda checked: (
+                self.prefilter_keep_label.setEnabled(checked),
+                self.prefilter_keep_edit.setEnabled(checked),
+            )
+        )
+
+        right_col.addStretch()
+        main_row.addLayout(right_col, 1)
 
         grp_prefilter.addSettingCard(card_prefilter)
         layout.addWidget(grp_prefilter)
+
+        self.btn_chloro_prefilter = PrimaryPushButton("Run Pre-filter", view)
+        self.btn_chloro_prefilter.setIcon(FIF.FILTER)
+        self.btn_chloro_prefilter.clicked.connect(self.on_chloro_prefilter)
+        layout.addWidget(self.btn_chloro_prefilter)
         layout.addStretch(1)
 
         w.setWidget(view)
@@ -1142,7 +1227,7 @@ class ChloroplastMinerInterface(QWidget):
         grp = SettingCardGroup("Extract Info & Quality Control", w)
 
         card = CardWidget()
-        card.setFixedHeight(220)
+        card.setFixedHeight(160)
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(15, 10, 15, 10)
 
@@ -1152,7 +1237,9 @@ class ChloroplastMinerInterface(QWidget):
         btn_chloro_qc_in = PushButton("Browse")
         btn_chloro_qc_in.setIcon(FIF.FOLDER)
         btn_chloro_qc_in.clicked.connect(lambda: self.browse_folder(self.chloro_qc_in))
-        h_input.addWidget(BodyLabel("Input Directory:"))
+        lbl_qc_in = BodyLabel("Input Directory:")
+        lbl_qc_in.setFixedWidth(130)
+        h_input.addWidget(lbl_qc_in)
         h_input.addWidget(self.chloro_qc_in)
         h_input.addWidget(btn_chloro_qc_in)
         card_layout.addLayout(h_input)
@@ -1168,7 +1255,9 @@ class ChloroplastMinerInterface(QWidget):
         btn_chloro_qc_out.clicked.connect(
             lambda: self.browse_folder(self.chloro_qc_out)
         )
-        h_output.addWidget(BodyLabel("Output Directory:"))
+        lbl_qc_out = BodyLabel("Output Directory:")
+        lbl_qc_out.setFixedWidth(130)
+        h_output.addWidget(lbl_qc_out)
         h_output.addWidget(self.chloro_qc_out)
         h_output.addWidget(btn_chloro_qc_out)
         card_layout.addLayout(h_output)
@@ -1179,26 +1268,28 @@ class ChloroplastMinerInterface(QWidget):
         self.chloro_ambig_thresh.setText("0.1")
 
         h_threshold = QHBoxLayout()
-        h_threshold.addWidget(BodyLabel("CDS Threshold:"))
+        lbl_cds_thresh = BodyLabel("CDS Threshold:")
+        lbl_cds_thresh.setFixedWidth(130)
+        h_threshold.addWidget(lbl_cds_thresh)
         h_threshold.addWidget(self.chloro_cds_thresh)
         h_threshold.addStretch()
         h_threshold.addWidget(BodyLabel("Ambiguity Threshold:"))
         h_threshold.addWidget(self.chloro_ambig_thresh)
         card_layout.addLayout(h_threshold)
 
-        self.btn_chloro_qc_extract = PushButton("Extract")
-        self.btn_chloro_qc_extract.setIcon(FIF.PLAY)
-        self.btn_chloro_qc_extract.clicked.connect(self.on_chloro_qc_extract)
-        card_layout.addWidget(self.btn_chloro_qc_extract)
-
         grp.addSettingCard(card)
 
         layout.addWidget(grp)
 
+        self.btn_chloro_qc_extract = PrimaryPushButton("Extract", w)
+        self.btn_chloro_qc_extract.setIcon(FIF.PLAY)
+        self.btn_chloro_qc_extract.clicked.connect(self.on_chloro_qc_extract)
+        layout.addWidget(self.btn_chloro_qc_extract)
+
         grp_pga = SettingCardGroup("Plastid Genome Annotator", w)
 
         card_pga = CardWidget()
-        card_pga.setFixedHeight(180)
+        card_pga.setFixedHeight(130)
         card_pga_layout = QVBoxLayout(card_pga)
         card_pga_layout.setContentsMargins(15, 10, 15, 10)
 
@@ -1212,7 +1303,9 @@ class ChloroplastMinerInterface(QWidget):
         btn_chloro_pga_in.clicked.connect(
             lambda: self.browse_folder(self.chloro_pga_in)
         )
-        h_pga_input.addWidget(BodyLabel("Input Directory:"))
+        lbl_pga_in = BodyLabel("Input Directory:")
+        lbl_pga_in.setFixedWidth(130)
+        h_pga_input.addWidget(lbl_pga_in)
         h_pga_input.addWidget(self.chloro_pga_in)
         h_pga_input.addWidget(btn_chloro_pga_in)
         card_pga_layout.addLayout(h_pga_input)
@@ -1239,14 +1332,14 @@ class ChloroplastMinerInterface(QWidget):
         h_pga_ref.addWidget(self.btn_chloro_pga_ref)
         card_pga_layout.addLayout(h_pga_ref)
 
-        self.btn_chloro_pga = PushButton("Reannotate")
-        self.btn_chloro_pga.setIcon(FIF.PLAY)
-        self.btn_chloro_pga.clicked.connect(self.on_chloro_pga)
-        card_pga_layout.addWidget(self.btn_chloro_pga)
-
         grp_pga.addSettingCard(card_pga)
 
         layout.addWidget(grp_pga)
+
+        self.btn_chloro_pga = PrimaryPushButton("Reannotate", w)
+        self.btn_chloro_pga.setIcon(FIF.PLAY)
+        self.btn_chloro_pga.clicked.connect(self.on_chloro_pga)
+        layout.addWidget(self.btn_chloro_pga)
         layout.addStretch(1)
         return w
 
@@ -1257,12 +1350,12 @@ class ChloroplastMinerInterface(QWidget):
         self.cds_view.setObjectName("cds_view")
         layout = QVBoxLayout(self.cds_view)
         layout.setContentsMargins(5, 20, 20, 20)
-        layout.setSpacing(20)
+        layout.setSpacing(6)
 
         grp_get = SettingCardGroup("Get CDS", self.cds_view)
 
         card_get = CardWidget()
-        card_get.setFixedHeight(160)
+        card_get.setFixedHeight(120)
         card_get_layout = QVBoxLayout(card_get)
         card_get_layout.setContentsMargins(15, 10, 15, 10)
 
@@ -1274,7 +1367,9 @@ class ChloroplastMinerInterface(QWidget):
         btn_cds_get_in = PushButton("Browse")
         btn_cds_get_in.setIcon(FIF.FOLDER)
         btn_cds_get_in.clicked.connect(lambda: self.browse_folder(self.cds_get_in))
-        h_get_input.addWidget(BodyLabel("Input Directory:"))
+        lbl_get_in = BodyLabel("Input Directory:")
+        lbl_get_in.setFixedWidth(130)
+        h_get_input.addWidget(lbl_get_in)
         h_get_input.addWidget(self.cds_get_in)
         h_get_input.addWidget(btn_cds_get_in)
         card_get_layout.addLayout(h_get_input)
@@ -1288,23 +1383,26 @@ class ChloroplastMinerInterface(QWidget):
         btn_cds_get_out.clicked.connect(
             lambda: self.browse_folder(self.cds_get_out, self.cds_filter_in)
         )
-        h_get_output.addWidget(BodyLabel("Output Directory:"))
+        lbl_get_out = BodyLabel("Output Directory:")
+        lbl_get_out.setFixedWidth(130)
+        h_get_output.addWidget(lbl_get_out)
         h_get_output.addWidget(self.cds_get_out)
         h_get_output.addWidget(btn_cds_get_out)
         card_get_layout.addLayout(h_get_output)
 
-        self.btn_cds_get = PushButton("Extract CDS")
-        self.btn_cds_get.setIcon(FIF.CODE)
-        self.btn_cds_get.clicked.connect(self.on_cds_get_extract)
-        card_get_layout.addWidget(self.btn_cds_get)
-
         grp_get.addSettingCard(card_get)
         layout.addWidget(grp_get)
+
+        self.btn_cds_get = PrimaryPushButton("Extract CDS", self.cds_view)
+        self.btn_cds_get.setIcon(FIF.CODE)
+        self.btn_cds_get.clicked.connect(self.on_cds_get_extract)
+        layout.addWidget(self.btn_cds_get)
+        layout.addSpacing(14)
 
         grp_filter = SettingCardGroup("Filter CDS", self.cds_view)
 
         card_filter = CardWidget()
-        card_filter.setFixedHeight(210)
+        card_filter.setFixedHeight(165)
         card_filter_layout = QVBoxLayout(card_filter)
         card_filter_layout.setContentsMargins(15, 10, 15, 10)
 
@@ -1316,7 +1414,9 @@ class ChloroplastMinerInterface(QWidget):
         btn_cds_filter_in.clicked.connect(
             lambda: self.browse_folder(self.cds_filter_in)
         )
-        h_filter_input.addWidget(BodyLabel("Input Directory:"))
+        lbl_filter_in = BodyLabel("Input Directory:")
+        lbl_filter_in.setFixedWidth(130)
+        h_filter_input.addWidget(lbl_filter_in)
         h_filter_input.addWidget(self.cds_filter_in)
         h_filter_input.addWidget(btn_cds_filter_in)
         card_filter_layout.addLayout(h_filter_input)
@@ -1332,7 +1432,9 @@ class ChloroplastMinerInterface(QWidget):
         btn_cds_filter_out.clicked.connect(
             lambda: self.browse_folder(self.cds_filter_out, self.cds_select_in)
         )
-        h_filter_output.addWidget(BodyLabel("Output Directory:"))
+        lbl_filter_out = BodyLabel("Output Directory:")
+        lbl_filter_out.setFixedWidth(130)
+        h_filter_output.addWidget(lbl_filter_out)
         h_filter_output.addWidget(self.cds_filter_out)
         h_filter_output.addWidget(btn_cds_filter_out)
         card_filter_layout.addLayout(h_filter_output)
@@ -1358,18 +1460,19 @@ class ChloroplastMinerInterface(QWidget):
         h_filter_params.addWidget(self.cds_filter_ub)
         card_filter_layout.addLayout(h_filter_params)
 
-        self.btn_cds_filter = PushButton("Filter CDS")
-        self.btn_cds_filter.setIcon(FIF.FILTER)
-        self.btn_cds_filter.clicked.connect(self.on_cds_filter_extract)
-        card_filter_layout.addWidget(self.btn_cds_filter)
-
         grp_filter.addSettingCard(card_filter)
         layout.addWidget(grp_filter)
+
+        self.btn_cds_filter = PrimaryPushButton("Filter CDS", self.cds_view)
+        self.btn_cds_filter.setIcon(FIF.FILTER)
+        self.btn_cds_filter.clicked.connect(self.on_cds_filter_extract)
+        layout.addWidget(self.btn_cds_filter)
+        layout.addSpacing(14)
 
         grp_select = SettingCardGroup("Select CDS", self.cds_view)
 
         card_select = CardWidget()
-        card_select.setFixedHeight(200)
+        card_select.setFixedHeight(160)
         card_select_layout = QVBoxLayout(card_select)
         card_select_layout.setContentsMargins(15, 10, 15, 10)
 
@@ -1383,7 +1486,9 @@ class ChloroplastMinerInterface(QWidget):
         btn_cds_select_in.clicked.connect(
             lambda: self.browse_folder(self.cds_select_in)
         )
-        h_select_input.addWidget(BodyLabel("Input Directory:"))
+        lbl_select_in = BodyLabel("Input Directory:")
+        lbl_select_in.setFixedWidth(130)
+        h_select_input.addWidget(lbl_select_in)
         h_select_input.addWidget(self.cds_select_in)
         h_select_input.addWidget(btn_cds_select_in)
         card_select_layout.addLayout(h_select_input)
@@ -1399,7 +1504,9 @@ class ChloroplastMinerInterface(QWidget):
         btn_cds_select_out.clicked.connect(
             lambda: self.browse_folder(self.cds_select_out)
         )
-        h_select_output.addWidget(BodyLabel("Output Directory:"))
+        lbl_select_out = BodyLabel("Output Directory:")
+        lbl_select_out.setFixedWidth(130)
+        h_select_output.addWidget(lbl_select_out)
         h_select_output.addWidget(self.cds_select_out)
         h_select_output.addWidget(btn_cds_select_out)
         card_select_layout.addLayout(h_select_output)
@@ -1432,13 +1539,13 @@ class ChloroplastMinerInterface(QWidget):
             lambda checked: btn_cds_select_tax_file.setEnabled(checked)
         )
 
-        self.btn_cds_select = PushButton("Select CDS")
-        self.btn_cds_select.setIcon(FIF.TAG)
-        self.btn_cds_select.clicked.connect(self.on_cds_select_extract)
-        card_select_layout.addWidget(self.btn_cds_select)
-
         grp_select.addSettingCard(card_select)
         layout.addWidget(grp_select)
+
+        self.btn_cds_select = PrimaryPushButton("Select CDS", self.cds_view)
+        self.btn_cds_select.setIcon(FIF.TAG)
+        self.btn_cds_select.clicked.connect(self.on_cds_select_extract)
+        layout.addWidget(self.btn_cds_select)
 
         layout.addStretch(1)
 
@@ -1473,7 +1580,7 @@ class ChloroplastMinerInterface(QWidget):
             or not self.chloro_email_edit.text().strip()
         ):
             self.main_window.backend.emit_log(
-                "Please select index file, download directory and enter email",
+                "Please select index file, download directory and enter your email",
                 "WARNING",
             )
             return
@@ -1787,15 +1894,15 @@ class DependenciesInterface(QWidget):
         h_install.setContentsMargins(15, 10, 15, 10)
         h_install.setSpacing(30)
 
-        btn_mafft = PushButton("Install MAFFT", card_install)
+        btn_mafft = PrimaryPushButton("Install MAFFT", card_install)
         btn_mafft.clicked.connect(main_window.run_install_mafft)
         h_install.addWidget(btn_mafft, 1)
 
-        btn_trim = PushButton("Install trimAl", card_install)
+        btn_trim = PrimaryPushButton("Install trimAl", card_install)
         btn_trim.clicked.connect(main_window.run_install_trimal)
         h_install.addWidget(btn_trim, 1)
 
-        btn_pga = PushButton("Install PGA", card_install)
+        btn_pga = PrimaryPushButton("Install PGA", card_install)
         btn_pga.clicked.connect(main_window.run_install_pga)
         h_install.addWidget(btn_pga, 1)
 
@@ -1818,7 +1925,7 @@ class DependenciesInterface(QWidget):
         theme_layout.addWidget(BodyLabel("Theme:"))
         self.combo_theme = ComboBox(card_theme)
         self.combo_theme.addItems(["Light", "Dark", "Auto"])
-        self.combo_theme.setCurrentIndex(2)
+        self.combo_theme.setCurrentIndex(1)
         self.combo_theme.currentIndexChanged.connect(main_window.change_theme)
         theme_layout.addWidget(self.combo_theme)
         h_theme.addWidget(theme_container, 1)
@@ -1828,7 +1935,7 @@ class DependenciesInterface(QWidget):
         color_layout.setContentsMargins(0, 0, 0, 0)
         color_layout.addWidget(BodyLabel("Color:"))
         self.color_picker = ColorPickerButton(
-            parent=card_theme, title="Color", color=themeColor()
+            parent=card_theme, title="Color", color="#9fbfff"
         )
         self.color_picker.colorChanged.connect(lambda c: setThemeColor(c, save=True))
         color_layout.addWidget(self.color_picker)
@@ -1849,7 +1956,7 @@ class DependenciesInterface(QWidget):
         h_about.addWidget(BodyLabel("Developed by Ruijing Cheng & Yuxuan Wang under GPL v3 License"), 1)
         #h_about.addWidget(BodyLabel("License: GPL V3"), 1)
 
-        btn_github = PushButton("View Github Page", card_about)
+        btn_github = PrimaryPushButton("View Github Page", card_about)
         btn_github.setIcon(FIF.GITHUB)
         btn_github.clicked.connect(main_window.open_github_page)
         h_about.addWidget(btn_github, 1)
@@ -1932,8 +2039,7 @@ class MainWindow(FluentWindow):
         y = (screen_geometry.height() - self.height()) // 2
         self.move(x, y)
 
-        if HAS_SYSTEM_ACCENT and sys.platform in ["win32", "darwin"]:
-            setThemeColor(getSystemAccentColor(), save=False)
+        setThemeColor("#6eadff", save=False)
 
         self.backend = BackendController()
         self.backend.log_signal.connect(self.outputWritten)
@@ -1945,7 +2051,7 @@ class MainWindow(FluentWindow):
         self.chloroplast_miner_interface = ChloroplastMinerInterface(self)
         self.dependencies_interface = DependenciesInterface(self)
 
-        self.addSubInterface(self.retrieval_interface, FIF.LIBRARY, "Fragments")
+        self.addSubInterface(self.retrieval_interface, FIF.LIBRARY, "DNAseqs")
         self.addSubInterface(
             self.chloroplast_miner_interface, FIF.LEAF, "Chloroplast"
         )
@@ -2187,6 +2293,9 @@ class MainWindow(FluentWindow):
         QDesktopServices.openUrl(QUrl("https://github.com/wyx619/PyNCBIminer_NG"))
 
 if __name__ == "__main__":
+    import ctypes
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('PyNCBIminer-NG')
+
     QApplication.setHighDpiScaleFactorRoundingPolicy(
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
     )
@@ -2195,7 +2304,7 @@ if __name__ == "__main__":
     app.setApplicationName("PyNCBIminer-NG")
     app.setOrganizationName("Sichuan University")
     app.setApplicationDisplayName("PyNCBIminer-NG")
-    setTheme(Theme.AUTO)
+    setTheme(Theme.DARK)
 
     w = MainWindow()
     w.show()
