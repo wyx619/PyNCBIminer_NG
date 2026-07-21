@@ -650,9 +650,16 @@ class ConstructionInterface(QWidget):
         self.rb_align_single = RadioButton("Input one file")
         self.rb_align_multi = RadioButton("Input multiple files")
         self.rb_align_single.setChecked(True)
+        self.switch_reorder = SwitchButton()
+        self.switch_reorder.setChecked(True)
         row_rb = QHBoxLayout()
         row_rb.addWidget(self.rb_align_single)
+        row_rb.addStretch()
         row_rb.addWidget(self.rb_align_multi)
+        row_rb.addStretch()
+        row_rb.addWidget(BodyLabel("Reorder:"))
+        row_rb.addWidget(self.switch_reorder)
+        #row_rb.addStretch()
         l_opts.addLayout(row_rb)
 
         self.align_in = LineEdit()
@@ -689,8 +696,9 @@ class ConstructionInterface(QWidget):
         l_opts.addLayout(h2)
 
         self.align_thread = LineEdit()
+
         self.align_thread.setText("-1")
-        self.align_thread.setFixedWidth(80)
+        self.align_thread.setFixedWidth(100)
         self.align_algo = ComboBox()
         self.align_algo.addItems(
             [
@@ -698,18 +706,17 @@ class ConstructionInterface(QWidget):
                 "add (use long sequences as backbone to align sequences)",
             ]
         )
-        self.chk_reorder = CheckBox("Reorder", card_opts)
-        self.chk_reorder.setChecked(True)
-
         row_param = QHBoxLayout()
-        row_param.addWidget(BodyLabel("Threads:"))
+        #row_param.addWidget(BodyLabel("Threads:"))
+
+        lbl_threads = BodyLabel("Threads:")
+        lbl_threads.setFixedWidth(60)
+        row_param.addWidget(lbl_threads)
         row_param.addWidget(self.align_thread)
-        row_param.addSpacing(10)
+        row_param.addSpacing(20)
         row_param.addWidget(BodyLabel("Strategy:"))
         row_param.addWidget(self.align_algo, 1)
-        row_param.addSpacing(10)
-        row_param.addWidget(self.chk_reorder)
-        row_param.addStretch()
+        #row_param.addStretch()
         l_opts.addLayout(row_param)
 
         grp.addSettingCard(card_opts)
@@ -978,10 +985,10 @@ class ChloroplastMinerInterface(QWidget):
             self.update_qc_input_default()
 
     def update_qc_input_default(self):
-        if hasattr(self, "chloro_qc_in") and hasattr(self, "chloro_download_dir_edit"):
-            download_dir = self.chloro_download_dir_edit.text().strip()
-            if download_dir and not self.chloro_qc_in.text().strip():
-                self.chloro_qc_in.setText(download_dir)
+        if hasattr(self, "chloro_qc_in") and hasattr(self, "prefilter_out_edit"):
+            prefilter_out = self.prefilter_out_edit.text().strip()
+            if prefilter_out and not self.chloro_qc_in.text().strip():
+                self.chloro_qc_in.setText(prefilter_out)
 
     def addSubInterface(self, widget: QWidget, objectName, text):
         widget.setObjectName(objectName)
@@ -993,21 +1000,21 @@ class ChloroplastMinerInterface(QWidget):
         w.setWidgetResizable(True)
         view = QWidget()
         layout = QVBoxLayout(view)
-        layout.setContentsMargins(5, 20, 20, 20)
+        layout.setContentsMargins(5, 20, 5, 20)
         layout.setSpacing(6)
 
-        grp_search = SettingCardGroup("Search", view)
+        grp_search_dl = SettingCardGroup("Search & Download", view)
 
         card = CardWidget()
-        card.setFixedHeight(115)
+        card.setFixedHeight(200)
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(15, 10, 15, 10)
-        card_layout.setSpacing(10)
 
         content_row = QHBoxLayout()
         content_row.setContentsMargins(0, 0, 0, 0)
         content_row.setSpacing(20)
 
+        # --- Left: Target Taxa ---
         left_col = QVBoxLayout()
         left_col.setContentsMargins(0, 0, 0, 0)
         left_col.setSpacing(6)
@@ -1017,17 +1024,15 @@ class ChloroplastMinerInterface(QWidget):
         left_col.addWidget(self.chloro_tax_edit, 1)
         content_row.addLayout(left_col, 1)
 
+        # --- Right: Dates + Email + Download Dir ---
         right_col = QVBoxLayout()
         right_col.setContentsMargins(0, 0, 0, 0)
         right_col.setSpacing(8)
-        right_col.addStretch(1)
 
-        label_w = 80
+        label_w = 100
+
         lbl_from = BodyLabel("Date From:")
         lbl_from.setFixedWidth(label_w)
-        lbl_to = BodyLabel("Date To:")
-        lbl_to.setFixedWidth(label_w)
-
         row_from = QHBoxLayout()
         self.chloro_date_from = DatePicker(card)
         self.chloro_date_from.setDate(QDate())
@@ -1040,6 +1045,8 @@ class ChloroplastMinerInterface(QWidget):
         row_from.addWidget(self.chloro_btn_clear_from)
         right_col.addLayout(row_from)
 
+        lbl_to = BodyLabel("Date To:")
+        lbl_to.setFixedWidth(label_w)
         row_to = QHBoxLayout()
         self.chloro_date_to = DatePicker(card)
         self.chloro_date_to.setDate(QDate())
@@ -1051,76 +1058,48 @@ class ChloroplastMinerInterface(QWidget):
         row_to.addWidget(self.chloro_date_to, 1)
         row_to.addWidget(self.chloro_btn_clear_to)
         right_col.addLayout(row_to)
-        right_col.addStretch(1)
 
-        content_row.addLayout(right_col, 1)
-        card_layout.addLayout(content_row, 1)
+        lbl_email = BodyLabel("Email:")
+        lbl_email.setFixedWidth(label_w)
+        row_email = QHBoxLayout()
+        self.chloro_email_edit = LineEdit(card)
+        self.chloro_email_edit.setPlaceholderText("Your Email")
+        row_email.addWidget(lbl_email)
+        row_email.addWidget(self.chloro_email_edit, 1)
+        right_col.addLayout(row_email)
 
-        grp_search.addSettingCard(card)
-        layout.addWidget(grp_search)
-
-        self.btn_chloro_search = PrimaryPushButton("Search", view)
-        self.btn_chloro_search.setIcon(FIF.GLOBE)
-        self.btn_chloro_search.clicked.connect(self.on_chloro_search)
-        layout.addWidget(self.btn_chloro_search)
-        layout.addSpacing(14)
-
-        grp_download = SettingCardGroup("Download", view)
-
-        card_download = CardWidget()
-        card_download.setFixedHeight(150)
-        download_layout = QVBoxLayout(card_download)
-        download_layout.setContentsMargins(15, 10, 15, 10)
-        download_layout.setSpacing(8)
-
-        self.chloro_wd_edit = LineEdit()
-        self.chloro_wd_edit.setPlaceholderText("Index File Path")
-        btn_chloro_wd = PushButton("Browse")
-        btn_chloro_wd.setIcon(FIF.FOLDER)
-        btn_chloro_wd.clicked.connect(lambda: self.browse_file(self.chloro_wd_edit))
-
-        h_box = QHBoxLayout()
-        lbl_index = BodyLabel("Index File:")
-        lbl_index.setFixedWidth(130)
-        h_box.addWidget(lbl_index)
-        h_box.addWidget(self.chloro_wd_edit)
-        h_box.addWidget(btn_chloro_wd)
-
-        self.chloro_download_dir_edit = LineEdit()
+        lbl_dl = BodyLabel("Download Dir:")
+        lbl_dl.setFixedWidth(label_w)
+        row_dl = QHBoxLayout()
+        self.chloro_download_dir_edit = LineEdit(card)
         self.chloro_download_dir_edit.setPlaceholderText("Download Directory Path")
         btn_chloro_download_dir = PushButton("Browse")
         btn_chloro_download_dir.setIcon(FIF.FOLDER)
         btn_chloro_download_dir.clicked.connect(
             lambda: self.browse_folder(self.chloro_download_dir_edit)
         )
+        row_dl.addWidget(lbl_dl)
+        row_dl.addWidget(self.chloro_download_dir_edit, 1)
+        row_dl.addWidget(btn_chloro_download_dir)
+        right_col.addLayout(row_dl)
 
-        h_box2 = QHBoxLayout()
-        lbl_dl_dir = BodyLabel("Download Directory:")
-        lbl_dl_dir.setFixedWidth(130)
-        h_box2.addWidget(lbl_dl_dir)
-        h_box2.addWidget(self.chloro_download_dir_edit)
-        h_box2.addWidget(btn_chloro_download_dir)
+        content_row.addLayout(right_col, 1)
+        card_layout.addLayout(content_row, 1)
 
-        self.chloro_email_edit = LineEdit()
-        self.chloro_email_edit.setPlaceholderText("Your Email")
+        grp_search_dl.addSettingCard(card)
+        layout.addWidget(grp_search_dl)
 
-        h_box3 = QHBoxLayout()
-        lbl_email = BodyLabel("Email:")
-        lbl_email.setFixedWidth(130)
-        h_box3.addWidget(lbl_email)
-        h_box3.addWidget(self.chloro_email_edit)
-
-        download_layout.addLayout(h_box)
-        download_layout.addLayout(h_box2)
-        download_layout.addLayout(h_box3)
-
-        grp_download.addSettingCard(card_download)
-        layout.addWidget(grp_download)
-
+        btn_row = QHBoxLayout()
+        self.btn_chloro_search = PrimaryPushButton("Search", view)
+        self.btn_chloro_search.setIcon(FIF.SEARCH)
+        self.btn_chloro_search.clicked.connect(self.on_chloro_search)
         self.btn_chloro_download = PrimaryPushButton("Download", view)
         self.btn_chloro_download.setIcon(FIF.DOWNLOAD)
         self.btn_chloro_download.clicked.connect(self.on_chloro_download)
-        layout.addWidget(self.btn_chloro_download)
+        btn_row.addWidget(self.btn_chloro_search)
+        btn_row.addSpacing(10)
+        btn_row.addWidget(self.btn_chloro_download)
+        layout.addLayout(btn_row)
         layout.addSpacing(14)
 
         grp_prefilter = SettingCardGroup("Pre-filter", view)
@@ -1573,23 +1552,80 @@ class ChloroplastMinerInterface(QWidget):
             if follow_target:
                 follow_target.setText(path)
 
-    def on_chloro_download(self):
-        if (
-            not self.chloro_wd_edit.text().strip()
-            or not self.chloro_download_dir_edit.text().strip()
-            or not self.chloro_email_edit.text().strip()
-        ):
+    def on_chloro_search(self):
+        text = self.chloro_tax_edit.toPlainText().strip()
+        email = self.chloro_email_edit.text().strip()
+        out_path = self.chloro_download_dir_edit.text().strip()
+
+        if not text:
             self.main_window.backend.emit_log(
-                "Please select index file, download directory and enter your email",
+                "Please input at least one taxon", "WARNING"
+            )
+            return
+        if not email:
+            self.main_window.backend.emit_log(
+                "Please enter your email", "WARNING"
+            )
+            return
+        if not out_path:
+            self.main_window.backend.emit_log(
+                "Please select a download directory", "WARNING"
+            )
+            return
+
+        date_from_obj = self.chloro_date_from.date
+        date_to_obj = self.chloro_date_to.date
+
+        has_from = not self.chloro_date_from_cleared and date_from_obj.isValid()
+        has_to = not self.chloro_date_to_cleared and date_to_obj.isValid()
+
+        if has_from and not has_to:
+            self.chloro_date_to.setDate(QDate.currentDate())
+            date_to_obj = self.chloro_date_to.date
+            has_to = date_to_obj.isValid()
+            self.main_window.backend.emit_log(
+                "Date To not set, automatically set to today", "INFO"
+            )
+        elif not has_from and has_to:
+            self.main_window.backend.emit_log(
+                "Please select both Date From and Date To, or leave both empty",
                 "WARNING",
             )
             return
 
+        taxa = [line.strip() for line in text.split("\n") if line.strip()]
+        d_from = date_from_obj.toString("yyyy/MM/dd") if has_from else ""
+        d_to = date_to_obj.toString("yyyy/MM/dd") if has_to else ""
+
+        self.main_window.backend.emit_log("Search started...", "INFO")
+        self.main_window.backend.search_chloroplast(email, taxa, d_from, d_to, out_path)
+
+    def on_chloro_download(self):
         email = self.chloro_email_edit.text().strip()
-        in_path = self.chloro_wd_edit.text().strip()
         out_path = self.chloro_download_dir_edit.text().strip()
 
-        self.main_window.backend.download_chloroplast_genomes(email, in_path, out_path)
+        if not email:
+            self.main_window.backend.emit_log(
+                "Please enter your email", "WARNING"
+            )
+            return
+        if not out_path:
+            self.main_window.backend.emit_log(
+                "Please select a download directory", "WARNING"
+            )
+            return
+
+        index_file = Path(out_path) / "accession_index.txt"
+        if not index_file.exists():
+            self.main_window.backend.emit_log(
+                "No accession index found. Please run Search first.", "WARNING"
+            )
+            return
+
+        self.main_window.backend.emit_log("Download started...", "INFO")
+        self.main_window.backend.download_chloroplast_genomes(
+            email, str(index_file), out_path
+        )
 
     def on_chloro_prefilter(self):
         in_folder = self.prefilter_in_edit.text().strip()
@@ -1637,74 +1673,19 @@ class ChloroplastMinerInterface(QWidget):
         self.chloro_date_to._date = QDate()
         self.chloro_date_to_cleared = True
 
-    def on_chloro_search(self):
-        text = self.chloro_tax_edit.toPlainText().strip()
-        if not text:
-            self.main_window.backend.emit_log(
-                "Please enter at least one taxon name", "WARNING"
-            )
-            return
-
-        date_from_obj = self.chloro_date_from.date
-        date_to_obj = self.chloro_date_to.date
-
-        has_from = not self.chloro_date_from_cleared and date_from_obj.isValid()
-        has_to = not self.chloro_date_to_cleared and date_to_obj.isValid()
-
-        if has_from and not has_to:
-            self.chloro_date_to.setDate(QDate.currentDate())
-            date_to_obj = self.chloro_date_to.date
-            has_to = date_to_obj.isValid()
-            self.main_window.backend.emit_log(
-                "Date To not set, automatically set to today", "INFO"
-            )
-        elif not has_from and has_to:
-            self.main_window.backend.emit_log(
-                "Please select both Date From and Date To, or leave both empty",
-                "WARNING",
-            )
-            return
-
-        from urllib.parse import quote
-
-        from PySide6.QtCore import QUrl
-        from PySide6.QtGui import QDesktopServices
-
-        taxa = [line.strip() for line in text.split("\n") if line.strip()]
-
-        if len(taxa) == 1:
-            taxa_query = f'"{taxa[0]}"[Organism]'
-        else:
-            taxa_queries = " OR ".join([f'"{t}"[Organism]' for t in taxa])
-            taxa_query = f"({taxa_queries})"
-
-        query = f"{taxa_query} AND (plastid[All Fields] OR chloroplast[All Fields]) AND (100000[Sequence Length] : 300000[Sequence Length]) NOT mitochondrion[Title] NOT mitochondrial[Title] NOT chromosome[Title]"
-
-        d_from = ""
-        d_to = ""
-
-        if has_from:
-            d_from = date_from_obj.toString("yyyy/MM/dd")
-        if has_to:
-            d_to = date_to_obj.toString("yyyy/MM/dd")
-
-        if d_from and d_to:
-            query = f'{query} AND "{d_from}"[PDAT] : "{d_to}"[PDAT]'
-        elif d_from:
-            query = f'{query} AND "{d_from}"[PDAT]'
-
-        encoded_query = quote(query, safe="()")
-        url = f"https://www.ncbi.nlm.nih.gov/nuccore/?term={encoded_query}"
-
-        QDesktopServices.openUrl(QUrl(url))
-
     def on_chloro_qc_extract(self):
         in_folder = self.chloro_qc_in.text().strip()
         out_folder = self.chloro_qc_out.text().strip()
 
-        if not in_folder or not out_folder:
+        if not in_folder :
             self.main_window.backend.emit_log(
-                "Please select both input and output directories", "WARNING"
+                "Please select an input directory", "WARNING"
+            )
+            return
+        
+        if not out_folder:
+            self.main_window.backend.emit_log(
+                "Please select an output directory", "WARNING"
             )
             return
 

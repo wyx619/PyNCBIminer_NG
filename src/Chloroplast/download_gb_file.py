@@ -153,11 +153,6 @@ def download_gb_file(email, in_path, out_path, max_threads=10, batch_size=None):
         with open(out_path / "error_downloaded_index.csv", "w") as fw:
             for f, size in error_files:
                 fw.write(f"{f.stem},{size / 1024:.2f}\n")
-                print(f"Deleted {f.name} without ORIGIN section")
-        print(f"Quality check completed! Deleted {len(error_files)} invalid files.")
-    else:
-        print("Quality check completed! All files are valid.")
-
-
+    # Suppress noisy quality-check print
 
     return len(accession_list), len(skipped), len(to_download), success, failed

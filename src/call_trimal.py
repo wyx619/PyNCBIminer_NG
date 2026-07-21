@@ -46,7 +46,7 @@ def get_trimal_path():
         return "trimal"
 
     raise FileNotFoundError(
-        "trimal executable not found. Please go to Software Settings Page to install trimAl first"
+        "trimal executable not found. Please go to Settings Page to install trimAl first"
     )
 
 

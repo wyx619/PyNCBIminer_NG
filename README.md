@@ -139,7 +139,7 @@ A: Provide a valid email address in the Entrez Email field. NCBI may temporarily
 A: Check if your target taxa have sequences deposited in GenBank. You can also try extending the search date range.
 
 **Q: MAFFT/trimAl not found**
-A: Use the "Software Settings" page in PyNCBIminer-NG to automatically download and install these tools.
+A: Use the "Settings" page in PyNCBIminer-NG to automatically download and install these tools.
 
 ---
 

@@ -24,7 +24,7 @@ def get_mafft_path():
         return "mafft"
 
     raise FileNotFoundError(
-        "mafft executable not found. Please go to Software Settings Page to install MAFFT first"
+        "mafft executable not found. Please go to Settings Page to install MAFFT first"
     )
 
 

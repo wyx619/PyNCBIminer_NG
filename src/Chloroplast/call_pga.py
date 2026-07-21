@@ -134,7 +134,7 @@ def run_pga(in_folder, ori_gb_folder, clade, ref_folder=None, emit_log=None):
 def _check_pga_installed(pga_dir, emit_log):
     if not pga_dir.exists():
         emit_log(
-            "PGA directory not found. Please go to Software Settings Page to install PGA first.", "WARNING"
+            "PGA directory not found. Please go to Settings Page to install PGA first.", "WARNING"
         )
         return False
     return True

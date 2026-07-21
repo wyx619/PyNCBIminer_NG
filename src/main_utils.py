@@ -754,7 +754,7 @@ class BackendController(QObject):
             thread_num = int(construction_interface.align_thread.text().strip())
         except ValueError:
             thread_num = -1
-        reorder = construction_interface.chk_reorder.isChecked()
+        reorder = construction_interface.switch_reorder.isChecked()
 
         def emit_callback(message, level="INFO"):
             self.emit_log(message, level)
@@ -1014,6 +1014,62 @@ class BackendController(QObject):
 
             QDesktopServices.openUrl(QUrl("https://github.com/wyx619/PyNCBIminer_NG"))
 
+    def search_chloroplast(self, email, taxa, date_from, date_to, out_path):
+        from pathlib import Path
+
+        from Bio import Entrez
+
+        Entrez.email = email
+        out_path = Path(out_path)
+        out_path.mkdir(parents=True, exist_ok=True)
+
+        # Build query
+        if len(taxa) == 1:
+            taxa_query = f'"{taxa[0]}"[Organism]'
+        else:
+            taxa_queries = " OR ".join([f'"{t}"[Organism]' for t in taxa])
+            taxa_query = f"({taxa_queries})"
+
+        query = (
+            f"{taxa_query} AND (plastid[All Fields] OR chloroplast[All Fields]) "
+            f"AND 100000:300000[SLEN] "
+            f"NOT mitochondrion[Title] NOT mitochondrial[Title] NOT chromosome[Title]"
+        )
+
+        if date_from and date_to:
+            query = f'{query} AND "{date_from}"[PDAT] : "{date_to}"[PDAT]'
+        elif date_from:
+            query = f'{query} AND "{date_from}"[PDAT]'
+
+        print(f"Entrez query: {query}")
+
+        # esearch paginated, write incrementally
+        handle = Entrez.esearch(db="nucleotide", term=query, retmax=0, idtype="acc")
+        record = Entrez.read(handle)
+        handle.close()
+        total = int(record["Count"])
+
+        if total == 0:
+            self.emit_log("No records found", "WARNING")
+            return
+
+        index_file = out_path / "accession_index.txt"
+        written = 0
+        with open(index_file, "w") as fw:
+            for start in range(0, total, 10000):
+                handle = Entrez.esearch(
+                    db="nucleotide", term=query, retstart=start, retmax=10000, idtype="acc"
+                )
+                record = Entrez.read(handle)
+                handle.close()
+                chunk = record["IdList"]
+                fw.write("\n".join(chunk) + "\n")
+                written += len(chunk)
+
+        self.emit_log(
+            f"Search completed: {written} records, saved to {index_file}", "SUCCESS"
+        )
+
     def download_chloroplast_genomes(self, email, in_path, out_path):
         from pathlib import Path
 
@@ -1043,7 +1099,7 @@ class BackendController(QObject):
 
         if len(to_download) == 0:
             self.emit_log("All files already downloaded!", "SUCCESS")
-            self.emit_log("Running quality check...")
+            #self.emit_log("Running quality check...")
             _, _, _, success, failed = download_gb_file(email, in_path, out_path, 10)
             if success > 0:
                 self.emit_log(f"Quality check: Verified {success} files", "SUCCESS")
