@@ -79,7 +79,7 @@ def run_pga(in_folder, ori_gb_folder, clade, ref_folder=None, emit_log=None):
         processed_stems = set()
         while not done_flag[0]:
             current_gb_files = list(temp_out.glob("*.gb"))
-            current_stems = {f.stem.replace("_reannoated", "") for f in current_gb_files}
+            current_stems = {f.stem.replace("_reannotated", "") for f in current_gb_files}
             completed_stems = current_stems & pending_stems
             new_stems = completed_stems - processed_stems
             if new_stems:
@@ -91,7 +91,7 @@ def run_pga(in_folder, ori_gb_folder, clade, ref_folder=None, emit_log=None):
                 processed_stems = completed_stems
             time.sleep(3)
         final_gb = list(temp_out.glob("*.gb"))
-        final_stems = {f.stem.replace("_reannoated", "") for f in final_gb}
+        final_stems = {f.stem.replace("_reannotated", "") for f in final_gb}
         completed_stems = final_stems & pending_stems
         for stem in completed_stems:
             if stem not in processed_stems:
@@ -152,7 +152,7 @@ def _get_pending_genomes(in_folder, ori_gb_folder, emit_log):
     annotated_stems = set()
     if out_folder.exists():
         gb_files = list(out_folder.glob("*.gb"))
-        annotated_stems = {f.stem.replace("_reannoated", "") for f in gb_files}
+        annotated_stems = {f.stem.replace("_reannotated", "") for f in gb_files}
         if annotated_stems:
             emit_log(f"Found {len(annotated_stems)} already annotated genomes", "INFO")
 
@@ -171,10 +171,10 @@ def _get_pending_genomes(in_folder, ori_gb_folder, emit_log):
         return None
 
     fasta_stems_raw = {f.stem for f in fasta_files}
-    fasta_stems = {s.replace("_reannoated", "") for s in fasta_stems_raw}
-    annotated_stems_clean = {s.replace("_reannoated", "") for s in annotated_stems}
+    fasta_stems = {s.replace("_reannotated", "") for s in fasta_stems_raw}
+    annotated_stems_clean = {s.replace("_reannotated", "") for s in annotated_stems}
     pending_stems = fasta_stems - annotated_stems_clean
-    pending_files = [f for f in fasta_files if f.stem.replace("_reannoated", "") in pending_stems]
+    pending_files = [f for f in fasta_files if f.stem.replace("_reannotated", "") in pending_stems]
 
     return pending_files, pending_stems, len(pending_stems), len(fasta_stems)
 
@@ -198,7 +198,7 @@ def _prepare_temp_folders(in_folder, fasta_files, pending_stems, emit_log):
     temp_out = temp_folder / "output"
     temp_folder.mkdir(exist_ok=True)
 
-    pending_files = [f for f in fasta_files if f.stem.replace("_reannoated", "") in pending_stems]
+    pending_files = [f for f in fasta_files if f.stem.replace("_reannotated", "") in pending_stems]
     for f in pending_files:
         shutil.copy2(f, temp_folder / f.name)
     temp_out.mkdir(exist_ok=True)
@@ -208,10 +208,10 @@ def _prepare_temp_folders(in_folder, fasta_files, pending_stems, emit_log):
 
 def _fix_annotated_files(ori_gb_folder, out_folder, temp_folder, num_pending, emit_log):
     def fix_thread():
-        annotated_files = list(out_folder.glob("*_reannoated.gb"))
+        annotated_files = list(out_folder.glob("*_reannotated.gb"))
 
         fixed_stems = {f.stem for f in ori_gb_folder.glob("*.gb.old")}
-        annotated_files = [f for f in annotated_files if f.stem.replace("_reannoated", "") not in fixed_stems]
+        annotated_files = [f for f in annotated_files if f.stem.replace("_reannotated", "") not in fixed_stems]
 
         total = len(annotated_files)
         if total == 0:
@@ -221,7 +221,7 @@ def _fix_annotated_files(ori_gb_folder, out_folder, temp_folder, num_pending, em
             return
 
         for i, annotated_file in enumerate(annotated_files):
-            original_file = ori_gb_folder / annotated_file.name.replace("_reannoated", "")
+            original_file = ori_gb_folder / annotated_file.name.replace("_reannotated", "")
             fix_annotated_genbank(original_file, annotated_file, emit_log)
             if (i + 1) % 100 == 0 or (i + 1) == total:
                 emit_log(f"Fixed: {i+1}/{total} - {original_file.name.replace(".gb", "")}", "INFO")

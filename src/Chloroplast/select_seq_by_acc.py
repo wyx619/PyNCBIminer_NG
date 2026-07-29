@@ -81,12 +81,23 @@ def select_seq_by_acc(
                 print(f"Error processing {file}: {error}")
 
 
-def make_tab(in_path, file_organism_name=None, on_duplicates="keep_longest"):
+def make_tab(
+    in_path,
+    enable_tnrs=False,
+    tnrs_sources=None,
+    tnrs_accuracy=None,
+    on_duplicates="keep_longest",
+    emit_log=None,
+):
+    if emit_log is None:
+        def emit_log(msg, level=None):
+            print(msg)
+
     df = pd.read_csv(Path(in_path) / "length.csv", sep=",")
-    
+
     meta_cols = {"filename", "organism", "cds_num"}
     cds_cols = [col for col in df.columns if col not in meta_cols]
-    
+
     df1 = df[["filename", "organism", "cds_num"]].copy()
     df1["length"] = df[cds_cols].sum(axis=1)
 
@@ -95,31 +106,59 @@ def make_tab(in_path, file_organism_name=None, on_duplicates="keep_longest"):
     df_organism_all.index.name = "ID"
     df_organism_all.to_csv(Path(in_path) / "organism.csv", index=True)
 
-    if file_organism_name:
-        df_rename = pd.read_csv(Path(file_organism_name))
-        required_cols = {"ID", "organism", "new_name"}
-        if set(df_rename.columns) != required_cols:
-            print(f"[WARNING] Standardization file must contain exactly columns: {required_cols}")
-            print(f"          Found columns: {set(df_rename.columns)}")
-            print("          Skipping standardization...")
+    if enable_tnrs:
+        from Chloroplast.TNRS import TNRS_cached
+
+        names = [n.strip() for n in df_organism_all["organism"].tolist()]
+        cache_dir = Path(in_path) / "tnrs_cache"
+
+        tnrs_result = TNRS_cached(
+            taxonomic_names=names,
+            sources=tnrs_sources,
+            accuracy=tnrs_accuracy,
+            cache_dir=cache_dir,
+            emit_log=emit_log,
+        )
+
+        if tnrs_result is None:
+            emit_log("TNRS failed. Aborting selection. Re-run to retry failed batches.", "WARNING")
+            return None
         else:
-            df1 = pd.merge(df1, df_rename, on="organism", how="inner")
-            df1["organism"] = df1["new_name"]
-            df1 = df1.drop(columns=["ID", "new_name"])
-            print("Organism name standardization completed")
+            resolved = tnrs_result[
+                tnrs_result["Overall_score"].notna()
+                & (tnrs_result["Overall_score"] >= (tnrs_accuracy or 0))
+                & tnrs_result["Accepted_name"].notna()
+                & (tnrs_result["Accepted_name"] != "")
+            ].copy()
+
+            rename_map = dict(
+                zip(resolved["Name_submitted"], resolved["Accepted_name"])
+            )
+
+            n_unmatched = len(names) - len(rename_map)
+            if n_unmatched > 0:
+                unmatched = [n for n in names if n not in rename_map]
+                emit_log(
+                    f"TNRS: {len(rename_map)} resolved, {n_unmatched} excluded: {unmatched[:10]}",
+                    "WARNING",
+                )
+
+            df1["organism"] = df1["organism"].map(rename_map)
+            df1 = df1.dropna(subset=["organism"])
+            emit_log(f"TNRS completed. {df1['organism'].nunique()} species retained.", "INFO")
 
     duplicate_counts = df1["organism"].value_counts().loc[lambda x: x > 1]
     if len(duplicate_counts):
         if on_duplicates == "skip":
-            print(f"Skipped {len(duplicate_counts)} duplicate organisms")
+            emit_log(f"Skipped {len(duplicate_counts)} duplicate organisms", "WARNING")
             return None
         elif on_duplicates == "keep_longest":
-            print(f"Keeping longest for {len(duplicate_counts)} duplicate organisms")
+            emit_log(f"Keeping longest for {len(duplicate_counts)} duplicate organisms", "INFO")
             return df1.loc[df1.groupby("organism")["length"].idxmax()]
         else:
             raise ValueError(f"Invalid on_duplicates: {on_duplicates}")
     else:
-        print("No duplicate samples exist.")
+        emit_log("No duplicate species.", "INFO")
         return df1.loc[df1.groupby("organism")["length"].idxmax()]
 
 

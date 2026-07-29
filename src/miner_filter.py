@@ -278,6 +278,52 @@ class Miner_filter:
         )
         df_records_info.to_csv(csv_out_path, sep="\t", index=False)
 
+    def _tnrs_correct_names(self, tnrs_sources, tnrs_accuracy, emit_log):
+        """Correct organism names via TNRS API before species-level selection."""
+        import shutil
+        from Chloroplast.TNRS import TNRS_cached
+
+        info_path = self.__in_path / "results" / self.__get_info_csv()
+        df = pd.read_csv(info_path, sep="\t")
+
+        names = [n.strip() for n in df["organism"].dropna().unique().tolist()]
+        if not names:
+            emit_log("No organism names found. Skipping TNRS.", "WARNING")
+            return
+
+        cache_dir = self.__in_path / "tnrs_cache"
+
+        tnrs_result = TNRS_cached(
+            taxonomic_names=names,
+            sources=tnrs_sources,
+            accuracy=tnrs_accuracy,
+            cache_dir=cache_dir,
+            emit_log=emit_log,
+        )
+
+        if tnrs_result is None:
+            raise RuntimeError("TNRS name resolution failed. Aborting reduce_dataset.")
+
+        resolved = tnrs_result[
+            tnrs_result["Overall_score"].notna()
+            & (tnrs_result["Overall_score"] >= (tnrs_accuracy or 0))
+            & tnrs_result["Accepted_name"].notna()
+            & (tnrs_result["Accepted_name"] != "")
+        ]
+        rename_map = dict(zip(resolved["Name_submitted"], resolved["Accepted_name"]))
+
+        backup_path = info_path.with_suffix(".txt.bak")
+        shutil.copy2(info_path, backup_path)
+
+        df["organism"] = df["organism"].map(
+            lambda x: rename_map.get(x.strip()) if isinstance(x, str) else None
+        )
+        df.to_csv(info_path, sep="\t", index=False)
+
+        n_corrected = sum(1 for n in names if n in rename_map and rename_map[n] != n)
+        n_unmatched = len(names) - len(rename_map)
+        emit_log(f"TNRS: {n_corrected}/{len(names)} names corrected, {n_unmatched} unmatched (will be excluded).", "INFO")
+
     def reduce_dataset(
         self,
         consensus_value=True,
@@ -292,6 +338,10 @@ class Miner_filter:
         ignore_gap=True,  # for exception removal
         max_insertion_length=20,
         max_insertion_num=1,  # for deletion of large inserted fragment
+        enable_tnrs=False,
+        tnrs_sources=None,
+        tnrs_accuracy=None,
+        emit_log=None,
     ):
         """to reduce the dataset by select the best representative sequence for each taxon
         ----------
@@ -302,7 +352,17 @@ class Miner_filter:
         - x   - if True, records with " x "    will be removed
         - length_threshold - sequences shorter than this value will be removed
         - ignore_gap - if True, gaps will be ignored when counting lengths of sequences
+        - enable_tnrs - if True, correct organism names via TNRS API before selection
+        - tnrs_sources - comma-separated TNRS sources (e.g. "wcvp,wfo")
+        - tnrs_accuracy - minimum TNRS matching accuracy (0 < value <= 1)
+        - emit_log - optional callback(message, level) for GUI logging
         """
+        if emit_log is None:
+            def emit_log(msg, level="INFO"):
+                print(f"[{level}] {msg}")
+
+        if enable_tnrs:
+            self._tnrs_correct_names(tnrs_sources, tnrs_accuracy, emit_log)
 
         df = pd.read_csv(self.__in_path / "results" / self.__get_info_csv(), sep="\t")
         for row_index, row in df.iterrows():

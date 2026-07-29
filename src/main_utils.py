@@ -1,4 +1,3 @@
-# *-* coding:utf-8 *-*
 import threading
 from pathlib import Path
 
@@ -703,6 +702,29 @@ class BackendController(QObject):
             self.emit_log(f"Value Error: {e}", "ERROR")
             return
 
+        enable_tnrs = False
+        tnrs_sources = None
+        tnrs_accuracy = None
+        if retrieval_interface.switch_reduce.isChecked() and retrieval_interface.filter_tnrs_switch.isChecked():
+            sources = []
+            if retrieval_interface.filter_tnrs_wfo.isChecked():
+                sources.append("wfo")
+            if retrieval_interface.filter_tnrs_wcvp.isChecked():
+                sources.append("wcvp")
+            if not sources:
+                self.emit_log("Please select at least one TNRS source", "WARNING")
+                return
+            tnrs_sources = ",".join(sources)
+            try:
+                tnrs_accuracy = float(retrieval_interface.filter_tnrs_accuracy.text().strip())
+                if not (0 < tnrs_accuracy <= 1):
+                    self.emit_log("TNRS accuracy must be > 0 and <= 1", "WARNING")
+                    return
+            except ValueError:
+                self.emit_log("Invalid TNRS accuracy value", "WARNING")
+                return
+            enable_tnrs = True
+
         action = 0
         if (
             retrieval_interface.switch_ext.isChecked()
@@ -715,7 +737,7 @@ class BackendController(QObject):
             action = 2  # reduce only
 
         if action == 0:
-            self.emit_log("Please select an option", "WARNING")
+            self.emit_log("Please select at least one option", "WARNING")
             return
 
         self.emit_log("Running Filter...")
@@ -726,6 +748,7 @@ class BackendController(QObject):
         thread = threading.Thread(
             target=call_miner_filter,
             args=(in_path, out_path, action, cons, len_thr, emit_callback),
+            kwargs={"enable_tnrs": enable_tnrs, "tnrs_sources": tnrs_sources, "tnrs_accuracy": tnrs_accuracy},
         )
         thread.daemon = True
         thread.start()
@@ -837,7 +860,7 @@ class BackendController(QObject):
                         boundaries_threshold=0.025, in_path=in_path
                     )
                     self.emit_log("Boundary trimming completed", "SUCCESS")
-                except Exception as e:
+                except (RuntimeError, ValueError, FileNotFoundError) as e:
                     self.emit_log(f"Boundary trimming failed: {e}", "ERROR")
                     return
 
@@ -951,7 +974,7 @@ class BackendController(QObject):
                 ok = run_replacement(cp_file, frag_file, out_dir, self.emit_log)
                 if not ok:
                     self.emit_log("Replacement did not complete", "WARNING")
-            except Exception as e:
+            except (FileNotFoundError, ValueError, OSError) as e:
                 self.emit_log(f"Replacement failed: {e}", "ERROR")
 
         thread = threading.Thread(target=run_replacement_thread)
@@ -1100,7 +1123,7 @@ class BackendController(QObject):
         if len(to_download) == 0:
             self.emit_log("All files already downloaded!", "SUCCESS")
             #self.emit_log("Running quality check...")
-            _, _, _, success, failed = download_gb_file(email, in_path, out_path, 10)
+            _, _, _, success, _failed = download_gb_file(email, in_path, out_path, 10)
             if success > 0:
                 self.emit_log(f"Quality check: Verified {success} files", "SUCCESS")
             return
@@ -1184,33 +1207,13 @@ class BackendController(QObject):
         thread.daemon = True
         thread.start()
 
-    def run_get_cds(self, in_folder, out_folder, threads=3):
-        from pathlib import Path
-
-        from Chloroplast.get_cds import get_cds
-
-        in_folder = Path(in_folder)
-        out_folder = Path(out_folder)
-
-        out_folder.mkdir(parents=True, exist_ok=True)
-
-        def run_cds():
-            try:
-                get_cds(str(in_folder), str(out_folder), threads)
-                self.emit_log("CDS extraction completed successfully!", "SUCCESS")
-            except Exception as e:
-                self.emit_log(f"CDS extraction failed: {e}", "WARNING")
-
-        thread = threading.Thread(target=run_cds)
-        thread.daemon = True
-        thread.start()
-
-    def run_filter_cds(
+    def run_get_and_filter_cds(
         self, in_folder, out_folder, ref_type, lower_bound, upper_bound, threads=3
     ):
         from pathlib import Path
 
         from Chloroplast.filter_seq import get_ref_dict, select_seq_by_len
+        from Chloroplast.get_cds import get_cds
 
         in_folder = Path(in_folder)
         out_folder = Path(out_folder)
@@ -1224,28 +1227,38 @@ class BackendController(QObject):
             self.emit_log(f"Invalid reference type: {ref_type}", "WARNING")
             return
 
+        extracted_folder = out_folder / "extracted"
         out_folder.mkdir(parents=True, exist_ok=True)
+        extracted_folder.mkdir(parents=True, exist_ok=True)
 
-        def run_filter():
+        def run_pipeline():
             try:
+                self.emit_log("Extracting CDS from GenBank files...", "INFO")
+                get_cds(str(in_folder), str(extracted_folder), threads)
+                self.emit_log("Filtering CDS by reference length...", "INFO")
                 select_seq_by_len(
-                    str(in_folder),
+                    str(extracted_folder),
                     str(out_folder),
                     ref_dict,
                     lower_bound,
                     upper_bound,
                     threads,
                 )
-                self.emit_log("CDS filtering completed successfully!", "SUCCESS")
+                import shutil
+                shutil.rmtree(extracted_folder, ignore_errors=True)
+                self.emit_log(
+                    "CDS extraction & filtering completed successfully!", "SUCCESS"
+                )
             except Exception as e:
-                self.emit_log(f"CDS filtering failed: {e}", "WARNING")
+                self.emit_log(f"CDS extraction & filtering failed: {e}", "WARNING")
 
-        thread = threading.Thread(target=run_filter)
+        thread = threading.Thread(target=run_pipeline)
         thread.daemon = True
         thread.start()
 
     def run_select_cds(
-        self, in_folder, out_folder, enable_tax_res=False, tax_file=None, threads=3
+        self, in_folder, out_folder, enable_tax_res=False,
+        tnrs_sources=None, tnrs_accuracy=None, threads=3
     ):
         from pathlib import Path
 
@@ -1267,8 +1280,13 @@ class BackendController(QObject):
 
         def run_select():
             try:
-                file_organism_name = tax_file if enable_tax_res and tax_file else None
-                df_organism = make_tab(str(in_folder), file_organism_name)
+                df_organism = make_tab(
+                    str(in_folder),
+                    enable_tnrs=enable_tax_res,
+                    tnrs_sources=tnrs_sources,
+                    tnrs_accuracy=tnrs_accuracy,
+                    emit_log=self.emit_log,
+                )
                 if df_organism is not None:
                     select_seq_by_acc(
                         str(in_folder),

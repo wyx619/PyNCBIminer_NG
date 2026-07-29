@@ -1,4 +1,4 @@
-# *-* coding:utf-8 *-*
+
 import sys
 from pathlib import Path
 
@@ -22,7 +22,6 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
 from qfluentwidgets import (
     BodyLabel,
     CardWidget,
@@ -47,6 +46,8 @@ from qfluentwidgets import (
     SwitchButton,
     TextEdit,
     Theme,
+    ToolTipFilter,
+    ToolTipPosition,
     setTheme,
     setThemeColor,
 )
@@ -160,15 +161,15 @@ class RetrievalInterface(QWidget):
         wd_group.addSettingCard(wd_card)
         vBoxLayout.addWidget(wd_group)
 
-        basic_group = SettingCardGroup("Basic Settings", view)
+        basic_group = SettingCardGroup("Basic BLAST Parameters", view)
 
         tax_card = CardWidget(view)
         tax_card.setFixedHeight(150)
         tax_layout = QVBoxLayout(tax_card)
         tax_layout.setContentsMargins(15, 10, 15, 15)
-        tax_layout.addWidget(BodyLabel("Target Groups (Taxonomy):"))
+        tax_layout.addWidget(BodyLabel("Target Taxa:"))
         self.tax_edit = PlainTextEdit(tax_card)
-        self.tax_edit.setPlaceholderText("One taxon per line")
+        self.tax_edit.setPlaceholderText("Enter taxon names (one per line)")
         self.tax_edit.setFixedHeight(100)
         tax_layout.addWidget(self.tax_edit)
         basic_group.addSettingCard(tax_card)
@@ -401,7 +402,7 @@ class RetrievalInterface(QWidget):
         grp = SettingCardGroup("Filtering Parameters", w)
 
         card_opts = CardWidget()
-        card_opts.setFixedHeight(220)
+        card_opts.setFixedHeight(260)
         l_opts = QVBoxLayout(card_opts)
         l_opts.setContentsMargins(15, 10, 15, 10)
 
@@ -409,6 +410,7 @@ class RetrievalInterface(QWidget):
         self.switch_ext = SwitchButton(card_opts)
         self.switch_ext.setChecked(True)
         lbl_ext = BodyLabel("Extended Segments Refinement:")
+
         lbl_ext.setToolTip(
             "Trims potentially non-homologous regions introduced by sequence extension.\n"
             "1) Split by genus; \n"
@@ -420,12 +422,12 @@ class RetrievalInterface(QWidget):
         row1.addWidget(self.switch_ext)
         row1.addStretch()
         l_opts.addLayout(row1)
-
+        self.switch_ext.setFixedHeight(35)
         row2 = QHBoxLayout()
         self.switch_reduce = SwitchButton(card_opts)
         self.switch_reduce.setChecked(False)
         self.switch_reduce.checkedChanged.connect(self.on_switch_reduce_changed)
-        lbl_select = BodyLabel("Species-level Sequence Selection")
+        lbl_select = BodyLabel("Species-level Sequence Selection:")
         lbl_select.setToolTip(
             "Select one representative sequence per species.\n"
             "Method 1 (Abnormality Index): compares each sequence to the species consensus;\n"
@@ -434,9 +436,10 @@ class RetrievalInterface(QWidget):
         )
         row2.addWidget(lbl_select)
         row2.addWidget(self.switch_reduce)
+        row2.addStretch(1)
 
-        row2.addSpacing(40)
-        self.chk_consensus = CheckBox("Abnormal Index", card_opts)
+        #row2.addSpacing(40)
+        self.chk_consensus = CheckBox("Abnormal Index:", card_opts)
         self.chk_consensus.setToolTip(
             "Calculates consensus sequence per species via MAFFT alignment,\n"
             "then scores each sequence by pairwise identity (PI) against the consensus.\n"
@@ -445,7 +448,8 @@ class RetrievalInterface(QWidget):
         self.chk_consensus.setChecked(True)
         self.chk_consensus.setEnabled(False)
         row2.addWidget(self.chk_consensus)
-        row2.addSpacing(40)
+        row2.addStretch(1)
+        #row2.addSpacing(40)
         lbl_len = BodyLabel("Length Threshold:")
         lbl_len.setToolTip(
             "Minimum non-ambiguous (A/T/C/G) base count for a sequence to be retained.\n"
@@ -455,9 +459,54 @@ class RetrievalInterface(QWidget):
         self.len_thresh = LineEdit()
         self.len_thresh.setText("100")
         self.len_thresh.setEnabled(False)
-        # self.len_thresh.setFixedWidth(240)
+        self.len_thresh.setMinimumWidth(80)
         row2.addWidget(self.len_thresh)
         l_opts.addLayout(row2)
+
+        row_tnrs = QHBoxLayout()
+        lbl_tnrs = BodyLabel("Taxonomic Name Resolution:")
+        lbl_tnrs.setToolTip(
+            "Enable online scientific-name standardization via TNRS API\n"
+            "before species-level selection. Unmatched names keep original values."
+        )
+        row_tnrs.addWidget(lbl_tnrs)
+        self.filter_tnrs_switch = SwitchButton(card_opts)
+        self.filter_tnrs_switch.setChecked(False)
+        self.filter_tnrs_switch.setEnabled(False)
+        self.filter_tnrs_switch.checkedChanged.connect(self.on_filter_tnrs_switch_changed)
+        row_tnrs.addWidget(self.filter_tnrs_switch)
+        row_tnrs.addStretch(1)
+
+        lbl_filter_tnrs_src = BodyLabel("Source:")
+        lbl_filter_tnrs_src.setToolTip(
+            "TNRS data sources for name resolution.\n"
+            "wcvp: World Checklist of Vascular Plants (Kew);\n"
+            "wfo: World Flora Online. At least one required."
+        )
+        row_tnrs.addWidget(lbl_filter_tnrs_src)
+        self.filter_tnrs_wfo = CheckBox("wfo", card_opts)
+        self.filter_tnrs_wfo.setChecked(False)
+        self.filter_tnrs_wfo.setEnabled(False)
+        self.filter_tnrs_wcvp = CheckBox("wcvp", card_opts)
+        self.filter_tnrs_wcvp.setChecked(True)
+        self.filter_tnrs_wcvp.setEnabled(False)
+        row_tnrs.addWidget(self.filter_tnrs_wfo)
+        row_tnrs.addWidget(self.filter_tnrs_wcvp)
+        row_tnrs.addStretch(1)
+
+        lbl_filter_tnrs_acc = BodyLabel("Accuracy:")
+        lbl_filter_tnrs_acc.setToolTip(
+            "Minimum matching accuracy (0 < value <= 1).\n"
+            "Higher values require stricter name matches. Default 0.9."
+        )
+        row_tnrs.addWidget(lbl_filter_tnrs_acc)
+        self.filter_tnrs_accuracy = LineEdit()
+        self.filter_tnrs_accuracy.setText("0.9")
+        self.filter_tnrs_accuracy.setMinimumWidth(80)
+        self.filter_tnrs_accuracy.setEnabled(False)
+        row_tnrs.addWidget(self.filter_tnrs_accuracy)
+        #row_tnrs.addStretch(1)
+        l_opts.addLayout(row_tnrs)
 
         row3 = QHBoxLayout()
         self.filter_in = LineEdit()
@@ -467,8 +516,8 @@ class RetrievalInterface(QWidget):
         btn_in = PushButton("Browse")
         btn_in.setIcon(FIF.FOLDER)
         btn_in.clicked.connect(lambda: self.browse_dir(self.filter_in))
-        lbl_in = BodyLabel("Input Path:")
-        lbl_in.setFixedWidth(100)
+        lbl_in = BodyLabel("Input Directory:")
+        lbl_in.setFixedWidth(150)
         row3.addWidget(lbl_in)
         row3.addWidget(self.filter_in, 1)
         row3.addWidget(btn_in)
@@ -480,8 +529,8 @@ class RetrievalInterface(QWidget):
         btn_out = PushButton("Browse")
         btn_out.setIcon(FIF.FOLDER)
         btn_out.clicked.connect(lambda: self.browse_dir(self.filter_out))
-        lbl_out = BodyLabel("Output Path:")
-        lbl_out.setFixedWidth(100)
+        lbl_out = BodyLabel("Output Directory:")
+        lbl_out.setFixedWidth(150)
         row4.addWidget(lbl_out)
         row4.addWidget(self.filter_out, 1)
         row4.addWidget(btn_out)
@@ -500,6 +549,17 @@ class RetrievalInterface(QWidget):
     def on_switch_reduce_changed(self, checked):
         self.len_thresh.setEnabled(checked)
         self.chk_consensus.setEnabled(checked)
+        self.filter_tnrs_switch.setEnabled(checked)
+        if not checked:
+            self.filter_tnrs_switch.setChecked(False)
+            self.filter_tnrs_wfo.setEnabled(False)
+            self.filter_tnrs_wcvp.setEnabled(False)
+            self.filter_tnrs_accuracy.setEnabled(False)
+
+    def on_filter_tnrs_switch_changed(self, checked):
+        self.filter_tnrs_wfo.setEnabled(checked)
+        self.filter_tnrs_wcvp.setEnabled(checked)
+        self.filter_tnrs_accuracy.setEnabled(checked)
 
     def browse_dir(self, line_edit):
         path = QFileDialog.getExistingDirectory(self, "Select Directory")
@@ -582,7 +642,7 @@ class ConstructionInterface(QWidget):
         lbl_cp.setFixedWidth(label_w)
         lbl_frag = BodyLabel("Gene from DNAseqs:")
         lbl_frag.setFixedWidth(label_w)
-        lbl_out = BodyLabel("Output Folder:")
+        lbl_out = BodyLabel("Output Directory:")
         lbl_out.setFixedWidth(label_w)
 
         self.replace_cp_file = LineEdit()
@@ -886,14 +946,14 @@ class ConstructionInterface(QWidget):
         btn_out.clicked.connect(lambda: self.browse_dir(self.concat_out))
 
         h1 = QHBoxLayout()
-        lbl_concat_in = BodyLabel("Input Folder:")
+        lbl_concat_in = BodyLabel("Input Directory:")
         lbl_concat_in.setFixedWidth(120)
         h1.addWidget(lbl_concat_in)
         h1.addWidget(self.concat_in)
         h1.addWidget(btn_in)
 
         h2 = QHBoxLayout()
-        lbl_concat_out = BodyLabel("Output Folder:")
+        lbl_concat_out = BodyLabel("Output Directory:")
         lbl_concat_out.setFixedWidth(120)
         h2.addWidget(lbl_concat_out)
         h2.addWidget(self.concat_out)
@@ -1004,6 +1064,14 @@ class ChloroplastMinerInterface(QWidget):
         layout.setSpacing(6)
 
         grp_search_dl = SettingCardGroup("Search & Download", view)
+        grp_search_dl.titleLabel.setToolTip(
+            "Search NCBI for plastid genomes by taxon names and batch download GenBank files.\n"
+            "Query: taxon[Organism] AND (plastid OR chloroplast) AND SLEN range,\n"
+            "excluding mitochondrion/chromosome titles. Optionally filter by date range."
+        )
+        grp_search_dl.titleLabel.installEventFilter(
+            ToolTipFilter(grp_search_dl.titleLabel, showDelay=300, position=ToolTipPosition.BOTTOM_LEFT)
+        )
 
         card = CardWidget()
         card.setFixedHeight(200)
@@ -1103,6 +1171,14 @@ class ChloroplastMinerInterface(QWidget):
         layout.addSpacing(14)
 
         grp_prefilter = SettingCardGroup("Pre-filter", view)
+        grp_prefilter.titleLabel.setToolTip(
+            "Remove redundant genomes before downstream analysis.\n"
+            "Optionally merge at species level and retain only the top N\n"
+            "longest genomes per taxon to reduce redundancy."
+        )
+        grp_prefilter.titleLabel.installEventFilter(
+            ToolTipFilter(grp_prefilter.titleLabel, showDelay=300, position=ToolTipPosition.BOTTOM_LEFT)
+        )
 
         card_prefilter = CardWidget()
         card_prefilter.setFixedHeight(100)
@@ -1157,7 +1233,12 @@ class ChloroplastMinerInterface(QWidget):
         right_col.addStretch()
 
         row_species = QHBoxLayout()
-        row_species.addWidget(BodyLabel("Species Level Merge:"))
+        lbl_species_merge = BodyLabel("Species Level Merge:")
+        lbl_species_merge.setToolTip(
+            "When enabled, group records by species (not just genus)\n"
+            "before selecting representative genomes."
+        )
+        row_species.addWidget(lbl_species_merge)
         row_species.addStretch()
         self.prefilter_species_switch = SwitchButton()
         self.prefilter_species_switch.setChecked(True)
@@ -1166,6 +1247,10 @@ class ChloroplastMinerInterface(QWidget):
 
         row_keep = QHBoxLayout()
         self.prefilter_keep_label = BodyLabel("Records Per Taxon:")
+        self.prefilter_keep_label.setToolTip(
+            "Maximum number of genomes to retain per taxon.\n"
+            "Longest sequences are kept; the rest are discarded. Default 3."
+        )
         row_keep.addWidget(self.prefilter_keep_label)
         row_keep.addStretch()
         self.prefilter_keep_edit = LineEdit()
@@ -1204,6 +1289,14 @@ class ChloroplastMinerInterface(QWidget):
         layout.setContentsMargins(5, 20, 5, 20)
 
         grp = SettingCardGroup("Extract Info & Quality Control", w)
+        grp.titleLabel.setToolTip(
+            "Extract genome metadata and flag problematic genomes.\n"
+            "Genomes with too few CDS features or excessive ambiguous bases (N)\n"
+            "are exported as FASTA for reannotation via PGA."
+        )
+        grp.titleLabel.installEventFilter(
+            ToolTipFilter(grp.titleLabel, showDelay=300, position=ToolTipPosition.BOTTOM_LEFT)
+        )
 
         card = CardWidget()
         card.setFixedHeight(160)
@@ -1249,10 +1342,19 @@ class ChloroplastMinerInterface(QWidget):
         h_threshold = QHBoxLayout()
         lbl_cds_thresh = BodyLabel("CDS Threshold:")
         lbl_cds_thresh.setFixedWidth(130)
+        lbl_cds_thresh.setToolTip(
+            "Minimum number of CDS features required.\n"
+            "Genomes with fewer CDS are flagged as problematic. Default 75."
+        )
         h_threshold.addWidget(lbl_cds_thresh)
         h_threshold.addWidget(self.chloro_cds_thresh)
         h_threshold.addStretch()
-        h_threshold.addWidget(BodyLabel("Ambiguity Threshold:"))
+        lbl_ambig_thresh = BodyLabel("Ambiguity Threshold:")
+        lbl_ambig_thresh.setToolTip(
+            "Maximum allowed fraction of ambiguous bases (N).\n"
+            "Genomes exceeding this ratio are flagged. Default 0.1 (10%)."
+        )
+        h_threshold.addWidget(lbl_ambig_thresh)
         h_threshold.addWidget(self.chloro_ambig_thresh)
         card_layout.addLayout(h_threshold)
 
@@ -1266,6 +1368,14 @@ class ChloroplastMinerInterface(QWidget):
         layout.addWidget(self.btn_chloro_qc_extract)
 
         grp_pga = SettingCardGroup("Plastid Genome Annotator", w)
+        grp_pga.titleLabel.setToolTip(
+            "Reannotate problematic genomes using PGA (Plastid Genome Annotator).\n"
+            "Select a clade-specific reference set or provide a custom directory\n"
+            "of reference GenBank files for homology-based annotation."
+        )
+        grp_pga.titleLabel.installEventFilter(
+            ToolTipFilter(grp_pga.titleLabel, showDelay=300, position=ToolTipPosition.BOTTOM_LEFT)
+        )
 
         card_pga = CardWidget()
         card_pga.setFixedHeight(130)
@@ -1304,9 +1414,20 @@ class ChloroplastMinerInterface(QWidget):
         self.btn_chloro_pga_ref.clicked.connect(
             lambda: self.browse_folder(self.chloro_pga_ref)
         )
-        h_pga_ref.addWidget(BodyLabel("Clades:"))
+        lbl_pga_clade = BodyLabel("Clades:")
+        lbl_pga_clade.setToolTip(
+            "Reference annotation set for PGA.\n"
+            "Angiosperms / Gymnosperms use built-in references;\n"
+            "User defined requires a custom reference genome directory."
+        )
+        lbl_pga_ref = BodyLabel("Reference Genome:")
+        lbl_pga_ref.setToolTip(
+            "Directory of reference GenBank files for PGA.\n"
+            "Only enabled when Clades is set to User defined."
+        )
+        h_pga_ref.addWidget(lbl_pga_clade)
         h_pga_ref.addWidget(self.chloro_pga_clade)
-        h_pga_ref.addWidget(BodyLabel("Reference Genome:"))
+        h_pga_ref.addWidget(lbl_pga_ref)
         h_pga_ref.addWidget(self.chloro_pga_ref)
         h_pga_ref.addWidget(self.btn_chloro_pga_ref)
         card_pga_layout.addLayout(h_pga_ref)
@@ -1328,127 +1449,118 @@ class ChloroplastMinerInterface(QWidget):
         self.cds_view = QWidget()
         self.cds_view.setObjectName("cds_view")
         layout = QVBoxLayout(self.cds_view)
-        layout.setContentsMargins(5, 20, 20, 20)
+        layout.setContentsMargins(5, 20, 5, 20)
         layout.setSpacing(6)
 
-        grp_get = SettingCardGroup("Get CDS", self.cds_view)
+        grp_gf = SettingCardGroup("Get & Filter CDS", self.cds_view)
+        grp_gf.titleLabel.setToolTip(
+            "Extract plastid CDS/rRNA from GenBank files and filter by reference length.\n"
+            "1) Map features to the standard ~80-gene plastid set;\n"
+            "2) Discard sequences outside [Lower Bound, Upper Bound] x reference length;\n"
+            "3) Write filtered FASTA files and length.csv for downstream selection."
+        )
+        grp_gf.titleLabel.installEventFilter(
+            ToolTipFilter(grp_gf.titleLabel, showDelay=300, position=ToolTipPosition.BOTTOM_LEFT)
+        )
 
-        card_get = CardWidget()
-        card_get.setFixedHeight(120)
-        card_get_layout = QVBoxLayout(card_get)
-        card_get_layout.setContentsMargins(15, 10, 15, 10)
+        card_gf = CardWidget()
+        card_gf.setFixedHeight(165)
+        card_gf_layout = QVBoxLayout(card_gf)
+        card_gf_layout.setContentsMargins(15, 10, 15, 10)
 
-        h_get_input = QHBoxLayout()
-        self.cds_get_in = LineEdit()
-        self.cds_get_in.setPlaceholderText(
+        h_gf_input = QHBoxLayout()
+        self.cds_gf_in = LineEdit()
+        self.cds_gf_in.setPlaceholderText(
             "Input directory containing filtered GenBank files"
         )
-        btn_cds_get_in = PushButton("Browse")
-        btn_cds_get_in.setIcon(FIF.FOLDER)
-        btn_cds_get_in.clicked.connect(lambda: self.browse_folder(self.cds_get_in))
-        lbl_get_in = BodyLabel("Input Directory:")
-        lbl_get_in.setFixedWidth(130)
-        h_get_input.addWidget(lbl_get_in)
-        h_get_input.addWidget(self.cds_get_in)
-        h_get_input.addWidget(btn_cds_get_in)
-        card_get_layout.addLayout(h_get_input)
-
-        h_get_output = QHBoxLayout()
-        self.cds_get_out = LineEdit()
-        self.cds_get_out.setPlaceholderText("Output directory for CDS files")
-        self.cds_get_out.textChanged.connect(self.on_cds_get_out_changed)
-        btn_cds_get_out = PushButton("Browse")
-        btn_cds_get_out.setIcon(FIF.FOLDER)
-        btn_cds_get_out.clicked.connect(
-            lambda: self.browse_folder(self.cds_get_out, self.cds_filter_in)
+        self.chloro_qc_in.textChanged.connect(
+            lambda text: self.cds_gf_in.setText(text) if text else None
         )
-        lbl_get_out = BodyLabel("Output Directory:")
-        lbl_get_out.setFixedWidth(130)
-        h_get_output.addWidget(lbl_get_out)
-        h_get_output.addWidget(self.cds_get_out)
-        h_get_output.addWidget(btn_cds_get_out)
-        card_get_layout.addLayout(h_get_output)
+        btn_cds_gf_in = PushButton("Browse")
+        btn_cds_gf_in.setIcon(FIF.FOLDER)
+        btn_cds_gf_in.clicked.connect(lambda: self.browse_folder(self.cds_gf_in))
+        lbl_gf_in = BodyLabel("Input Directory:")
+        lbl_gf_in.setFixedWidth(130)
+        h_gf_input.addWidget(lbl_gf_in)
+        h_gf_input.addWidget(self.cds_gf_in)
+        h_gf_input.addWidget(btn_cds_gf_in)
+        card_gf_layout.addLayout(h_gf_input)
 
-        grp_get.addSettingCard(card_get)
-        layout.addWidget(grp_get)
-
-        self.btn_cds_get = PrimaryPushButton("Extract CDS", self.cds_view)
-        self.btn_cds_get.setIcon(FIF.CODE)
-        self.btn_cds_get.clicked.connect(self.on_cds_get_extract)
-        layout.addWidget(self.btn_cds_get)
-        layout.addSpacing(14)
-
-        grp_filter = SettingCardGroup("Filter CDS", self.cds_view)
-
-        card_filter = CardWidget()
-        card_filter.setFixedHeight(165)
-        card_filter_layout = QVBoxLayout(card_filter)
-        card_filter_layout.setContentsMargins(15, 10, 15, 10)
-
-        h_filter_input = QHBoxLayout()
-        self.cds_filter_in = LineEdit()
-        self.cds_filter_in.setPlaceholderText("Input directory containing CDS files")
-        btn_cds_filter_in = PushButton("Browse")
-        btn_cds_filter_in.setIcon(FIF.FOLDER)
-        btn_cds_filter_in.clicked.connect(
-            lambda: self.browse_folder(self.cds_filter_in)
-        )
-        lbl_filter_in = BodyLabel("Input Directory:")
-        lbl_filter_in.setFixedWidth(130)
-        h_filter_input.addWidget(lbl_filter_in)
-        h_filter_input.addWidget(self.cds_filter_in)
-        h_filter_input.addWidget(btn_cds_filter_in)
-        card_filter_layout.addLayout(h_filter_input)
-
-        h_filter_output = QHBoxLayout()
-        self.cds_filter_out = LineEdit()
-        self.cds_filter_out.setPlaceholderText(
+        h_gf_output = QHBoxLayout()
+        self.cds_gf_out = LineEdit()
+        self.cds_gf_out.setPlaceholderText(
             "Output directory for filtered CDS files"
         )
-        self.cds_filter_out.textChanged.connect(self.on_cds_filter_out_changed)
-        btn_cds_filter_out = PushButton("Browse")
-        btn_cds_filter_out.setIcon(FIF.FOLDER)
-        btn_cds_filter_out.clicked.connect(
-            lambda: self.browse_folder(self.cds_filter_out, self.cds_select_in)
+        self.cds_gf_out.textChanged.connect(self.on_cds_gf_out_changed)
+        btn_cds_gf_out = PushButton("Browse")
+        btn_cds_gf_out.setIcon(FIF.FOLDER)
+        btn_cds_gf_out.clicked.connect(
+            lambda: self.browse_folder(self.cds_gf_out, self.cds_select_in)
         )
-        lbl_filter_out = BodyLabel("Output Directory:")
-        lbl_filter_out.setFixedWidth(130)
-        h_filter_output.addWidget(lbl_filter_out)
-        h_filter_output.addWidget(self.cds_filter_out)
-        h_filter_output.addWidget(btn_cds_filter_out)
-        card_filter_layout.addLayout(h_filter_output)
+        lbl_gf_out = BodyLabel("Output Directory:")
+        lbl_gf_out.setFixedWidth(130)
+        h_gf_output.addWidget(lbl_gf_out)
+        h_gf_output.addWidget(self.cds_gf_out)
+        h_gf_output.addWidget(btn_cds_gf_out)
+        card_gf_layout.addLayout(h_gf_output)
 
-        h_filter_params = QHBoxLayout()
-        self.cds_filter_ref = ComboBox()
-        self.cds_filter_ref.addItems(["Angiosperms", "Gymnosperms"])
+        h_gf_params = QHBoxLayout()
+        self.cds_gf_ref = ComboBox()
+        self.cds_gf_ref.addItems(["Angiosperms", "Gymnosperms"])
+        self.cds_gf_ref.setCurrentIndex(0)
+        self.cds_gf_lb = LineEdit()
+        self.cds_gf_lb.setText("0.5")
+        self.cds_gf_ub = LineEdit()
+        self.cds_gf_ub.setText("2.0")
 
-        self.cds_filter_ref.setCurrentIndex(0)
-        self.cds_filter_lb = LineEdit()
-        self.cds_filter_lb.setText("0.5")
+        lbl_gf_ref = BodyLabel("Reference:")
+        lbl_gf_ref.setToolTip(
+            "Reference plastid gene length table used for filtering.\n"
+            "Angiosperms: typical flowering-plant CDS lengths;\n"
+            "Gymnosperms: typical gymnosperm CDS lengths.\n"
+            "Genes absent from the reference table are not length-filtered."
+        )
+        lbl_gf_lb = BodyLabel("Lower Bound:")
+        lbl_gf_lb.setToolTip(
+            "Minimum length as a fraction of the reference gene length.\n"
+            "Default 0.5 retains sequences >= 50% of the reference length.\n"
+            "Sequences shorter than this threshold are discarded."
+        )
+        lbl_gf_ub = BodyLabel("Upper Bound:")
+        lbl_gf_ub.setToolTip(
+            "Maximum length as a fraction of the reference gene length.\n"
+            "Default 2.0 retains sequences <= 200% of the reference length.\n"
+            "Sequences longer than this threshold are discarded."
+        )
+        h_gf_params.addWidget(lbl_gf_ref)
+        h_gf_params.addWidget(self.cds_gf_ref)
+        h_gf_params.addStretch(1)
+        h_gf_params.addWidget(lbl_gf_lb)
+        h_gf_params.addWidget(self.cds_gf_lb)
+        h_gf_params.addStretch(1)
+        h_gf_params.addWidget(lbl_gf_ub)
+        h_gf_params.addWidget(self.cds_gf_ub)
+        card_gf_layout.addLayout(h_gf_params)
 
-        self.cds_filter_ub = LineEdit()
-        self.cds_filter_ub.setText("2.0")
+        grp_gf.addSettingCard(card_gf)
+        layout.addWidget(grp_gf)
 
-        h_filter_params.addWidget(BodyLabel("Reference:"))
-        h_filter_params.addWidget(self.cds_filter_ref)
-        h_filter_params.addStretch(1)
-        h_filter_params.addWidget(BodyLabel("Lower Bound:"))
-        h_filter_params.addWidget(self.cds_filter_lb)
-        h_filter_params.addStretch(1)
-        h_filter_params.addWidget(BodyLabel("Upper Bound:"))
-        h_filter_params.addWidget(self.cds_filter_ub)
-        card_filter_layout.addLayout(h_filter_params)
-
-        grp_filter.addSettingCard(card_filter)
-        layout.addWidget(grp_filter)
-
-        self.btn_cds_filter = PrimaryPushButton("Filter CDS", self.cds_view)
-        self.btn_cds_filter.setIcon(FIF.FILTER)
-        self.btn_cds_filter.clicked.connect(self.on_cds_filter_extract)
-        layout.addWidget(self.btn_cds_filter)
+        self.btn_cds_gf = PrimaryPushButton("Get & Filter CDS", self.cds_view)
+        self.btn_cds_gf.setIcon(FIF.FILTER)
+        self.btn_cds_gf.clicked.connect(self.on_cds_get_filter)
+        layout.addWidget(self.btn_cds_gf)
         layout.addSpacing(14)
 
-        grp_select = SettingCardGroup("Select CDS", self.cds_view)
+        grp_select = SettingCardGroup("Species-level CDS Selection", self.cds_view)
+        grp_select.titleLabel.setToolTip(
+            "Select one representative plastid genome per species.\n"
+            "For each species, keep the accession with the longest total CDS length;\n"
+            "optionally standardize organism names via CSV (inner join; unmatched excluded).\n"
+            "Output headers are rewritten as accession|species_name."
+        )
+        grp_select.titleLabel.installEventFilter(
+            ToolTipFilter(grp_select.titleLabel, showDelay=300, position=ToolTipPosition.BOTTOM_LEFT)
+        )
 
         card_select = CardWidget()
         card_select.setFixedHeight(160)
@@ -1491,37 +1603,59 @@ class ChloroplastMinerInterface(QWidget):
         card_select_layout.addLayout(h_select_output)
 
         h_select_tax = QHBoxLayout()
-        h_select_tax.addWidget(BodyLabel("Taxonomic Name Resolution:"))
+        lbl_select_tax = BodyLabel("Taxonomic Name Resolution:")
+        lbl_select_tax.setToolTip(
+            "Enable online scientific-name standardization via TNRS API\n"
+            "before species-level selection. Unmatched species are excluded."
+        )
+        h_select_tax.addWidget(lbl_select_tax)
         self.cds_select_tax_switch = SwitchButton()
         self.cds_select_tax_switch.setChecked(False)
         h_select_tax.addWidget(self.cds_select_tax_switch)
-        h_select_tax.addSpacing(10)
-        h_select_tax.addWidget(BodyLabel("Resolution Source:"))
-        self.cds_select_tax_file = LineEdit()
-        self.cds_select_tax_file.setPlaceholderText("Select file (.csv) [ID , organism , new_name]")
-        self.cds_select_tax_file.setEnabled(False)
+        h_select_tax.addStretch(1)
 
-        btn_cds_select_tax_file = PushButton("Browse")
-        btn_cds_select_tax_file.setIcon(FIF.FOLDER)
-        btn_cds_select_tax_file.setEnabled(False)
-        btn_cds_select_tax_file.clicked.connect(
-            lambda: self.browse_csv_file(self.cds_select_tax_file)
+        lbl_tnrs_src = BodyLabel("Source:")
+        lbl_tnrs_src.setToolTip(
+            "TNRS data sources for name resolution.\n"
+            "wcvp: World Checklist of Vascular Plants (Kew);\n"
+            "wfo: World Flora Online. At least one required."
         )
-        h_select_tax.addWidget(self.cds_select_tax_file)
-        h_select_tax.addWidget(btn_cds_select_tax_file)
+        h_select_tax.addWidget(lbl_tnrs_src)
+        self.cds_tnrs_wfo = CheckBox("wfo")
+        self.cds_tnrs_wfo.setChecked(False)
+        self.cds_tnrs_wfo.setEnabled(False)
+        self.cds_tnrs_wcvp = CheckBox("wcvp")
+        self.cds_tnrs_wcvp.setChecked(True)
+        self.cds_tnrs_wcvp.setEnabled(False)
+        h_select_tax.addWidget(self.cds_tnrs_wfo)
+        h_select_tax.addWidget(self.cds_tnrs_wcvp)
+        h_select_tax.addStretch(1)
+
+        lbl_tnrs_acc = BodyLabel("Accuracy:")
+        lbl_tnrs_acc.setToolTip(
+            "Minimum matching accuracy (0 < value <= 1).\n"
+            "Higher values require stricter name matches. Default 0.9."
+        )
+        h_select_tax.addWidget(lbl_tnrs_acc)
+        self.cds_tnrs_accuracy = LineEdit()
+        self.cds_tnrs_accuracy.setText("0.9")
+        self.cds_tnrs_accuracy.setMinimumWidth(120)
+        self.cds_tnrs_accuracy.setEnabled(False)
+        h_select_tax.addWidget(self.cds_tnrs_accuracy)
+        #h_select_tax.addStretch(1)
         card_select_layout.addLayout(h_select_tax)
 
-        self.cds_select_tax_switch.checkedChanged.connect(
-            lambda checked: self.cds_select_tax_file.setEnabled(checked)
-        )
-        self.cds_select_tax_switch.checkedChanged.connect(
-            lambda checked: btn_cds_select_tax_file.setEnabled(checked)
-        )
+        def _on_tax_switch(checked):
+            self.cds_tnrs_wfo.setEnabled(checked)
+            self.cds_tnrs_wcvp.setEnabled(checked)
+            self.cds_tnrs_accuracy.setEnabled(checked)
+
+        self.cds_select_tax_switch.checkedChanged.connect(_on_tax_switch)
 
         grp_select.addSettingCard(card_select)
         layout.addWidget(grp_select)
 
-        self.btn_cds_select = PrimaryPushButton("Select CDS", self.cds_view)
+        self.btn_cds_select = PrimaryPushButton("Species-level CDS Selection", self.cds_view)
         self.btn_cds_select.setIcon(FIF.TAG)
         self.btn_cds_select.clicked.connect(self.on_cds_select_extract)
         layout.addWidget(self.btn_cds_select)
@@ -1720,9 +1854,9 @@ class ChloroplastMinerInterface(QWidget):
             in_folder, out_folder, cds_threshold, ambig_threshold
         )
 
-    def on_cds_get_extract(self):
-        in_folder = self.cds_get_in.text().strip()
-        out_folder = self.cds_get_out.text().strip()
+    def on_cds_get_filter(self):
+        in_folder = self.cds_gf_in.text().strip()
+        out_folder = self.cds_gf_out.text().strip()
 
         if not in_folder or not out_folder:
             self.main_window.backend.emit_log(
@@ -1730,24 +1864,11 @@ class ChloroplastMinerInterface(QWidget):
             )
             return
 
-        self.main_window.backend.emit_log("CDS extraction started...", "INFO")
-        self.main_window.backend.run_get_cds(in_folder, out_folder)
-
-    def on_cds_filter_extract(self):
-        in_folder = self.cds_filter_in.text().strip()
-        out_folder = self.cds_filter_out.text().strip()
-
-        if not in_folder or not out_folder:
-            self.main_window.backend.emit_log(
-                "Please select both input and output directories", "WARNING"
-            )
-            return
-
-        ref_text = self.cds_filter_ref.currentText()
+        ref_text = self.cds_gf_ref.currentText()
         ref_type = "Ang" if ref_text == "Angiosperms" else "Gym"
 
         try:
-            lower_bound = float(self.cds_filter_lb.text().strip())
+            lower_bound = float(self.cds_gf_lb.text().strip())
             if lower_bound <= 0:
                 self.main_window.backend.emit_log(
                     "Lower bound must be a positive number", "WARNING"
@@ -1758,7 +1879,7 @@ class ChloroplastMinerInterface(QWidget):
             return
 
         try:
-            upper_bound = float(self.cds_filter_ub.text().strip())
+            upper_bound = float(self.cds_gf_ub.text().strip())
             if upper_bound <= 0:
                 self.main_window.backend.emit_log(
                     "Upper bound must be a positive number", "WARNING"
@@ -1774,8 +1895,8 @@ class ChloroplastMinerInterface(QWidget):
             )
             return
 
-        self.main_window.backend.emit_log("CDS filtering started...", "INFO")
-        self.main_window.backend.run_filter_cds(
+        self.main_window.backend.emit_log("CDS extraction & filtering started...", "INFO")
+        self.main_window.backend.run_get_and_filter_cds(
             in_folder, out_folder, ref_type, lower_bound, upper_bound
         )
 
@@ -1790,24 +1911,41 @@ class ChloroplastMinerInterface(QWidget):
             return
 
         enable_tax_res = self.cds_select_tax_switch.isChecked()
-        tax_file = self.cds_select_tax_file.text().strip() if enable_tax_res else None
+        tnrs_sources = None
+        tnrs_accuracy = None
 
-        if enable_tax_res and not tax_file:
-            self.main_window.backend.emit_log(
-                "Please select a taxonomic name resolution file", "WARNING"
-            )
-            return
+        if enable_tax_res:
+            sources = []
+            if self.cds_tnrs_wfo.isChecked():
+                sources.append("wfo")
+            if self.cds_tnrs_wcvp.isChecked():
+                sources.append("wcvp")
+            if not sources:
+                self.main_window.backend.emit_log(
+                    "Please select at least one TNRS source", "WARNING"
+                )
+                return
+            tnrs_sources = ",".join(sources)
+
+            try:
+                tnrs_accuracy = float(self.cds_tnrs_accuracy.text().strip())
+                if not (0 < tnrs_accuracy <= 1):
+                    self.main_window.backend.emit_log(
+                        "Accuracy must be > 0 and <= 1", "WARNING"
+                    )
+                    return
+            except ValueError:
+                self.main_window.backend.emit_log(
+                    "Invalid accuracy value", "WARNING"
+                )
+                return
 
         self.main_window.backend.emit_log("CDS selection started...", "INFO")
         self.main_window.backend.run_select_cds(
-            in_folder, out_folder, enable_tax_res, tax_file
+            in_folder, out_folder, enable_tax_res, tnrs_sources, tnrs_accuracy
         )
 
-    def on_cds_get_out_changed(self, text):
-        if text:
-            self.cds_filter_in.setText(text)
-
-    def on_cds_filter_out_changed(self, text):
+    def on_cds_gf_out_changed(self, text):
         if text:
             self.cds_select_in.setText(text)
 
@@ -2011,7 +2149,8 @@ class MainWindow(FluentWindow):
         self.setWindowIcon(QIcon(get_resource_path("icons/app_icon.ico")))
         self.navigationInterface.setExpandWidth(180)
 
-        self.setMinimumWidth(600)
+        self.setMinimumWidth(850)
+        #self.setMinimumHeight(70)
 
         self.resize(1100, 750)
         screen = QApplication.primaryScreen()
@@ -2037,7 +2176,7 @@ class MainWindow(FluentWindow):
             self.chloroplast_miner_interface, FIF.LEAF, "Chloroplast"
         )
         self.addSubInterface(
-            self.construction_interface, FIF.APPLICATION, "Matrix"
+            self.construction_interface, FIF.APPLICATION, "Supermatrix"
         )
         self.addSubInterface(
             self.dependencies_interface, FIF.SETTING, "Settings"

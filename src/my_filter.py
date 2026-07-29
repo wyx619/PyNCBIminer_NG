@@ -106,7 +106,8 @@ def put_filtered_seq_together(wd_list, out_path):
     print("All filtered sequences are into ‘filtered_seqs’ folder")
 
 
-def call_miner_filter(in_path, out_path, action, consensus_value, len_shresh, emit_log_callback=None):
+def call_miner_filter(in_path, out_path, action, consensus_value, len_shresh, emit_log_callback=None,
+                     enable_tnrs=False, tnrs_sources=None, tnrs_accuracy=None):
     """
     Call miner_filter, and modify input and output file names, using one thread.
     :param in_path: working directory of one marker or the parent directory of multiple working directories
@@ -176,7 +177,10 @@ def call_miner_filter(in_path, out_path, action, consensus_value, len_shresh, em
                 x=True,
                 length_threshold=len_shresh,
                 ignore_gap=True,
-                # for exception removal
+                enable_tnrs=enable_tnrs,
+                tnrs_sources=tnrs_sources,
+                tnrs_accuracy=tnrs_accuracy,
+                emit_log=emit_log,
             )
             t1 = datetime.now()
             print("Running time: %s seconds" % (t1 - t0))
@@ -215,7 +219,10 @@ def call_miner_filter(in_path, out_path, action, consensus_value, len_shresh, em
                 x=True,
                 length_threshold=len_shresh,
                 ignore_gap=True,
-                # for exception removal
+                enable_tnrs=enable_tnrs,
+                tnrs_sources=tnrs_sources,
+                tnrs_accuracy=tnrs_accuracy,
+                emit_log=emit_log,
             )
             t2 = datetime.now()
             print("Running time: %s seconds" % (t2 - t1))
