@@ -1,89 +1,58 @@
----
-output:
-  word_document:
-    fig_caption: true
-    number_sections: false
-    toc: false
-    toc_depth: 3
-    df_print: paged
-  pdf_document:
-    latex_engine: xelatex
-    highlight: arrow
-    number_sections: false
-  html_document:
-    df_print: kable
-    toc: true
-    toc_float: true
-    number_sections: true
-    theme: readable
-    highlight: textmate
-    dev: CairoPNG
----
-
 # Chloroplast Genome Mining Module
 
 ## Overview
 
-This module implements an automated, end-to-end bioinformatics pipeline for the retrieval, quality assessment, re-annotation, gene extraction, and deduplication of plant chloroplast genome sequences from the NCBI GenBank database. The pipeline is designed for large-scale comparative chloroplast genomics studies and consists of eight sequential stages.
+This module implements an automated, end-to-end bioinformatics pipeline for the retrieval, quality assessment, re-annotation, gene extraction, and deduplication of plant chloroplast genome sequences from the NCBI GenBank database. The pipeline is designed for large-scale comparative chloroplast genomics studies.
 
-------------------------------------------------------------------------
+---
 
 ## Pipeline Architecture
 
-``` mermaid
+```mermaid
 flowchart TD
-    A["1. Accession List"] --> B["2. Batch Download\n(download_gb_file.py)"]
-    B -->|"*.gb"| C["3. Pre-filtering\n(pre_filter_gb_file.py)"]
-    C -->|"Retained *.gb"| D["4. Quality Control\n(quality_ctrl.py)"]
-    D -->|"gb_info.csv"| E{Problematic genomes?}
-    E -->|"Yes"| F["5. PGA-NG Re-annotation\n(call_pga.py)"]
-    E -->|"No"| G["6. CDS Extraction\n(get_cds.py)"]
-    F -->|"*.gb.old + pga_output/*.gb"| G
-    G -->|"*.fasta per gene"| H["7. Length Filtering\n(filter_seq.py)"]
-    H -->|"length.csv + filtered *.fasta"| I["8. Species-level Selection\n(select_seq_by_acc.py)"]
-    I --> J["Final representative CDS set"]
+    A["1. Entrez Search & Download<br/>(download_gb_file.py)"] -->|"*.gb"| B["2. Pre-filtering<br/>(pre_filter_gb_file.py)"]
+    B -->|"Retained *.gb"| C["3. Quality Control<br/>(quality_ctrl.py)"]
+    C -->|"gb_info.csv"| D{Problematic?}
+    D -->|"Yes"| E["4. PGA-NG Re-annotation<br/>(call_pga.py)"]
+    D -->|"No"| F["5. Get & Filter CDS<br/>(get_cds.py + filter_seq.py)"]
+    E -->|".gb.old backup + fixed .gb"| F
+    F -->|"length.csv + filtered *.fasta"| G["6. Species-level Selection<br/>(select_seq_by_acc.py)"]
+    G -->|"optional"| H["TNRS Name Resolution<br/>(TNRS.py)"]
+    H --> I["Final representative CDS set"]
+    G --> I
 
     style A fill:#e1f5fe
     style B fill:#fff3e0
     style C fill:#fff3e0
-    style D fill:#fff3e0
-    style F fill:#ffebee
-    style G fill:#fff3e0
-    style H fill:#fff3e0
+    style E fill:#ffebee
+    style F fill:#f3e5f5
+    style G fill:#e8f5e9
+    style H fill:#e8f5e9
     style I fill:#e8f5e9
-    style J fill:#e8f5e9
 ```
 
-------------------------------------------------------------------------
+---
 
 ## Workflow Stages
 
-### Stage 1: Batch Download (`download_gb_file.py`)
+### Stage 1: Entrez Search & Batch Download (`download_gb_file.py`)
 
-**Function**: Download GenBank-format chloroplast genome files from NCBI based on a provided accession list.
-
-**Implementation details**:
+**Function**: Search NCBI for chloroplast genomes by taxon names and batch-download GenBank files.
 
 | Feature | Description |
-|----------------|-------------------------------------------------------|
+|---|---|
+| Query construction | `taxon[Organism] AND (plastid OR chloroplast) AND SLEN range`, excluding mitochondrion/chromosome |
 | Threading | `ThreadPoolExecutor` with configurable thread count (default: 10) |
 | Rate limiting | Minimum 0.34 s interval between consecutive requests |
-| Retry mechanism | Up to 3 retries per accession with exponential backoff |
-| Error handling | Timeout (600 s per request), HTTP 429 rate-limit detection |
-| Resume support | Detects existing `.gb` files and previously failed accessions |
-| Integrity check | Validates `ORIGIN` section presence; deletes empty/invalid files |
+| Retry | Up to 3 retries per accession with exponential backoff |
+| Resume | Detects existing `.gb` files; skips already-downloaded accessions |
+| Integrity | Validates `ORIGIN` section; deletes empty/invalid files |
 
-**Inputs**:
+**Inputs**: Taxon names (one per line), email, date range (optional)
 
-- Accession list file (one accession per line)
-- NCBI contact email
+**Outputs**: `{accession}.gb` files, `accession_index.txt`, `error_downloaded_index.csv`
 
-**Outputs**:
-
-- `{accession}.gb` files in the output directory
-- `error_downloaded_index.csv` for failed downloads
-
-------------------------------------------------------------------------
+---
 
 ### Stage 2: Pre-filtering (`pre_filter_gb_file.py`)
 
@@ -92,250 +61,128 @@ flowchart TD
 **Rejection criteria**:
 
 | Criterion | Action |
-|-------------------------------|----------------------------------------|
+|---|---|
 | `KEYWORDS` contains `UNVERIFIED` | Reject → rename to `.unusable` |
-| `ORGANISM` contains `sp.` | Reject (ambiguous species-level identification) |
-| `ORGANISM` contains `x` | Reject (hybrid genomes) |
+| `ORGANISM` contains `sp.` | Reject (ambiguous identification) |
+| `ORGANISM` contains `x` | Reject (hybrid) |
 
-**Retention strategy**:
+**Retention strategy**: For each taxon, retain at most `keep_latest` (default: 3) genomes, prioritized by:
 
-For each taxon (species or variety level, configurable via `species_level`), retain at most `keep_latest` (default: 3) genomes, prioritized by:
+1. Publication status (published > unpublished)
+2. Number of annotated CDS features
+3. Genome length
+4. Submission date (newest first)
 
-1.  Publication status (published \> unpublished)
-2.  Number of annotated CDS features
-3.  Genome length
-4.  Submission date (newest first)
+**Outputs**: Retained `.gb` files, `pre_filter.csv`
 
-**Inputs**: Directory of `.gb` files
-
-**Outputs**:
-
-- Retained `.gb` files copied to output directory
-- `pre_filter.csv`: per-genome metadata table
-
-------------------------------------------------------------------------
+---
 
 ### Stage 3: Quality Control (`quality_ctrl.py`)
 
-**Function**: Generate a comprehensive quality report for each retained GenBank file.
+**Function**: Generate a quality report and flag problematic genomes.
 
-**Metrics extracted per genome**:
-
-| Metric | Description |
-|------------------|------------------------------------------------------|
-| `sequence_length` | Total nucleotide length |
-| `gene_count` | Total annotated genes |
-| `CDS` | Number of standard plastid CDS (from the 80-gene reference set) |
-| `tRNA` / `rRNA` | Count of tRNA and rRNA features |
-| `unclear_bases` | Number of bases not in {A, T, C, G} |
-| `unclear_ratio` | Proportion of ambiguous bases |
+**Metrics per genome**: `sequence_length`, `gene_count`, `CDS` (80-gene set), `tRNA`, `rRNA`, `unclear_bases`, `unclear_ratio`
 
 **Flagging criteria**:
 
-- **Low CDS count**: `CDS < cds_threshold` (default: 80)
-- **High ambiguity**: `unclear_ratio > ambig_threshold` (default: 0.2)
+- CDS count < `cds_threshold` (default: 75)
+- Ambiguity ratio > `ambig_threshold` (default: 0.1)
 
-Problematic genomes are exported as `{accession}_reannotated.fasta` for subsequent PGA-NG re-annotation (Stage 5).
+**Outputs**: `gb_info.csv`, `{accession}_reannotated.fasta` for flagged genomes
 
-**Outputs**:
-
-- `gb_info.csv`: Complete quality-control table
-- `{accession}_reannotated.fasta` files for flagged genomes
-
-------------------------------------------------------------------------
+---
 
 ### Stage 4: PGA-NG Re-annotation (`call_pga.py`)
 
-**Function**: Re-annotate problematic GenBank files using the **PGA-NG** (Plastid Genome Annotator) tool, using reference genomes from appropriate clades (Angiosperms or Gymnosperms).
+**Function**: Re-annotate problematic genomes using PGA-NG with clade-specific reference sets.
 
 **Workflow**:
 
-``` mermaid
-flowchart TD
-    A["Identify pending genomes"] --> B["Prepare temp folders"]
-    B --> C["Execute PGA-NG"]
-    C --> D["Monitor annotation progress"]
-    D --> E{"All complete?"}
-    E -->|"No"| D
-    E -->|"Yes"| F["Merge annotations\ninto original .gb files"]
-    F --> G["Clean up temp folders"]
-```
+1. Identify pending genomes (skip already-annotated)
+2. Copy pending FASTA to temp folder
+3. Execute PGA-NG with reference genomes (Angiosperms / Gymnosperms / User-defined)
+4. Monitor progress; copy results to `pga_output/`
+5. Merge new FEATURES + ORIGIN into original GenBank files
+6. Backup originals as `.gb.old`
 
-**Key features**:
+**Key features**: Incremental (skips completed), graceful recovery from interruptions, multi-threaded progress monitoring.
 
-- Incremental annotation: skips genomes with existing re-annotated files
-- Multi-threaded progress monitoring and annotation merging
-- Graceful recovery from interrupted runs
+---
 
-**Reference sets**: Two clade-specific reference genome collections are embedded in the PGA-NG installation:
+### Stage 5: Get & Filter CDS (`get_cds.py` + `filter_seq.py`)
 
-- **Angiosperms** — for flowering plants
-- **Gymnosperms** — for conifers and related lineages
+**Function**: Extract plastid CDS/rRNA genes and filter by reference length.
 
-------------------------------------------------------------------------
+**Extraction** (`get_cds.py`):
 
-### Stage 5: CDS Extraction (`get_cds.py`)
+- Maps features to the standard 80 plastid gene set (`PPA_80_CDS`)
+- Handles split features, reverse-complement strands, alternative gene names
+- Outputs one FASTA per gene + `cds_num.csv` + `length.csv`
 
-**Function**: Extract individual coding sequences from all GenBank files (original + re-annotated), producing one FASTA file per gene.
-
-**Gene nomenclature**: Utilizes the standard 80 plastid gene set defined in `PPA_80_CDS`, which includes:
-
-- Photosystem I / II genes (e.g., `psaA`, `psbD`, `petB`)
-- ATP synthase genes (e.g., `atpA`, `atpB`)
-- RNA polymerase genes (e.g., `rpoA`, `rpoB`)
-- Ribosomal protein genes (e.g., `rpl16`, `rps12`)
-- Ribosomal RNA genes (`rrn16`, `rrn23`, `rrn4.5`, `rrn5`)
-- Other essential plastid genes (`rbcL`, `matK`, `ycf4`, etc.)
-
-**Feature extraction**:
-
-- Handles split features (disjoint locations)
-- Correctly processes reverse-complement strands
-- Maps alternative gene names to standard nomenclature via `PPA_80_CDS` dictionary
-
-**Outputs**:
-
-- `{gene}.fasta` — one file per gene, containing all accession-level sequences
-- `cds_num.csv` — per-accession CDS counts
-- `cds_loc.txt` — per-accession CDS location strings (tab-separated)
-- `length.csv` — per-accession per-gene sequence lengths
-
-------------------------------------------------------------------------
-
-### Stage 6: Length Filtering (`filter_seq.py`)
-
-**Function**: Remove abnormally long or short CDS sequences based on reference genome length distributions.
-
-**Filtering formula**:
+**Filtering** (`filter_seq.py`):
 
 $$L_{\min} = \alpha \times L_{\text{ref}} \qquad L_{\max} = \beta \times L_{\text{ref}}$$
 
-where $L_{\text{ref}}$ is the reference gene length (from `ANG_REF_LEN` for angiosperms or `GYM_REF_LEN` for gymnosperms), and default bounds are $\alpha = 0.5$, $\beta = 2.0$.
+Default: $\alpha = 0.5$, $\beta = 2.0$. Reference tables: `ANG_REF_LEN` (angiosperms) or `GYM_REF_LEN` (gymnosperms).
 
-Sequences with length outside $[L_{\min}, L_{\max}]$ are excluded. For genes not present in the reference set, the longest sequence per accession is retained without filtering.
+**UI integration**: Both steps are merged into a single "Get & Filter CDS" action. The intermediate extraction folder is automatically cleaned up after filtering.
 
-**Outputs**:
+**Outputs**: Filtered `{gene}.fasta` files, `length.csv`
 
-- Filtered `{gene}.fasta` files
-- `length.csv`: updated per-accession per-gene lengths
+---
 
-------------------------------------------------------------------------
+### Stage 6: Species-level Selection (`select_seq_by_acc.py`)
 
-### Stage 7: Species-level Selection (`select_seq_by_acc.py`)
+**Function**: Select one representative chloroplast genome per species based on maximum cumulative CDS length.
 
-**Function**: Select a single representative chloroplast genome for each species based on the maximum cumulative CDS length, and optionally standardize taxonomic names.
+**Selection criterion**: For each species, retain the accession with the greatest total CDS length.
 
-**Selection criterion**: For each species with multiple chloroplast genome submissions, retain the genome with the greatest total CDS length (`sum of all CDS column lengths`).
+**TNRS Name Resolution** (optional):
 
-**Name standardization** (optional, via `-f` flag):
+When enabled, organism names are standardized via the TNRS API before selection:
 
-When a standardization file (`file_organism_name`) is provided, an **inner join** on the `organism` column maps original names to standardized names (`new_name` column). Species not present in the standardization table are excluded.
-
-``` mermaid
-flowchart TD
-    A["length.csv"] --> B["make_tab()"]
-    B -->|"organism.csv"| C["Optional: manual name standardization"]
-    C -->|"file_organism_name"| D["Inner join → new_name"]
-    D --> E["select_seq_by_acc()"]
-    E -->|"Per species"| F["Representative CDS FASTA"]
+```mermaid
+flowchart LR
+    A["organism.csv"] --> B["TNRS_cached()<br/>batch 5000/request"]
+    B --> C{"All batches<br/>succeed?"}
+    C -->|"Yes"| D["Accepted_name mapping<br/>score >= accuracy"]
+    C -->|"No"| E["Abort; cache preserved<br/>re-run retries failed batches"]
+    D --> F["Unmatched → excluded"]
+    F --> G["keep_longest per species"]
 ```
 
-**Outputs**:
+| Parameter | Description |
+|---|---|
+| Sources | `wcvp` (Kew WCVP) and/or `wfo` (World Flora Online); at least one required |
+| Accuracy | Minimum Overall_score threshold (default: 0.9) |
+| Batching | 5000 names per API request; per-batch CSV cache in `tnrs_cache/` |
+| Retry | 3 attempts per batch (pass 1) + 3 attempts (pass 2); all-fail → abort |
+| Cache validation | SHA-256 of (names + sources + accuracy); input change → auto-clear |
 
-- `organism.csv`: deduplicated organism list with IDs
-- Representative CDS FASTA files (one per selected accession)
+**Outputs**: Representative CDS FASTA files (header: `{accession}|{species_name}`), `organism.csv`
 
-------------------------------------------------------------------------
+---
 
 ## Reference Data
 
 | Resource | Description |
-|---------------|---------------------------------------------------------|
-| `PPA_80_CDS` | Standard 80 plastid gene name mapping dictionary (alternative names → standard names) |
-| `ANG_REF_LEN` | Reference CDS lengths for**angiosperm** plastid genes |
-| `GYM_REF_LEN` | Reference CDS lengths for**gymnosperm** plastid genes |
+|---|---|
+| `PPA_80_CDS` | Standard 80 plastid gene name mapping (alternative names → standard names) |
+| `ANG_REF_LEN` | Reference CDS lengths for angiosperm plastid genes |
+| `GYM_REF_LEN` | Reference CDS lengths for gymnosperm plastid genes |
 
-------------------------------------------------------------------------
-
-## Complete Data Flow
-
-``` mermaid
-flowchart TD
-    subgraph sg_Input["Input"]
-        A1["Accession list"]
-        A2["NCBI GenBank"]
-    end
-
-    subgraph sg_Acquisition["Acquisition"]
-        B1["download_gb_file.py<br/>→ *.gb files"]
-    end
-
-    subgraph sg_Filtering["Filtering"]
-        C1["pre_filter_gb_file.py<br/>→ Retained *.gb + pre_filter.csv"]
-        C2["quality_ctrl.py<br/>→ gb_info.csv + _reannotated.fasta"]
-    end
-
-    subgraph sg_Reannotation["Re-annotation"]
-        D1["call_pga.py<br/>→ Fixed *.gb files"]
-    end
-
-    subgraph sg_GeneLevel["Gene-level Processing"]
-        E1["get_cds.py<br/>→ per-gene *.fasta + cds tables"]
-        E2["filter_seq.py<br/>→ filtered *.fasta + length.csv"]
-    end
-
-    subgraph sg_SpeciesLevel["Species-level Processing"]
-        F1["select_seq_by_acc.py<br/>→ Representative CDS set"]
-    end
-
-    subgraph sg_Output["Output"]
-        G1["Final representative chloroplast CDS collection"]
-        G2["organism.csv"]
-        G3["length.csv"]
-    end
-
-    A1 --> B1
-    A2 --> B1
-    B1 --> C1
-    C1 --> C2
-    C2 -->|"flagged"| D1
-    C2 -->|"OK"| E1
-    D1 --> E1
-    E1 --> E2
-    E2 --> F1
-    F1 --> G1
-    F1 --> G2
-    F1 --> G3
-
-    classDef input fill:#e3f2fd,stroke:#1565c0
-    classDef acquisition fill:#fff3e0,stroke:#ef6c00
-    classDef filtering fill:#fff8e1,stroke:#f9a825
-    classDef reannotation fill:#ffebee,stroke:#c62828
-    classDef geneLevel fill:#f3e5f5,stroke:#6a1b9a
-    classDef speciesLevel fill:#e8f5e9,stroke:#2e7d32
-    classDef output fill:#e0f2f1,stroke:#00695c
-
-    class sg_Input input
-    class sg_Acquisition acquisition
-    class sg_Filtering filtering
-    class sg_Reannotation reannotation
-    class sg_GeneLevel geneLevel
-    class sg_SpeciesLevel speciesLevel
-    class sg_Output output
-```
-
-------------------------------------------------------------------------
+---
 
 ## Dependencies
 
-- **Python ≥ 3.12**
+- Python >= 3.12
 - `biopython` — sequence file I/O
 - `pandas` — tabular data processing
-- `func_timeout` — request timeout enforcement
-- `PGA-NG` — chloroplast genome re-annotation (external tool)
+- `PGA-NG` — chloroplast genome re-annotation (external tool, auto-installable)
+- TNRS API (`https://tnrsapi.xyz`) — online name resolution (no local dependency)
 
-------------------------------------------------------------------------
+---
 
-## Author
+## Authors
 
-**Ruijing Cheng, Wang Yuxuan, Li Dan**
+Ruijing Cheng, Yuxuan Wang, Xiaoting Xu

@@ -1,51 +1,56 @@
 # PyNCBIminer-NG
 
-A powerful, user-friendly graphical interface for efficient retrieval and analysis of GenBank sequence data.
+A user-friendly graphical interface software for efficient and precise retrieval of GenBank data.
 
 ## Overview
 
-PyNCBIminer-NG is a next-generation bioinformatics tool that simplifies the retrieval of nucleotide sequences from NCBI GenBank. Whether you are studying plant phylogenetics, bacterial diversity, or any organism of interest, PyNCBIminer-NG streamlines your workflow by automating BLAST iterations, sequence filtering, multiple sequence alignment, and supermatrix construction—no programming experience required.
+PyNCBIminer-NG is a next-generation bioinformatics desktop application that streamlines the retrieval, filtering, alignment, and concatenation of nucleotide sequences from NCBI GenBank. It provides two major workflows:
+
+- **Retrieval Module** — Iterative BLAST-based sequence mining with species-level deduplication and TNRS name resolution
+- **Chloroplast Module** — End-to-end chloroplast genome mining: batch download, quality control, re-annotation, CDS extraction, and species-level representative selection
+
+No programming experience is required.
 
 ---
 
 ## Key Features
 
-### 🔍 Intelligent Sequence Retrieval
+### Retrieval Module
 
-- **Automated BLAST Iterations**: Automatically performs iterative BLAST searches until no new relevant sequences are found
-- **Smart Query Selection**: Intelligently selects optimal reference sequences at each iteration to maximize retrieval coverage
-- **Resume Capability**: Interrupted workflow? No problem—resume from where you left off anytime
-- **Customizable Taxa & Genes**: Specify your target taxa and gene markers (ITS, rbcL, matK, ndhF, and more)
+| Feature | Description |
+|---|---|
+| Iterative BLAST | Automatically performs iterative BLAST searches until saturation |
+| Smart Query Selection | Selects optimal reference sequences at each iteration |
+| Resume Capability | Interrupted workflows can be resumed from the last checkpoint |
+| Extended Segments Refinement | Trims non-homologous regions introduced by sequence extension |
+| Species-level Selection | Retains one representative sequence per species (Abnormality Index + multi-criteria ranking) |
+| TNRS Name Resolution | Online taxonomic name standardization via TNRS API (wcvp/wfo sources, configurable accuracy) |
 
-### 🧬 Comprehensive Sequence Processing
+### Construction Module
 
-- **Sequence Filtering**: Remove erroneous annotations, control sequence extensions, and reduce datasets to one representative sequence per species
-- **Quality Control**: Built-in tools to identify and handle potentially erroneous sequences
-- **Flexible Output**: Results organized in clear folder structures with detailed sequence information
+| Feature | Description |
+|---|---|
+| MAFFT Alignment | Multiple sequence alignment with configurable algorithms and thread count |
+| trimAl Trimming | Alignment trimming (automated1, gappyout, strict, strictplus) with chloroplast boundary mode |
+| Supermatrix Concatenation | Combine multiple gene markers into a single partitioned supermatrix |
 
-### 📊 Multiple Sequence Alignment & Trimming
+### Chloroplast Module
 
-- **MAFFT Integration**: High-quality multiple sequence alignments using the industry-standard MAFFT algorithm
-- **trimAl Support**: Automated alignment trimming with customizable methods (automated1, gappyout, strict, strictplus)
-- **Chloroplast Mode**: Specialized workflow for chloroplast genome analysis with boundary trimming
+| Feature | Description |
+|---|---|
+| Entrez Search & Batch Download | Taxon-based NCBI search with date filtering and threaded GenBank download |
+| Pre-filtering | Remove UNVERIFIED/ambiguous/hybrid genomes; retain top-N per taxon |
+| Quality Control | Flag genomes with low CDS count or high ambiguity ratio |
+| PGA-NG Re-annotation | Re-annotate problematic genomes with clade-specific references |
+| Get & Filter CDS | Extract 80 standard plastid genes and filter by reference length bounds |
+| Species-level CDS Selection | Select one representative genome per species (longest total CDS); optional TNRS name resolution with batch caching |
 
-### 🏗️ Supermatrix Construction
+### Interface
 
-- **Concatenation**: Combine multiple gene markers into a single supermatrix for phylogenomic analysis
-- **Automatic Gap Handling**: Missing markers are automatically filled with gaps
-
-### 🌿 Chloroplast Genome Analysis (New!)
-
-- Specialized tools for chloroplast genome mining
-- Extract CDS regions from GenBank files
-- Quality control and sequence filtering for chloroplast sequences
-
-### 🖥️ User-Friendly Interface
-
-- **Modern Fluent Design**: Clean, intuitive PySide6-based interface
-- **Real-time Progress Tracking**: Monitor BLAST iterations and sequence processing
-- **Customizable Themes**: Light, Dark, or Auto (follows system) mode
-- **Software Auto-Installation**: MAFFT, trimAl, and PGA-NG can be installed directly from the app
+- Modern Fluent Design (PySide6 + PySide6-Fluent-Widgets)
+- Light / Dark / Auto theme
+- Real-time console logging with level-tagged messages
+- Built-in installer for MAFFT, trimAl, and PGA-NG
 
 ---
 
@@ -54,98 +59,102 @@ PyNCBIminer-NG is a next-generation bioinformatics tool that simplifies the retr
 ### Prerequisites
 
 - Windows 10/11
-- Microsoft Visual C++ Redistributable v14 required, if not installed, [download](https://aka.ms/vc14/vc_redist.x64.exe) and install first.
+- [Microsoft Visual C++ Redistributable v14](https://aka.ms/vc14/vc_redist.x64.exe)
 
 ### Pre-built Executable
 
-1. Download the latest release from [Release Page](https://github.com/wyx619/PyNCBIminer_NG/releases)
-2. Double-click `PyNCBIminer-NG.exe` to launch
+1. Download the latest release from the [Releases Page](https://github.com/wyx619/PyNCBIminer_NG/releases)
+2. Run `PyNCBIminer-NG.exe`
+
+### From Source
+
+```bash
+git clone https://github.com/wyx619/PyNCBIminer_NG.git
+cd PyNCBIminer_NG
+uv sync
+uv run python src/Main_Fluent.py
+```
 
 ---
 
-## Quick Start Guide
+## Quick Start
 
-### Step 1: Set Your Working Directory
+### Retrieval Workflow
 
-Choose a folder where all outputs will be saved.
+1. **Set Working Directory** — choose an output folder
+2. **Configure Target** — select a gene marker (ITS, rbcL, matK, etc.) or enter a custom region
+3. **Submit BLAST** — iterative search runs automatically
+4. **Filter** — enable Extended Segments Refinement and/or Species-level Selection (with optional TNRS)
+5. **Align → Trim → Concatenate** — build your supermatrix in the Construction module
 
-### Step 2: Configure Target Region
+### Chloroplast Workflow
 
-- Select a predefined gene marker (ITS, rbcL, matK, etc.) or enter a custom region
-- Optionally provide your email for NCBI compliance
-
-### Step 3: Submit BLAST
-
-Click "Submit New BLAST" and watch as PyNCBIminer automatically:
-
-- Searches NCBI for matching sequences
-- Identifies and retrieves new reference sequences
-- Iterates until no new sequences are found
-
-### Step 4: Process Your Sequences
-
-Use the Construction Module to:
-
-1. **Filter** sequences (remove errors, reduce to one per species)
-2. **Align** sequences with MAFFT
-3. **Trim** alignments with trimAl
-4. **Concatenate** multiple genes into a supermatrix
+1. **Search & Download** — enter taxon names, set date range, download GenBank files
+2. **Pre-filter** — remove low-quality genomes, retain top-N per taxon
+3. **Extract & QC** — flag problematic genomes (low CDS / high ambiguity)
+4. **Reannotate** — run PGA-NG on flagged genomes
+5. **Get & Filter CDS** — extract plastid genes and filter by reference length
+6. **Species-level Selection** — pick one representative genome per species (with optional TNRS)
 
 ---
 
 ## Supported Gene Markers
 
-PyNCBIminer-NG comes pre-configured with reference sequences for:
-
-| Category    | Genes                                                                           |
-| ----------- | ------------------------------------------------------------------------------- |
-| Ribosomal   | 18S, 28S, ITS                                                                   |
-| Chloroplast | rbcL, matK, ndhF, ndhD, ndhI, ndhJ-ndhK-ndhC, psbA-trnH, trnL-trnF, rpoB, rpoC1 |
-| Custom      | User-defined regions                                                            |
+| Category | Genes |
+|---|---|
+| Ribosomal | 18S, 28S, ITS |
+| Chloroplast | rbcL, matK, ndhF, ndhD, ndhI, ndhJ-ndhK-ndhC, psbA-trnH, trnL-trnF, rpoB, rpoC1, atpB |
+| Custom | User-defined regions |
 
 ---
 
 ## Output Structure
 
-After a successful retrieval, your working directory will contain:
+### Retrieval Module
 
 ```
 working_directory/
 ├── parameters/           # BLAST parameters and initial queries
-│   ├── blast_parameters.txt
-│   ├── initial_queries.fasta
-│   └── ref_seq/         # Reference sequences
 ├── results/              # Final sequence data
-│   ├── blast_results.txt
-│   ├── blast_results_checked.fasta    # Clean sequences for analysis
-│   └── erroneous_sequences.fasta
-└── tmp_files/           # Intermediate files from each BLAST round
+│   ├── blast_results_checked.fasta
+│   ├── blast_results_filtered.fasta
+│   └── blast_result_kept.txt
+├── tnrs_cache/           # TNRS batch cache (if name resolution enabled)
+└── tmp_files/            # Intermediate files
+```
+
+### Chloroplast Module
+
+```
+output_directory/
+├── *.gb                  # Downloaded/pre-filtered GenBank files
+├── gb_info.csv           # Quality control report
+├── length.csv            # Per-accession per-gene CDS lengths
+├── organism.csv          # Deduplicated species list
+├── *.fasta               # Filtered/selected CDS files
+└── tnrs_cache/           # TNRS batch cache (if name resolution enabled)
 ```
 
 ---
 
-## Documentation
+## Dependencies
 
-For detailed instructions, parameter explanations, and example workflows, please refer to the Manunal.
+- Python >= 3.12
+- PySide6 + PySide6-Fluent-Widgets
+- Biopython
+- pandas, numpy, scipy, scikit-learn
+- networkx, markov-clustering
+- func_timeout
 
----
+External tools (auto-installable from Settings page):
 
-## Troubleshooting
-
-**Q: NCBI is blocking my requests**
-A: Provide a valid email address in the Entrez Email field. NCBI may temporarily block requests without an email.
-
-**Q: Some sequences are missing**
-A: Check if your target taxa have sequences deposited in GenBank. You can also try extending the search date range.
-
-**Q: MAFFT/trimAl not found**
-A: Use the "Settings" page in PyNCBIminer-NG to automatically download and install these tools.
+- MAFFT — multiple sequence alignment
+- trimAl — alignment trimming
+- PGA-NG — chloroplast genome re-annotation
 
 ---
 
 ## Citation
-
-If you use PyNCBIminer-NG in your research, please cite:
 
 > PyNCBIminer: A user-friendly graphical interface for efficient and precise retrieval of GenBank data
 
@@ -157,4 +166,6 @@ MIT License
 
 ---
 
-*PyNCBIminer-NG — Empowering phylogenetic research for everyone.*
+## Authors
+
+Ruijing Cheng, Yuxuan Wang, Xiaoting Xu
