@@ -39,14 +39,14 @@ flowchart TD
 
 **Function**: Search NCBI for chloroplast genomes by taxon names and batch-download GenBank files.
 
-| Feature | Description |
-|---|---|
+| Feature            | Description                                                                                         |
+| ------------------ | --------------------------------------------------------------------------------------------------- |
 | Query construction | `taxon[Organism] AND (plastid OR chloroplast) AND SLEN range`, excluding mitochondrion/chromosome |
-| Threading | `ThreadPoolExecutor` with configurable thread count (default: 10) |
-| Rate limiting | Minimum 0.34 s interval between consecutive requests |
-| Retry | Up to 3 retries per accession with exponential backoff |
-| Resume | Detects existing `.gb` files; skips already-downloaded accessions |
-| Integrity | Validates `ORIGIN` section; deletes empty/invalid files |
+| Threading          | `ThreadPoolExecutor` with configurable thread count (default: 10)                                 |
+| Rate limiting      | Minimum 0.34 s interval between consecutive requests                                                |
+| Retry              | Up to 3 retries per accession with exponential backoff                                              |
+| Resume             | Detects existing`.gb` files; skips already-downloaded accessions                                  |
+| Integrity          | Validates`ORIGIN` section; deletes empty/invalid files                                            |
 
 **Inputs**: Taxon names (one per line), email, date range (optional)
 
@@ -60,11 +60,11 @@ flowchart TD
 
 **Rejection criteria**:
 
-| Criterion | Action |
-|---|---|
-| `KEYWORDS` contains `UNVERIFIED` | Reject → rename to `.unusable` |
-| `ORGANISM` contains `sp.` | Reject (ambiguous identification) |
-| `ORGANISM` contains `x` | Reject (hybrid) |
+| Criterion                            | Action                            |
+| ------------------------------------ | --------------------------------- |
+| `KEYWORDS` contains `UNVERIFIED` | Reject → rename to`.unusable`  |
+| `ORGANISM` contains `sp.`        | Reject (ambiguous identification) |
+| `ORGANISM` contains `x`          | Reject (hybrid)                   |
 
 **Retention strategy**: For each taxon, retain at most `keep_latest` (default: 3) genomes, prioritized by:
 
@@ -121,7 +121,9 @@ flowchart TD
 
 **Filtering** (`filter_seq.py`):
 
-$$L_{\min} = \alpha \times L_{\text{ref}} \qquad L_{\max} = \beta \times L_{\text{ref}}$$
+$$
+L_{\min} = \alpha \times L_{\text{ref}} \qquad L_{\max} = \beta \times L_{\text{ref}}
+$$
 
 Default: $\alpha = 0.5$, $\beta = 2.0$. Reference tables: `ANG_REF_LEN` (angiosperms) or `GYM_REF_LEN` (gymnosperms).
 
@@ -151,13 +153,13 @@ flowchart LR
     F --> G["keep_longest per species"]
 ```
 
-| Parameter | Description |
-|---|---|
-| Sources | `wcvp` (Kew WCVP) and/or `wfo` (World Flora Online); at least one required |
-| Accuracy | Minimum Overall_score threshold (default: 0.9) |
-| Batching | 5000 names per API request; per-batch CSV cache in `tnrs_cache/` |
-| Retry | 3 attempts per batch (pass 1) + 3 attempts (pass 2); all-fail → abort |
-| Cache validation | SHA-256 of (names + sources + accuracy); input change → auto-clear |
+| Parameter        | Description                                                                    |
+| ---------------- | ------------------------------------------------------------------------------ |
+| Sources          | `wcvp` (Kew WCVP) and/or `wfo` (World Flora Online); at least one required |
+| Accuracy         | Minimum Overall_score threshold (default: 0.9)                                 |
+| Batching         | 5000 names per API request; per-batch CSV cache in`tnrs_cache/`              |
+| Retry            | 3 attempts per batch (pass 1) + 3 attempts (pass 2); all-fail → abort         |
+| Cache validation | SHA-256 of (names + sources + accuracy); input change → auto-clear            |
 
 **Outputs**: Representative CDS FASTA files (header: `{accession}|{species_name}`), `organism.csv`
 
@@ -165,11 +167,11 @@ flowchart LR
 
 ## Reference Data
 
-| Resource | Description |
-|---|---|
-| `PPA_80_CDS` | Standard 80 plastid gene name mapping (alternative names → standard names) |
-| `ANG_REF_LEN` | Reference CDS lengths for angiosperm plastid genes |
-| `GYM_REF_LEN` | Reference CDS lengths for gymnosperm plastid genes |
+| Resource        | Description                                                                 |
+| --------------- | --------------------------------------------------------------------------- |
+| `PPA_80_CDS`  | Standard 80 plastid gene name mapping (alternative names → standard names) |
+| `ANG_REF_LEN` | Reference CDS lengths for angiosperm plastid genes                          |
+| `GYM_REF_LEN` | Reference CDS lengths for gymnosperm plastid genes                          |
 
 ---
 
@@ -185,4 +187,4 @@ flowchart LR
 
 ## Authors
 
-Ruijing Cheng, Yuxuan Wang, Xiaoting Xu
+Yuxuan Wang, Ruijing Cheng, Xiaoting Xu

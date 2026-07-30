@@ -4,10 +4,8 @@ from pathlib import Path
 
 from PySide6.QtCore import (
     QDate,
-    QEasingCurve,
     QEventLoop,
     QObject,
-    QPropertyAnimation,
     Qt,
     QTimer,
     Signal,
@@ -2144,7 +2142,6 @@ class MainWindow(FluentWindow):
 
     def __init__(self):
         super().__init__()
-        self.is_closing = False
         self.setWindowTitle("PyNCBIminer-NG")
         self.setWindowIcon(QIcon(get_resource_path("icons/app_icon.ico")))
         self.navigationInterface.setExpandWidth(180)
@@ -2204,28 +2201,8 @@ class MainWindow(FluentWindow):
         self.mafft_checked = False
         self.trimal_checked = False
 
-        self.setWindowOpacity(0)
-        self.fade_in_animation = QPropertyAnimation(self, b"windowOpacity")
-        self.fade_in_animation.setDuration(150)
-        self.fade_in_animation.setStartValue(0)
-        self.fade_in_animation.setEndValue(1)
-        self.fade_in_animation.setEasingCurve(QEasingCurve.InOutQuad)
-        self.fade_in_animation.start()
-
     def closeEvent(self, event):
-        if self.is_closing:
-            event.accept()
-            return
-
-        self.is_closing = True
-        event.ignore()
-        self.fade_out_animation = QPropertyAnimation(self, b"windowOpacity")
-        self.fade_out_animation.setDuration(150)
-        self.fade_out_animation.setStartValue(1)
-        self.fade_out_animation.setEndValue(0)
-        self.fade_out_animation.setEasingCurve(QEasingCurve.InOutQuad)
-        self.fade_out_animation.finished.connect(self.close)
-        self.fade_out_animation.start()
+        event.accept()
 
     def connect_logic(self):
         ri = self.retrieval_interface

@@ -4,10 +4,11 @@ A user-friendly graphical interface software for efficient and precise retrieval
 
 ## Overview
 
-PyNCBIminer-NG is a next-generation bioinformatics desktop application that streamlines the retrieval, filtering, alignment, and concatenation of nucleotide sequences from NCBI GenBank. It provides two major workflows:
+PyNCBIminer-NG is a next-generation bioinformatics desktop application that streamlines the retrieval, filtering, alignment, and concatenation of nucleotide sequences from NCBI GenBank. It provides three major modules:
 
-- **Retrieval Module** — Iterative BLAST-based sequence mining with species-level deduplication and TNRS name resolution
-- **Chloroplast Module** — End-to-end chloroplast genome mining: batch download, quality control, re-annotation, CDS extraction, and species-level representative selection
+- **DNA Sequence Module** — Iterative BLAST-based sequence mining, extension refinement, species-level deduplication, and TNRS taxonomic name resolution
+- **Chloroplast Module** — End-to-end chloroplast genome mining: batch download, quality control, PGA-NG re-annotation, CDS extraction, length filtering, and species-level representative selection
+- **Supermatrix Construction Module** — Sequence replacement (merging chloroplast CDS with fragments), multiple sequence alignment (MAFFT), alignment trimming (trimAl), and multi-gene supermatrix concatenation
 
 No programming experience is required.
 
@@ -15,35 +16,36 @@ No programming experience is required.
 
 ## Key Features
 
-### Retrieval Module
+### DNA Sequence Module
 
-| Feature | Description |
-|---|---|
-| Iterative BLAST | Automatically performs iterative BLAST searches until saturation |
-| Smart Query Selection | Selects optimal reference sequences at each iteration |
-| Resume Capability | Interrupted workflows can be resumed from the last checkpoint |
-| Extended Segments Refinement | Trims non-homologous regions introduced by sequence extension |
-| Species-level Selection | Retains one representative sequence per species (Abnormality Index + multi-criteria ranking) |
-| TNRS Name Resolution | Online taxonomic name standardization via TNRS API (wcvp/wfo sources, configurable accuracy) |
-
-### Construction Module
-
-| Feature | Description |
-|---|---|
-| MAFFT Alignment | Multiple sequence alignment with configurable algorithms and thread count |
-| trimAl Trimming | Alignment trimming (automated1, gappyout, strict, strictplus) with chloroplast boundary mode |
-| Supermatrix Concatenation | Combine multiple gene markers into a single partitioned supermatrix |
+| Feature                      | Description                                                                                  |
+| ---------------------------- | -------------------------------------------------------------------------------------------- |
+| Iterative BLAST              | Automatically performs iterative BLAST searches until saturation                             |
+| Smart Query Selection        | Selects optimal reference sequences at each iteration                                        |
+| Resume Capability            | Interrupted workflows can be resumed from the last checkpoint                                |
+| Extended Segments Refinement | Trims non-homologous regions introduced by sequence extension                                |
+| Species-level Selection      | Retains one representative sequence per species (Abnormality Index + multi-criteria ranking) |
+| TNRS Name Resolution         | Online taxonomic name standardization via TNRS API (wcvp/wfo sources, configurable accuracy) |
 
 ### Chloroplast Module
 
-| Feature | Description |
-|---|---|
-| Entrez Search & Batch Download | Taxon-based NCBI search with date filtering and threaded GenBank download |
-| Pre-filtering | Remove UNVERIFIED/ambiguous/hybrid genomes; retain top-N per taxon |
-| Quality Control | Flag genomes with low CDS count or high ambiguity ratio |
-| PGA-NG Re-annotation | Re-annotate problematic genomes with clade-specific references |
-| Get & Filter CDS | Extract 80 standard plastid genes and filter by reference length bounds |
-| Species-level CDS Selection | Select one representative genome per species (longest total CDS); optional TNRS name resolution with batch caching |
+| Feature                        | Description                                                                                                        |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| Entrez Search & Batch Download | Taxon-based NCBI search with date filtering and threaded GenBank download                                          |
+| Pre-filtering                  | Remove UNVERIFIED/ambiguous/hybrid genomes; retain top-N per taxon                                                 |
+| Quality Control                | Flag genomes with low CDS count or high ambiguity ratio                                                            |
+| PGA-NG Re-annotation           | Re-annotate problematic genomes with clade-specific references                                                     |
+| Get & Filter CDS               | Extract 80 standard plastid genes and filter by reference length bounds                                            |
+| Species-level CDS Selection    | Select one representative genome per species (longest total CDS); optional TNRS name resolution with batch caching |
+
+### Supermatrix Construction Module
+
+| Feature                   | Description                                                                                  |
+| ------------------------- | -------------------------------------------------------------------------------------------- |
+| Replacement               | Merge chloroplast genome-derived CDS with fragment sequences for the same gene marker        |
+| MAFFT Alignment           | Multiple sequence alignment with configurable algorithms and thread count                    |
+| trimAl Trimming           | Alignment trimming (automated1, gappyout, strict, strictplus) with chloroplast boundary mode |
+| Supermatrix Concatenation | Combine multiple gene markers into a single partitioned supermatrix                          |
 
 ### Interface
 
@@ -61,10 +63,10 @@ No programming experience is required.
 - Windows 10/11
 - [Microsoft Visual C++ Redistributable v14](https://aka.ms/vc14/vc_redist.x64.exe)
 
-### Pre-built Executable
+### Pre-built Setup Executable
 
 1. Download the latest release from the [Releases Page](https://github.com/wyx619/PyNCBIminer_NG/releases)
-2. Run `PyNCBIminer-NG.exe`
+2. Run `PyNCBIminer-NG-x.x.x-Setup.exe`
 
 ### From Source
 
@@ -100,11 +102,11 @@ uv run python src/Main_Fluent.py
 
 ## Supported Gene Markers
 
-| Category | Genes |
-|---|---|
-| Ribosomal | 18S, 28S, ITS |
+| Category    | Genes                                                                                 |
+| ----------- | ------------------------------------------------------------------------------------- |
+| Ribosomal   | 18S, 28S, ITS                                                                         |
 | Chloroplast | rbcL, matK, ndhF, ndhD, ndhI, ndhJ-ndhK-ndhC, psbA-trnH, trnL-trnF, rpoB, rpoC1, atpB |
-| Custom | User-defined regions |
+| Custom      | User-defined regions                                                                  |
 
 ---
 
@@ -154,12 +156,6 @@ External tools (auto-installable from Settings page):
 
 ---
 
-## Citation
-
-> PyNCBIminer: A user-friendly graphical interface for efficient and precise retrieval of GenBank data
-
----
-
 ## License
 
 MIT License
@@ -168,4 +164,4 @@ MIT License
 
 ## Authors
 
-Ruijing Cheng, Yuxuan Wang, Xiaoting Xu
+Yuxuan Wang, Ruijing Cheng,Xiaoting Xu

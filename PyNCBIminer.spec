@@ -1,77 +1,80 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-import sys
-import os
 import warnings
 from pathlib import Path
 
-# 获取项目根目录（使用当前工作目录）
 project_root = Path.cwd()
-
-# 版本信息文件
 version_info_file = str(project_root / "version_info.txt")
 
-# 过滤 markov-clustering 的 matplotlib 警告
 warnings.filterwarnings('ignore', message='.*Matplotlib not present.*')
 
-# 分析主程序
 a = Analysis(
     [str(project_root / "src" / "Main_Fluent.py")],
-    pathex=[str(project_root)],
+    pathex=[str(project_root), str(project_root / "src")],
     binaries=[],
     datas=[
-        # 包含图标（图标在 src/icons 目录下）
         (str(project_root / "src" / "icons"), "icons"),
-        # 包含BLAST参数文件（blast_parameters 在 src 目录下）
         (str(project_root / "src" / "blast_parameters"), "blast_parameters"),
-        # 包含初始查询序列（initial_queries 在 src 目录下）
         (str(project_root / "src" / "initial_queries"), "initial_queries"),
     ],
     hiddenimports=[
-        # PySide6相关
+        # PySide6
         'PySide6.QtCore',
         'PySide6.QtGui',
         'PySide6.QtWidgets',
-        # 科学计算库
+        'qfluentwidgets',
+        # Scientific computing
         'pandas',
         'numpy',
         'scipy',
-        'scikit-learn',
+        'sklearn',
         'markov_clustering',
         'networkx',
         # BioPython
         'Bio',
         'Bio.SeqIO',
         'Bio.Blast',
-        'qfluentwidgets',
-        # 其他依赖
+        # Other dependencies
         'func_timeout',
-        # 动态导入的模块
-        'src.main_utils',
-        'src.blast_put_get',
-        'src.blast_results_extend',
-        'src.call_mafft2',
-        'src.call_trimal',
-        'src.format_wizard',
-        'src.functional',
-        'src.hits_parse_join_select',
-        'src.install_dependencies',
-        'src.iterated_blast',
-        'src.miner_filter',
-        'src.my_entrez',
-        'src.my_filter',
-        'src.nt_calculator',
-        'src.select_new_queries',
-        'src.seq_check_download',
-        'src.sequence_indexer'
+        # Project modules (src/)
+        'main_utils',
+        'blast_put_get',
+        'blast_results_extend',
+        'call_mafft2',
+        'call_trimal',
+        'format_wizard',
+        'functional',
+        'hits_parse_join_select',
+        'install_dependencies',
+        'iterated_blast',
+        'miner_filter',
+        'my_entrez',
+        'my_filter',
+        'nt_calculator',
+        'replacement',
+        'select_new_queries',
+        'seq_check_download',
+        'sequence_indexer',
+        # Chloroplast submodules
+        'Chloroplast',
+        'Chloroplast.PPA_80_CDS',
+        'Chloroplast.TNRS',
+        'Chloroplast.call_pga',
+        'Chloroplast.download_gb_file',
+        'Chloroplast.filter_seq',
+        'Chloroplast.get_cds',
+        'Chloroplast.pre_filter_gb_file',
+        'Chloroplast.quality_ctrl',
+        'Chloroplast.select_seq_by_acc',
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        # 排除不需要的模块以减小体积
+        # GUI frameworks not used
         'tkinter',
         'matplotlib',
+        # Dev/test tools
         'IPython',
         'jupyter',
         'notebook',
@@ -80,21 +83,27 @@ a = Analysis(
         'tests',
         'setuptools',
         'pip',
+        'unittest',
+        'doctest',
+        'pdb',
+        'lib2to3',
+        'pydoc',
+        # PIL (dev-only)
         'PIL',
         'PIL.Image',
         'PIL._tkinter_finder',
-        # 排除测试模块
+        # Test submodules
         'pandas.tests',
         'pandas.io.formats.style',
+        'pandas.io.sas',
+        'pandas.io.stata',
         'numpy.tests',
+        'numpy.f2py',
         'scipy.tests',
-        'scikit-learn.tests',
+        'sklearn.tests',
         'networkx.tests',
         'Bio.tests',
     ],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=None,
     noarchive=True,
 )
 
@@ -103,16 +112,13 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='PyNCBIminer-NG',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -121,4 +127,14 @@ exe = EXE(
     entitlements_file=None,
     icon=str(project_root / "src" / "icons" / "app_icon.ico"),
     version=version_info_file,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='PyNCBIminer-NG',
 )
