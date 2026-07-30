@@ -28,7 +28,7 @@ a = Analysis(
         'numpy',
         'scipy',
         'sklearn',
-        'markov_clustering',
+        'mcl',
         'networkx',
         # BioPython
         'Bio',

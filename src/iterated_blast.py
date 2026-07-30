@@ -1,16 +1,18 @@
-import pandas as pd
-import numpy as np
-from pathlib import Path
-from math import ceil
-from Bio import SeqIO
 import threading
+from math import ceil
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+from Bio import SeqIO
+
+from blast_put_get import blast_put_get_main
+from blast_results_extend import blast_results_extend_main
+from hits_parse_join_select import hits_parse_join_select_main
 from main_utils import get_query_accession
 from my_entrez import format_entrez_query
-from seq_check_download import check_annotation, seq_check_download_main
-from blast_put_get import blast_put_get_main
-from hits_parse_join_select import hits_parse_join_select_main
 from select_new_queries import select_new_queries_main
-from blast_results_extend import blast_results_extend_main
+from seq_check_download import check_annotation, seq_check_download_main
 
 
 def combine_iterated_blast(wd, blast_round, tmp_df, key_annotations, exclude_sources):
@@ -97,7 +99,10 @@ def iterated_blast_main(
     blast_round = 1  # to correct error in combining blast results.
     print("Start BLAST iteration...")
     entrez_query = format_entrez_query(
-        organisms=organisms, entrez_qualifier=entrez_qualifier, date_from=date_from, date_to=date_to
+        organisms=organisms,
+        entrez_qualifier=entrez_qualifier,
+        date_from=date_from,
+        date_to=date_to,
     )
     alignments = ceil(count * 1.05)
     last_new = 9999
@@ -142,7 +147,6 @@ def iterated_blast_main(
         if stop_flag.is_set():
             print("BLAST iteration stopped by user.")
             return
-
 
         print("BLAST round %d" % blast_round)
         if blast_round == 1:
@@ -220,7 +224,6 @@ def iterated_blast_main(
             "Sequence",
             "Sequence_length",
             "blast_round",
-
         ]
         sum_mat = np.zeros((len(queries), len(column_list)), dtype=str)
         sum_table = pd.DataFrame(sum_mat, columns=column_list, dtype=str)
@@ -229,8 +232,8 @@ def iterated_blast_main(
             sum_table.loc[i, "ID"] = key
             sum_table.loc[i, "Description"] = queries[key].description
             sum_table.loc[i, "Sequence"] = str(queries[key].seq.upper())
-            sum_table.loc[i, "Sequence_length"] = len(sum_table.loc[i, "Sequence"])
-            sum_table.loc[i, "blast_round"] = blast_round
+            sum_table.loc[i, "Sequence_length"] = str(len(sum_table.loc[i, "Sequence"]))
+            sum_table.loc[i, "blast_round"] = str(blast_round)
 
         if not (Path(wd) / Path("parameters") / Path("all_queries_info.txt")).exists():
             sum_table.to_csv(
@@ -243,7 +246,7 @@ def iterated_blast_main(
             all_queries = pd.read_table(
                 Path(wd) / Path("parameters") / Path("all_queries_info.txt"), sep="\t"
             )
-            if blast_round not in set(all_queries["blast_round"]):
+            if str(blast_round) not in set(all_queries["blast_round"].astype(str)):
                 all_queries = pd.concat([all_queries, sum_table])
                 all_queries.to_csv(
                     Path(wd) / Path("parameters") / Path("all_queries_info.txt"),
@@ -269,6 +272,7 @@ def iterated_blast_main(
             word_size=word_size,
             nucl_reward=nucl_reward,
             nucl_penalty=nucl_penalty,
+            stop_flag=stop_flag,
         )
         tmp_results = hits_parse_join_select_main(wd=tmp_wd, max_len=max_length)
         tmp_results["Source"] = blast_round
@@ -312,6 +316,7 @@ def iterated_blast_main(
             blast_round,
             ref_number,
             allowed_taxa=organisms,
+            stop_flag=stop_flag,
         )
         if new_quereis_num is None:
             break
@@ -328,5 +333,6 @@ def iterated_blast_main(
         entrez_email=entrez_email,
         allowed_taxa=organisms,
         extend=True,
+        stop_flag=stop_flag,
     )
     print("Stop thread.")

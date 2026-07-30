@@ -18,11 +18,11 @@ VSVersionInfo(
           [
             StringStruct(u'CompanyName', u'Sichuan University'),
             StringStruct(u'FileDescription', u'GenBank Data Toolkits'),
-            StringStruct(u'FileVersion', u'3.0.0'),
+            StringStruct(u'FileVersion', u'3.1.0'),
             StringStruct(u'InternalName', u'PyNCBIminer-NG'),
             StringStruct(u'OriginalFilename', u'PyNCBIminer-NG.exe'),
             StringStruct(u'ProductName', u'PyNCBIminer-NG'),
-            StringStruct(u'ProductVersion', u'3.0.0'),
+            StringStruct(u'ProductVersion', u'3.1.0'),
             StringStruct(u'LegalCopyright', u'Copyright (c) 2026 Sichuan University')
           ]
         )

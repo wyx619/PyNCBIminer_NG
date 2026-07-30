@@ -1,8 +1,9 @@
 import re
-import pandas as pd
-import numpy as np
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
 
 
 def parse_xml_by_re(wd, in_file):
@@ -234,8 +235,8 @@ def join_hits(df, maxlen, qreflen):
     print("Number of hits: %d, number of accessions: %d" % (df.shape[0], len(groups)))
 
     len_groups = len(groups)
-    arr = np.zeros((len_groups, df.shape[1]), dtype=str)
-    df1 = pd.DataFrame(arr, columns=df.columns, dtype=str)
+    arr = np.zeros((len_groups, df.shape[1]), dtype=object)
+    df1 = pd.DataFrame(arr, columns=df.columns)
 
     # TODO: try apply
     for i, (name, group) in enumerate(groups):
@@ -252,15 +253,15 @@ def join_hits(df, maxlen, qreflen):
                 q_strand,
                 s_strand,
             ) = join_group(group, allowed_length)
-            df1.iloc[i]["s_start"] = s_start
-            df1.iloc[i]["s_end"] = s_end
-            df1.iloc[i]["q_start"] = q_start
-            df1.iloc[i]["q_end"] = q_end
-            df1.iloc[i]["hits_num"] = hits_num
-            df1.iloc[i]["sum_hits_alignlen"] = sum_hits_alignlen
-            df1.iloc[i]["sum_hits_score"] = sum_hits_score
-            df1.iloc[i]["q_strand"] = q_strand
-            df1.iloc[i]["s_strand"] = s_strand
+            df1.loc[i, "s_start"] = s_start
+            df1.loc[i, "s_end"] = s_end
+            df1.loc[i, "q_start"] = q_start
+            df1.loc[i, "q_end"] = q_end
+            df1.loc[i, "hits_num"] = hits_num
+            df1.loc[i, "sum_hits_alignlen"] = sum_hits_alignlen
+            df1.loc[i, "sum_hits_score"] = sum_hits_score
+            df1.loc[i, "q_strand"] = q_strand
+            df1.loc[i, "s_strand"] = s_strand
     return df1
 
 
@@ -269,8 +270,8 @@ def select_hits(df):
         ["sum_hits_alignlen", "sum_hits_score"]
     ].apply(pd.to_numeric)
     groups = df.groupby(df["subject_acc.ver"])
-    mat = np.zeros((len(groups), df.shape[1]), dtype=str)
-    df1 = pd.DataFrame(mat, columns=df.columns, dtype=str)
+    mat = np.zeros((len(groups), df.shape[1]), dtype=object)
+    df1 = pd.DataFrame(mat, columns=df.columns)
 
     i = 0
     for name, group in groups:

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "PyNCBIminer-NG"
-version = "3.0.0"
+version = "3.1.0"
 description = "A user-friendly graphical interface software for efficient and precise retrieval of GenBank data"
 authors = [
     { name = "Ruijing Cheng" },{ name = "Yuxuan Wang" }
@@ -30,7 +30,6 @@ dependencies = [
     "func_timeout>=4.3.5",
     "scipy",
     "scikit-learn",
-    "markov-clustering",
     "networkx",
     "PySide6-Fluent-Widgets"
 ]

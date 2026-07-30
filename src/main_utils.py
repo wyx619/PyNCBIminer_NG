@@ -437,6 +437,7 @@ class BackendController(QObject):
         retrieval_interface.btn_submit_blast.setEnabled(False)
         retrieval_interface.btn_load_job.setEnabled(False)
         retrieval_interface.btn_stop.setEnabled(True)
+        retrieval_interface.chk_summary.setEnabled(False)
 
         if parent_window:
             InfoBar.success(
@@ -627,6 +628,7 @@ class BackendController(QObject):
         retrieval_interface.btn_submit_blast.setEnabled(False)
         retrieval_interface.btn_load_job.setEnabled(False)
         retrieval_interface.btn_stop.setEnabled(True)
+        retrieval_interface.chk_summary.setEnabled(False)
         InfoBar.success(
             title="Success",
             content="Previous job loaded!",
@@ -641,9 +643,11 @@ class BackendController(QObject):
         if self.blast_thread and self.blast_thread.is_alive():
             self.blast_thread = None
 
-        retrieval_interface.btn_submit_blast.setEnabled(True)
-        retrieval_interface.btn_load_job.setEnabled(True)
+        summary_checked = retrieval_interface.chk_summary.isChecked()
+        retrieval_interface.btn_submit_blast.setEnabled(summary_checked is False)
+        retrieval_interface.btn_load_job.setEnabled(summary_checked is False)
         retrieval_interface.btn_stop.setEnabled(False)
+        retrieval_interface.chk_summary.setEnabled(True)
 
         self.emit_log("BLAST process stopped.", "WARNING")
 

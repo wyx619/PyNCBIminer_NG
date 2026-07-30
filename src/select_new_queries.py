@@ -1,22 +1,22 @@
-import networkx as nx
-import pandas as pd
-import numpy as np
-from Bio import AlignIO
-from pathlib import Path
-from datetime import datetime
-from Bio import SeqIO
-from main_utils import get_query_accession
-from seq_check_download import seq_check_download_main
-from call_mafft2 import get_mafft_path
-from functional import run_command
-import shutil
-
-# 导入markov_clustering模块
-import markov_clustering as mc
-
 # 确保 sys.stdout 存在（PyInstaller 打包时可能为 None）
 import os
+import shutil
 import sys
+from datetime import datetime
+from pathlib import Path
+
+import networkx as nx
+import numpy as np
+import pandas as pd
+from Bio import AlignIO, SeqIO
+
+from call_mafft2 import get_mafft_path
+from functional import run_command
+from main_utils import get_query_accession
+
+# 导入MCL聚类模块
+from mcl import get_clusters, run_mcl
+from seq_check_download import seq_check_download_main
 
 if sys.stdout is None:
     sys.stdout = open(os.devnull, "w")
@@ -41,7 +41,6 @@ def cluster_queries(wd, ref_list=None):
     index_list = []
     for name, group in groups:
         try:
-
             print("%s, %d sequences" % (name, len(group)))
             if len(group) < 3:
                 print("Selecting one sequence found by this query randomly ...")
@@ -83,25 +82,29 @@ def cluster_queries(wd, ref_list=None):
                 print("running time: %s Seconds" % (time3 - time2))
                 print("Running MCL...", end="")
 
-                result = mc.run_mcl(matrix)
+                result = run_mcl(matrix)
                 time4 = datetime.now()
                 print("running time: %s Seconds" % (time4 - time3))
                 print("Getting clusters...", end="")
-                clusters = mc.get_clusters(result)
+                clusters = get_clusters(result)
                 time5 = datetime.now()
                 print("running time: %s Seconds" % (time5 - time4))
                 print("Total running time: %s Seconds" % (time5 - time0))
                 print("get %d clusters" % len(clusters))
-                print("Selecting the sequence with the longest align length from each cluster...")
+                print(
+                    "Selecting the sequence with the longest align length from each cluster..."
+                )
                 for i, cluster in enumerate(clusters):
                     print("cluster %d, %d sequences" % (i, len(cluster)))
                     indices = group.iloc[list(cluster)].index
-                    df.loc[indices, "qcluster"] = i
+                    df.loc[indices, "qcluster"] = str(i)
                     index_list.append(
                         df.loc[indices]
                         .sort_values(
                             by=["sum_hits_alignlen", "sum_hits_score"],
-                            ascending=[False, True],).index[0]
+                            ascending=[False, True],
+                        )
+                        .index[0]
                     )
                 df.to_csv(
                     Path(wd) / Path("hits_selected_clusters.txt"), index=False, sep="\t"
@@ -180,7 +183,6 @@ def filter_seq(
                 print("Removed duplicate sequence: " + index)
                 n += 1
             else:
-
                 SeqIO.write(record, fw, "fasta")
                 index_list.append(index)
 
@@ -194,98 +196,101 @@ def filter_seq(
 
 def p_distance(wd, in_file):
     from scipy.spatial.distance import pdist, squareform
-    
+
     alignment = AlignIO.read(Path(wd) / Path(in_file), "fasta")
-    
+
     # 将序列转换为数值数组（A=0, T=1, C=2, G=3, -=4, 其他=5）
     # 使用向量化操作提高性能
     base_to_int = np.array([0] * 256, dtype=np.int8)  # 查找表
-    for i, base in enumerate(b'ATCG'):
+    for i, base in enumerate(b"ATCG"):
         base_to_int[base] = i
-    base_to_int[ord('-')] = 4
-    base_to_int[ord('N')] = 5
-    
+    base_to_int[ord("-")] = 4
+    base_to_int[ord("N")] = 5
+
     # 转换为数值矩阵
     seq_array = np.zeros((len(alignment), len(alignment[0])), dtype=np.int8)
     for i, record in enumerate(alignment):
-        seq_bytes = str(record.seq).upper().encode('ascii', errors='replace')
-        seq_array[i, :len(seq_bytes)] = [base_to_int[b] for b in seq_bytes]
-    
+        seq_bytes = str(record.seq).upper().encode("ascii", errors="replace")
+        seq_array[i, : len(seq_bytes)] = [base_to_int[b] for b in seq_bytes]
+
     # 使用 pdist 计算 p-distance（Hamming 距离归一化）
-    distances = pdist(seq_array, metric='hamming')
-    
+    distances = pdist(seq_array, metric="hamming")
+
     # 转换为方阵
     distance_matrix = squareform(distances)
-    
+
     # 转换为 DataFrame
     df = pd.DataFrame(distance_matrix)
-    
+
     return df
 
 
 def my_mcl(wd, df, table):
     from scipy.sparse import lil_matrix
-    
+
     # 检查输入是否为空
     if df is None or len(df) == 0:
         print("Warning: Distance matrix is empty.")
         return None
-    
+
     # Nodes are considered adjacent if the distance between them is <= 0.3 units
     matrix = np.array(df)
-    
+
     # 检查矩阵维度
     if matrix.ndim < 2 or matrix.shape[0] < 2 or matrix.shape[1] < 2:
-        print("Warning: Distance matrix has insufficient dimensions (%s)." % str(matrix.shape))
+        print(
+            "Warning: Distance matrix has insufficient dimensions (%s)."
+            % str(matrix.shape)
+        )
         return None
-    
+
     # 构建邻接矩阵：距离 <= 0.3 为相邻
     adj_matrix = (matrix <= 0.3).astype(int)
     np.fill_diagonal(adj_matrix, 1)  # 对角线设为 1
-    
+
     # 转换为稀疏矩阵
     lil_mat = lil_matrix(adj_matrix)
     sparse_matrix = lil_mat.tocsr()
-    
+
     try:
         # 运行 MCL 聚类
-        result = mc.run_mcl(sparse_matrix)
-        clusters = mc.get_clusters(result)
-        
+        result = run_mcl(sparse_matrix)
+        clusters = get_clusters(result)
+
         # 检查聚类结果是否为空
         if clusters is None or len(clusters) == 0:
             print("Warning: MCL returned no clusters.")
             return None
-        
+
         # 读取表格并处理
         df1 = pd.read_table(Path(wd) / Path(table), sep="\t", engine="python")
         df1["scluster"] = -1
-        
+
         # 从每个聚类中选择序列
         index_list = []
         for i, cluster in enumerate(clusters):
             cluster_indices = list(cluster)
             df1.loc[cluster_indices, "scluster"] = i
-            
+
             # 选择该聚类中最长的序列
-            selected_idx = df1.loc[cluster_indices].sort_values(
-                by="seq_len", ascending=False
-            ).index[0]
+            selected_idx = (
+                df1.loc[cluster_indices]
+                .sort_values(by="seq_len", ascending=False)
+                .index[0]
+            )
             index_list.append(selected_idx)
-        
+
         # 保存聚类结果
         df1.to_csv(Path(wd) / Path(table), index=False, sep="\t")
-        
+
         # 返回选中的序列
         print("get %d clusters" % len(index_list))
         df2 = df1.iloc[index_list].sort_values(by="subject_acc.ver")
         return df2
-        
+
     except Exception as e:
         print("MCL clustering failed: %s" % str(e))
         return None
-
-
 
 
 def cluster_sequences(wd, fasta_file=r"hits_clustered_filtered.fasta"):
@@ -293,29 +298,31 @@ def cluster_sequences(wd, fasta_file=r"hits_clustered_filtered.fasta"):
     msa_file = "msa_" + fasta_file
     table_file = Path(wd) / Path("hits_clustered_filtered.txt")
     output_file = Path(wd) / Path("sequences_clustered.txt")
-    
+
     # 检查输入文件
     fasta_path = Path(wd) / Path(fasta_file)
     if not fasta_path.exists() or fasta_path.stat().st_size == 0:
         print("Warning: %s does not exist or is empty." % fasta_file)
         return None
-    
+
     # 统计序列数
     n_seq = sum(1 for _ in SeqIO.parse(fasta_path, "fasta"))
-    
+
     # 序列数 < 5，跳过 MCL
     if n_seq < 5:
-        print("Only %d sequences left after filtering. No need to do MCL step2." % n_seq)
+        print(
+            "Only %d sequences left after filtering. No need to do MCL step2." % n_seq
+        )
         seq_clustered = pd.read_table(table_file, sep="\t")
         seq_clustered.to_csv(output_file, index=False, sep="\t")
         return seq_clustered
-    
+
     # 运行 MAFFT
     print("Running MAFFT L-INS-i alignment...")
     mafft_exe = get_mafft_path()
     command = f"{mafft_exe} --localpair --maxiterate 1000 {fasta_path} > {Path(wd) / msa_file}"
     run_command(command)
-    
+
     # 检查 MAFFT 结果
     msa_path = Path(wd) / Path(msa_file)
     if not msa_path.exists() or msa_path.stat().st_size == 0:
@@ -323,27 +330,26 @@ def cluster_sequences(wd, fasta_file=r"hits_clustered_filtered.fasta"):
         seq_clustered = pd.read_table(table_file, sep="\t")
         seq_clustered.to_csv(output_file, index=False, sep="\t")
         return seq_clustered
-    
+
     # 计算 p-distance
     print("Calculating p-distance matrix...")
     seq_distance = p_distance(wd, msa_file)
     seq_distance.to_csv(
-        Path(wd) / Path(Path(msa_file).stem + "_distance.txt"),
-        index=True, sep="\t"
+        Path(wd) / Path(Path(msa_file).stem + "_distance.txt"), index=True, sep="\t"
     )
-    
+
     # 运行 MCL（带错误处理）
     print("Running MCL clustering...")
     table = r"hits_clustered_filtered.txt"
-    
+
     # 尝试调用 my_mcl
     seq_clustered = my_mcl(wd, seq_distance, table)
-    
+
     # Fallback：如果 MCL 失败，使用所有序列
     if seq_clustered is None:
         print("MCL failed, using all filtered sequences.")
         seq_clustered = pd.read_table(table_file, sep="\t")
-    
+
     seq_clustered.to_csv(output_file, index=False, sep="\t")
     return seq_clustered
 
@@ -375,7 +381,6 @@ def select_new_queries(tmp_wd, blast_round, ref_number):
         )
         seq_clustered = seq_clustered.iloc[index_list]
 
-
     seq_clustered["blast_round"] = blast_round
 
     """
@@ -404,7 +409,7 @@ def select_new_queries(tmp_wd, blast_round, ref_number):
     # all_new_queries.to_csv(Path(wd) / Path("parameters") / Path("all_queries_info.txt"), index=False, sep="\t")
 
     return seq_clustered.shape[0]
-    
+
 
 def select_new_queries_main(
     wd,
@@ -416,6 +421,7 @@ def select_new_queries_main(
     blast_round,
     ref_number,
     allowed_taxa,
+    stop_flag=None,
 ):
     file_list = [f.name for f in Path(tmp_wd).iterdir()]
 
@@ -454,6 +460,7 @@ def select_new_queries_main(
             exclude_sources=exclude_sources,
             entrez_email=entrez_email,
             allowed_taxa=allowed_taxa,
+            stop_flag=stop_flag,
         )
         if (Path(wd) / "parameters" / "ref_seq").exists():
             ref_file_list = [

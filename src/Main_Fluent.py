@@ -377,6 +377,14 @@ class RetrievalInterface(QWidget):
         btn_row.addWidget(self.btn_load_job)
         vBoxLayout.addLayout(btn_row)
 
+        self.chk_summary.stateChanged.connect(
+            lambda state: (
+                self.btn_submit_blast.setDisabled(state != 0),
+                self.btn_load_job.setDisabled(state != 0),
+                self.btn_stop.setDisabled(state != 0),
+            )
+        )
+
         stop_row = QHBoxLayout()
         stop_row.addWidget(self.btn_stop)
         vBoxLayout.addLayout(stop_row)

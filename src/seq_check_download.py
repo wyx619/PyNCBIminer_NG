@@ -228,7 +228,7 @@ def write_fas_file(record, start, end, strand, wd, file):
 
 
 def seq_check_download(
-    wd, acc_file, out_file, key_annotations, exclude_sources, entrez_email, allowed_taxa
+    wd, acc_file, out_file, key_annotations, exclude_sources, entrez_email, allowed_taxa, stop_flag=None
 ):
     """download fasta files from Genbank according to given accessions"""
     # todo: use user provided email
@@ -238,6 +238,9 @@ def seq_check_download(
     retry_count = {}
     print(f"Taxonomy whitelist: {allowed_taxa}")
     while len(acc_list) != 0:
+        if stop_flag and stop_flag.is_set():
+            print("Download stopped by user.")
+            return
         accession = acc_list[0]
         if accession not in retry_count:
             retry_count[accession] = 0
@@ -350,7 +353,7 @@ def seq_check_download(
 
 
 def seq_check_download_main(
-    wd, acc_file, out_file, key_annotations, exclude_sources, entrez_email, allowed_taxa, extend=False
+    wd, acc_file, out_file, key_annotations, exclude_sources, entrez_email, allowed_taxa, extend=False, stop_flag=None
 ):
     print("Downloading sequences...")
     df = pd.read_table(Path(wd) / Path(acc_file), sep="\t", engine="python")
@@ -429,6 +432,7 @@ def seq_check_download_main(
         exclude_sources=exclude_sources,
         entrez_email=entrez_email,
         allowed_taxa=allowed_taxa,
+        stop_flag=stop_flag,
     )
 
     with open(Path(wd) / Path("value_error_list.txt"), "r") as fw:
