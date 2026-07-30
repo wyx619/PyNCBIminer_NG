@@ -803,7 +803,10 @@ class BackendController(QObject):
                     self.emit_log(
                         f"MAFFT completed in {total_time:.2f} seconds", "SUCCESS"
                     )
-
+            except FileNotFoundError as e:
+                self.emit_log(str(e), "WARNING")
+            except Exception as e:
+                self.emit_log(f"MAFFT failed: {e}", "ERROR")
             finally:
                 for file in Path(out_path).glob("*"):
                     if not file.name.startswith("msa"):
@@ -866,25 +869,30 @@ class BackendController(QObject):
 
             self.emit_log("Running trimAl...")
 
-            _, total_time = trimal(
-                in_path,
-                out_path,
-                False,
-                False,
-                met,
-                gt_val,
-                st_val,
-                ct_val,
-                con_val,
-                "",
-                False,
-                "",
-                emit_callback,
-            )
-            if total_time is not None:
-                self.emit_log(
-                    f"trimAl completed in {total_time:.2f} seconds", "SUCCESS"
+            try:
+                _, total_time = trimal(
+                    in_path,
+                    out_path,
+                    False,
+                    False,
+                    met,
+                    gt_val,
+                    st_val,
+                    ct_val,
+                    con_val,
+                    "",
+                    False,
+                    "",
+                    emit_callback,
                 )
+                if total_time is not None:
+                    self.emit_log(
+                        f"trimAl completed in {total_time:.2f} seconds", "SUCCESS"
+                    )
+            except FileNotFoundError as e:
+                self.emit_log(str(e), "WARNING")
+            except Exception as e:
+                self.emit_log(f"trimAl failed: {e}", "ERROR")
 
         thread = threading.Thread(target=run_trimming_thread)
         thread.daemon = True

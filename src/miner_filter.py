@@ -1,6 +1,7 @@
-
+import os
 import re
 import shutil
+import sys
 import time
 from pathlib import Path
 
@@ -10,10 +11,6 @@ from Bio.Seq import Seq
 
 from functional import create_folder
 from nt_calculator import nt_Calculator
-import os
-import sys
-
-
 
 try:
     DEVNULL = os.devnull
@@ -27,7 +24,16 @@ if sys.stderr is None:
 
 
 from call_mafft2 import get_mafft_path
-mafft_exe = get_mafft_path()
+
+mafft_exe = None
+
+
+def _get_mafft_exe():
+    global mafft_exe
+    if mafft_exe is None:
+        mafft_exe = get_mafft_path()
+    return mafft_exe
+
 
 class Miner_filter:
     """CLass Miner_filter - filter retrieved seqs, including three main functions:
@@ -123,7 +129,7 @@ class Miner_filter:
                 shutil.move(self.__out_path / "results" / file, backup_folder / file)
 
         tmp_files = [
-            #"consensus_calculation",
+            # "consensus_calculation",
             "blast_result_kept.txt",
             "blast_result_long.fasta",
             "blast_result_long.txt",
@@ -281,6 +287,7 @@ class Miner_filter:
     def _tnrs_correct_names(self, tnrs_sources, tnrs_accuracy, emit_log):
         """Correct organism names via TNRS API before species-level selection."""
         import shutil
+
         from Chloroplast.TNRS import TNRS_cached
 
         info_path = self.__in_path / "results" / self.__get_info_csv()
@@ -322,7 +329,10 @@ class Miner_filter:
 
         n_corrected = sum(1 for n in names if n in rename_map and rename_map[n] != n)
         n_unmatched = len(names) - len(rename_map)
-        emit_log(f"TNRS: {n_corrected}/{len(names)} names corrected, {n_unmatched} unmatched (will be excluded).", "INFO")
+        emit_log(
+            f"TNRS: {n_corrected}/{len(names)} names corrected, {n_unmatched} unmatched (will be excluded).",
+            "INFO",
+        )
 
     def reduce_dataset(
         self,
@@ -358,6 +368,7 @@ class Miner_filter:
         - emit_log - optional callback(message, level) for GUI logging
         """
         if emit_log is None:
+
             def emit_log(msg, level="INFO"):
                 print(f"[{level}] {msg}")
 
@@ -569,34 +580,35 @@ class Miner_filter:
         return len(seq_str.translate(trans_table))
 
     @staticmethod
-    def __remove_minor_large_insertion(record_path, length_threshold=20, taxa_threshold=1, keep_tmp=False):
+    def __remove_minor_large_insertion(
+        record_path, length_threshold=20, taxa_threshold=1, keep_tmp=False
+    ):
         import numpy as np
 
         ## STEP 1: load related information
         record_iter = list(SeqIO.parse(record_path, "fasta"))
         records = np.array([list(str(record.seq).upper()) for record in record_iter])
-        
+
         ## STEP 2: record minor large insertion (in list remove_ends)
         single_insertion_columns = []
         num_taxa = records.shape[0]
         for col in range(records.shape[1]):
-            if np.sum(records[:,col]=="-") >= num_taxa-taxa_threshold:
+            if np.sum(records[:, col] == "-") >= num_taxa - taxa_threshold:
                 single_insertion_columns.append(col)
-                
+
         if not single_insertion_columns:
             return []
-            
+
         prev_col = single_insertion_columns[0]
         final_col = single_insertion_columns[-1]
         start = single_insertion_columns[0]
-        remove_ends = [] # [[0,50], [start2, end2]] means 0~50 bp and start2~end2 bp will be removed
+        remove_ends = []  # [[0,50], [start2, end2]] means 0~50 bp and start2~end2 bp will be removed
         count = 1
-        
+
         for col in single_insertion_columns[1:]:
-            
-            if col-prev_col==1 and col!=final_col:
+            if col - prev_col == 1 and col != final_col:
                 count += 1
-            elif col-prev_col==1 and col==final_col:
+            elif col - prev_col == 1 and col == final_col:
                 count += 1
                 if count >= length_threshold:
                     remove_ends.append([start, col])
@@ -607,58 +619,58 @@ class Miner_filter:
                     remove_ends.append([start, prev_col])
                 count = 1
                 start = col
-                    
+
             prev_col = col
-            
+
         ## STEP 3: remove those recorded insertion in both msa file and unaligned file
         ## substep 1: remove those insertion in all records
         for record in record_iter:
             if not remove_ends:
                 return []
             if keep_tmp and Path(record_path).is_file():
-                shutil.copy(record_path, record_path.replace(".fasta","_backup.fasta"))
-                shutil.copy(record_path.replace("_msa.fasta",".fasta"), record_path.replace("_msa.fasta","_backup.fasta"))
+                shutil.copy(record_path, record_path.replace(".fasta", "_backup.fasta"))
+                shutil.copy(
+                    record_path.replace("_msa.fasta", ".fasta"),
+                    record_path.replace("_msa.fasta", "_backup.fasta"),
+                )
             for ends in remove_ends:
                 sequence = record.seq
-                sequence = sequence[:ends[0]] + "-"*(ends[1]-ends[0]+1) + sequence[ends[1]+1:]
-            sequence = Seq(str(sequence).replace("-",""))
+                sequence = (
+                    sequence[: ends[0]]
+                    + "-" * (ends[1] - ends[0] + 1)
+                    + sequence[ends[1] + 1 :]
+                )
+            sequence = Seq(str(sequence).replace("-", ""))
             record.seq = sequence
-
 
         ## substep 2: write into unaligned file
 
         SeqIO.write(record_iter, record_path, "fasta")
 
-
         ## substep 3: write into msa file (直接使用 subprocess)
         import subprocess
-        
+
         temp_output = str(record_path).replace(".fasta", "_temp.fasta")
-        
+
         record_path_str = Path(record_path).as_posix()
         temp_output_str = Path(temp_output).as_posix()
-        mafft_exe_str = Path(mafft_exe).as_posix()
-        
+        mafft_exe_str = Path(_get_mafft_exe()).as_posix()
+
         commandstr = f'"{mafft_exe_str}" --auto --quiet "{record_path_str}" > "{temp_output_str}"'
-        
-        result = subprocess.run(
-            commandstr,
-            shell=True,
-            capture_output=True,
-            text=True
-        )
-        
+
+        result = subprocess.run(commandstr, shell=True, capture_output=True, text=True)
+
         if result.returncode != 0:
             raise RuntimeError(f"MAFFT failed: {result.stderr}")
-        
+
         if not Path(temp_output).exists():
             raise RuntimeError("MAFFT output file not created")
-        
+
         Path(temp_output).replace(record_path)
         size2 = record_path.stat().st_size
         if size2 == 0:
             raise ValueError(f"MAFFT failed to align {record_path}")
-        
+
         return remove_ends
 
     def __calculate_consensus_dict(self, length_threshold=20, taxa_threshold=1):
@@ -695,62 +707,69 @@ class Miner_filter:
 
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
-        taxon_list = [(taxon, records) for taxon, records in records_grouped.items() if len(records) > 3]
+        taxon_list = [
+            (taxon, records)
+            for taxon, records in records_grouped.items()
+            if len(records) > 3
+        ]
         total_taxa = len(taxon_list)
 
-        for (taxon, records) in taxon_list:
+        for taxon, records in taxon_list:
             records_path = tmp_path / f"{taxon}.fasta"
-            if records_path.exists() and records_path.stat().st_size>0:
+            if records_path.exists() and records_path.stat().st_size > 0:
                 continue
             else:
                 SeqIO.write(records, records_path, "fasta")
 
         create_folder(f"{tmp_path}/msa")
 
-
         def run_mafft_and_rename(taxon):
             import subprocess
-            
+
             msa_file = tmp_path / "msa" / f"{taxon}_msa.fasta"
             if msa_file.exists():
                 if msa_file.stat().st_size == 0:
                     msa_file.unlink()
                 else:
                     return taxon
-            
+
             in_file = tmp_path / f"{taxon}.fasta"
             out_file = tmp_path / "msa" / f"{taxon}_msa.fasta"
             temp_out = tmp_path / "msa" / f"{taxon}_msa_temp.fasta"
-            
+
             in_file_str = in_file.as_posix()
             temp_out_str = temp_out.as_posix()
-            mafft_exe_str = Path(mafft_exe).as_posix()
-            
-            commandstr = f'"{mafft_exe_str}" --auto --quiet "{in_file_str}" > "{temp_out_str}"'
-            
-            result = subprocess.run(
-                commandstr,
-                shell=True,
-                capture_output=True,
-                text=True
+            mafft_exe_str = Path(_get_mafft_exe()).as_posix()
+
+            commandstr = (
+                f'"{mafft_exe_str}" --auto --quiet "{in_file_str}" > "{temp_out_str}"'
             )
-            
+
+            result = subprocess.run(
+                commandstr, shell=True, capture_output=True, text=True
+            )
+
             if result.returncode != 0:
                 raise RuntimeError(f"MAFFT failed: {result.stderr}")
-            
+
             if temp_out.exists():
                 temp_out.rename(out_file)
-            
+
             return taxon
 
         completed = 0
-        with ThreadPoolExecutor(max_workers=min(total_taxa, 12, os.cpu_count())) as executor:
-            futures = {executor.submit(run_mafft_and_rename, taxon): taxon for taxon, _ in taxon_list}
+        with ThreadPoolExecutor(
+            max_workers=min(total_taxa, 12, os.cpu_count())
+        ) as executor:
+            futures = {
+                executor.submit(run_mafft_and_rename, taxon): taxon
+                for taxon, _ in taxon_list
+            }
             for future in as_completed(futures):
                 taxon = future.result()
                 completed += 1
                 print(f"MAFFT: {completed}/{total_taxa} - {taxon}")
-             
+
         def remove_insertion(taxon):
             temp_output_file = tmp_path / "msa" / f"{taxon}_msa.fasta"
             self.__remove_minor_large_insertion(
@@ -765,13 +784,18 @@ class Miner_filter:
             return taxon, consensus_sequence
 
         completed = 0
-        with ThreadPoolExecutor(max_workers=min(total_taxa, 12, os.cpu_count())) as executor:
-            futures = {executor.submit(remove_insertion, taxon): taxon for taxon, _ in taxon_list}
+        with ThreadPoolExecutor(
+            max_workers=min(total_taxa, 12, os.cpu_count())
+        ) as executor:
+            futures = {
+                executor.submit(remove_insertion, taxon): taxon
+                for taxon, _ in taxon_list
+            }
             for future in as_completed(futures):
                 taxon, consensus_sequence = future.result()
                 records_consensus[taxon] = consensus_sequence
                 completed += 1
-                if completed%100==0 and completed!=total_taxa:
+                if completed % 100 == 0 and completed != total_taxa:
                     print(f"Consensus: {completed}/{total_taxa} - {taxon}")
 
         self.__taxa_consensus_dict = records_consensus
@@ -1253,6 +1277,7 @@ class Miner_filter:
 
     def __align_subset(self, add_threshold=5):
         import subprocess
+
         """align the subsets
         ----------
         Parameters
@@ -1281,24 +1306,21 @@ class Miner_filter:
             if record_count > add_threshold:
                 temp_output_dir = out_path / f"temp_{Path(file).stem}"
                 temp_output_dir.mkdir(parents=True, exist_ok=True)
-                
+
                 in_file_str = file_abs_path.as_posix()
                 out_file = temp_output_dir / file
                 out_file_str = out_file.as_posix()
-                mafft_exe_str = Path(mafft_exe).as_posix()
-                
+                mafft_exe_str = Path(_get_mafft_exe()).as_posix()
+
                 commandstr = f'"{mafft_exe_str}" --auto --thread -1 --reorder "{in_file_str}" > "{out_file_str}"'
-                
+
                 result = subprocess.run(
-                    commandstr,
-                    shell=True,
-                    capture_output=True,
-                    text=True
+                    commandstr, shell=True, capture_output=True, text=True
                 )
-                
+
                 if result.returncode != 0:
                     raise RuntimeError(f"MAFFT failed: {result.stderr}")
-                
+
                 if out_file.exists():
                     shutil.move(str(out_file), str(file_out_path))
                 if temp_output_dir.exists():
@@ -1350,25 +1372,22 @@ class Miner_filter:
 
             temp_output_dir = out_path / f"temp_{Path(file).stem}"
             temp_output_dir.mkdir(parents=True, exist_ok=True)
-            
+
             in_file_str = file_abs_path.as_posix()
             out_file = temp_output_dir / file
             out_file_str = out_file.as_posix()
             ref_aligned_str = ref_aligned_path.as_posix()
-            mafft_exe_str = Path(mafft_exe).as_posix()
-            
+            mafft_exe_str = Path(_get_mafft_exe()).as_posix()
+
             commandstr = f'"{mafft_exe_str}" --quiet --auto --add "{ref_aligned_str}" --thread -1 --reorder "{in_file_str}" > "{out_file_str}"'
-            
+
             result = subprocess.run(
-                commandstr,
-                shell=True,
-                capture_output=True,
-                text=True
+                commandstr, shell=True, capture_output=True, text=True
             )
-            
+
             if result.returncode != 0:
                 raise RuntimeError(f"MAFFT --add failed: {result.stderr}")
-            
+
             if out_file.exists():
                 shutil.move(str(out_file), str(file_out_path))
             if temp_output_dir.exists():

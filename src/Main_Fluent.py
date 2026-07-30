@@ -1360,7 +1360,7 @@ class ChloroplastMinerInterface(QWidget):
 
         layout.addWidget(grp)
 
-        self.btn_chloro_qc_extract = PrimaryPushButton("Extract", w)
+        self.btn_chloro_qc_extract = PrimaryPushButton("Extract and QC", w)
         self.btn_chloro_qc_extract.setIcon(FIF.PLAY)
         self.btn_chloro_qc_extract.clicked.connect(self.on_chloro_qc_extract)
         layout.addWidget(self.btn_chloro_qc_extract)
@@ -1403,6 +1403,7 @@ class ChloroplastMinerInterface(QWidget):
         self.chloro_pga_clade.currentTextChanged.connect(
             self.on_chloro_pga_clade_changed
         )
+
         self.chloro_pga_ref = LineEdit()
         self.chloro_pga_ref.setPlaceholderText("Reference genome directory")
         self.chloro_pga_ref.setEnabled(False)
@@ -1418,6 +1419,7 @@ class ChloroplastMinerInterface(QWidget):
             "Angiosperms / Gymnosperms use built-in references;\n"
             "User defined requires a custom reference genome directory."
         )
+
         lbl_pga_ref = BodyLabel("Reference Genome:")
         lbl_pga_ref.setToolTip(
             "Directory of reference GenBank files for PGA.\n"
@@ -1425,6 +1427,7 @@ class ChloroplastMinerInterface(QWidget):
         )
         h_pga_ref.addWidget(lbl_pga_clade)
         h_pga_ref.addWidget(self.chloro_pga_clade)
+        #h_pga_ref.addStretch()
         h_pga_ref.addWidget(lbl_pga_ref)
         h_pga_ref.addWidget(self.chloro_pga_ref)
         h_pga_ref.addWidget(self.btn_chloro_pga_ref)
@@ -1977,7 +1980,7 @@ class ChloroplastMinerInterface(QWidget):
 
         if not ori_gb_folder:
             self.main_window.backend.emit_log(
-                "Please select original GenBank directory", "WARNING"
+                "Please select input directory of Extract & QC", "WARNING"
             )
             return
 

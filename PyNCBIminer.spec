@@ -94,9 +94,6 @@ a = Analysis(
         'PIL._tkinter_finder',
         # Test submodules
         'pandas.tests',
-        'pandas.io.formats.style',
-        'pandas.io.sas',
-        'pandas.io.stata',
         'numpy.tests',
         'numpy.f2py',
         'scipy.tests',
