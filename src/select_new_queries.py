@@ -5,10 +5,10 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-import networkx as nx
 import numpy as np
 import pandas as pd
 from Bio import AlignIO, SeqIO
+from scipy.sparse import csr_matrix
 
 from call_mafft2 import get_mafft_path
 from functional import run_command
@@ -22,6 +22,21 @@ if sys.stdout is None:
     sys.stdout = open(os.devnull, "w")
 if sys.stderr is None:
     sys.stderr = open(os.devnull, "w")
+
+
+def geometric_adjacency(n, radius, positions):
+    """Build the symmetric adjacency matrix of a geometric random graph.
+
+    Nodes i and j (i != j) are connected iff their Euclidean distance <= radius.
+    Equivalent to nx.random_geometric_graph + nx.to_scipy_sparse_array,
+    including the inclusive (<=) edge threshold used by networkx.
+    """
+    coords = np.array([positions[i] for i in range(n)], dtype=float)
+    diff = coords[:, None, :] - coords[None, :, :]
+    dist_sq = np.sum(diff * diff, axis=2)
+    adj = dist_sq <= radius * radius
+    np.fill_diagonal(adj, False)
+    return csr_matrix(adj.astype(float))
 
 
 def cluster_queries(wd, ref_list=None):
@@ -71,25 +86,21 @@ def cluster_queries(wd, ref_list=None):
                 time1 = datetime.now()
                 print("running time: %s Seconds" % (time1 - time0))
                 print("Generating network...", end="")
-                network = nx.random_geometric_graph(
+                matrix = geometric_adjacency(
                     group.shape[0], radius=0.1 * query_ref_len, pos=positions
                 )  # get 56 clusters
                 time2 = datetime.now()
                 print("running time: %s Seconds" % (time2 - time1))
-                print("Converting to matrix...", end="")
-                matrix = nx.to_scipy_sparse_array(network)
-                time3 = datetime.now()
-                print("running time: %s Seconds" % (time3 - time2))
                 print("Running MCL...", end="")
 
                 result = run_mcl(matrix)
-                time4 = datetime.now()
-                print("running time: %s Seconds" % (time4 - time3))
+                time3 = datetime.now()
+                print("running time: %s Seconds" % (time3 - time2))
                 print("Getting clusters...", end="")
                 clusters = get_clusters(result)
-                time5 = datetime.now()
-                print("running time: %s Seconds" % (time5 - time4))
-                print("Total running time: %s Seconds" % (time5 - time0))
+                time4 = datetime.now()
+                print("running time: %s Seconds" % (time4 - time3))
+                print("Total running time: %s Seconds" % (time4 - time0))
                 print("get %d clusters" % len(clusters))
                 print(
                     "Selecting the sequence with the longest align length from each cluster..."

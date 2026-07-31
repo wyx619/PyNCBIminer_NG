@@ -28,7 +28,6 @@ a = Analysis(
         'numpy',
         'scipy',
         'mcl',
-        'networkx',
         # BioPython
         'Bio',
         'Bio.SeqIO',
@@ -41,6 +40,7 @@ a = Analysis(
         'blast_results_extend',
         'call_mafft2',
         'call_trimal',
+        'combine_markers',
         'format_wizard',
         'functional',
         'hits_parse_join_select',
@@ -96,7 +96,6 @@ a = Analysis(
         'numpy.tests',
         'numpy.f2py',
         'scipy.tests',
-        'networkx.tests',
         'Bio.tests',
     ],
     noarchive=True,
