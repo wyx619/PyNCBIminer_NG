@@ -1,16 +1,15 @@
-import urllib.error
-import func_timeout.exceptions
 import shutil
-from func_timeout import func_set_timeout
-from Bio import Entrez
-from pathlib import Path
+import socket
+import urllib.error
 from datetime import datetime
-from Bio import SeqIO
+from pathlib import Path
+
 import pandas as pd
+from Bio import Entrez, SeqIO
+
 from main_utils import get_query_accession
 
 
-@func_set_timeout(180)
 def my_efetch(accession, strand, seq_start, seq_stop):
     """Fetch sequence from NCBI with timeout protection."""
     handle = Entrez.efetch(
@@ -28,7 +27,6 @@ def my_efetch(accession, strand, seq_start, seq_stop):
     return handle
 
 
-@func_set_timeout(180)
 def parse_gb_record(handle, accession):
     """Parse GenBank record with timeout protection."""
     print(f"Parsing GenBank record for {accession}...")
@@ -228,11 +226,19 @@ def write_fas_file(record, start, end, strand, wd, file):
 
 
 def seq_check_download(
-    wd, acc_file, out_file, key_annotations, exclude_sources, entrez_email, allowed_taxa, stop_flag=None
+    wd,
+    acc_file,
+    out_file,
+    key_annotations,
+    exclude_sources,
+    entrez_email,
+    allowed_taxa,
+    stop_flag=None,
 ):
     """download fasta files from Genbank according to given accessions"""
     # todo: use user provided email
     Entrez.email = entrez_email
+    socket.setdefaulttimeout(180)  # cover my_efetch + parse_gb_record (network reads)
     acc_list = list(acc_file.index)
     max_retries = 3
     retry_count = {}
@@ -281,7 +287,9 @@ def seq_check_download(
                     reasons.append("annotation filter failed")
                 if not tax_ok:
                     organism = record.annotations.get("organism", "unknown")
-                    taxonomy = "; ".join(record.annotations.get("taxonomy", [])) or "unknown"
+                    taxonomy = (
+                        "; ".join(record.annotations.get("taxonomy", [])) or "unknown"
+                    )
                     reasons.append(
                         f"taxonomy not in whitelist (organism={organism}; taxonomy={taxonomy})"
                     )
@@ -322,7 +330,7 @@ def seq_check_download(
             with open(Path(wd) / Path("bad_request_list.txt"), "a") as fw:
                 fw.write(accession + "\n")
             print(f"Bad request: {accession}. Move on to the next sequence.")
-        except func_timeout.exceptions.FunctionTimedOut:
+        except (socket.timeout, TimeoutError):
             retry_count[accession] += 1
             if retry_count[accession] < max_retries:
                 print(
@@ -331,9 +339,7 @@ def seq_check_download(
                 )
             else:
                 acc_list.pop(0)
-                print(
-                    f"Time out, skipped {accession} after {max_retries} attempts."
-                )
+                print(f"Time out, skipped {accession} after {max_retries} attempts.")
                 with open(Path(wd) / Path("bad_request_list.txt"), "a") as fw:
                     fw.write(accession + "\n")
         except Exception as result:
@@ -353,7 +359,15 @@ def seq_check_download(
 
 
 def seq_check_download_main(
-    wd, acc_file, out_file, key_annotations, exclude_sources, entrez_email, allowed_taxa, extend=False, stop_flag=None
+    wd,
+    acc_file,
+    out_file,
+    key_annotations,
+    exclude_sources,
+    entrez_email,
+    allowed_taxa,
+    extend=False,
+    stop_flag=None,
 ):
     print("Downloading sequences...")
     df = pd.read_table(Path(wd) / Path(acc_file), sep="\t", engine="python")

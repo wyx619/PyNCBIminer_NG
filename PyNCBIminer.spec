@@ -32,8 +32,6 @@ a = Analysis(
         'Bio',
         'Bio.SeqIO',
         'Bio.Blast',
-        # Other dependencies
-        'func_timeout',
         # Project modules (src/)
         'main_utils',
         'blast_put_get',

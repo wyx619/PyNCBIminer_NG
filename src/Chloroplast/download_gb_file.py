@@ -1,46 +1,38 @@
-# *-* coding:utf-8 *-*
-# @Time:2022/1/5 10:02
-# @Author:Ruijing Cheng
-# @File:download_gb_file.py
-# @Software:PyCharm
-
-
-
-from pathlib import Path
-
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from Bio import Entrez, SeqIO
-import func_timeout
-from func_timeout import func_set_timeout
+import socket
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 from threading import Lock
-import pandas as pd
 
-@func_set_timeout(600)
+import pandas as pd
+from Bio import Entrez, SeqIO
+
+
 def download_single(email, accession, out_path, request_lock, last_request_time):
     """下载单个基因组文件（带速率控制）"""
+    socket.setdefaulttimeout(600)  # cover Entrez.efetch + SeqIO.read (network reads)
     with request_lock:
         elapsed = time.time() - last_request_time[0]
         if elapsed < 0.34:
             time.sleep(0.34 - elapsed)
         last_request_time[0] = time.time()
-    
+
     Entrez.email = email
-    
+
     with Entrez.efetch(db="nucleotide", rettype="gb", id=accession) as handle:
         record = SeqIO.read(handle, "gb")
-    
+
     accession_clean = record.id.split(".")[0]
     out_file = Path(out_path) / f"{accession_clean}.gb"
     with open(out_file, "w") as f:
         SeqIO.write(record, f, "gb")
-    
+
     return accession_clean
 
 
 def download_gb_file(email, in_path, out_path, max_threads=10, batch_size=None):
     """批量下载基因组文件
-    
+
     Args:
         email: NCBI联系邮箱
         in_path: accession列表文件路径
@@ -59,7 +51,9 @@ def download_gb_file(email, in_path, out_path, max_threads=10, batch_size=None):
 
     if error_file.exists() and error_file.stat().st_size > 0:
         error_df = pd.read_csv(error_file, header=None)
-        existing_files = {p.stem for p in out_path.glob("*.gb")} | set(error_df.iloc[:, 0].astype(str))
+        existing_files = {p.stem for p in out_path.glob("*.gb")} | set(
+            error_df.iloc[:, 0].astype(str)
+        )
     else:
         existing_files = {p.stem for p in out_path.glob("*.gb")}
     to_download = []
@@ -84,11 +78,19 @@ def download_gb_file(email, in_path, out_path, max_threads=10, batch_size=None):
         """Download attempt with retry"""
         for attempt in range(retries):
             try:
-                return download_single(email, acc, out_path, request_lock, last_request_time), True, None
-            except func_timeout.exceptions.FunctionTimedOut:
+                return (
+                    download_single(
+                        email, acc, out_path, request_lock, last_request_time
+                    ),
+                    True,
+                    None,
+                )
+            except (socket.timeout, TimeoutError):
                 if attempt < retries - 1:
-                    sleep_time = 2 ** attempt
-                    print(f"[Retry {attempt + 1}/{retries - 1}] {acc}: Timeout, waiting {sleep_time}s...")
+                    sleep_time = 2**attempt
+                    print(
+                        f"[Retry {attempt + 1}/{retries - 1}] {acc}: Timeout, waiting {sleep_time}s..."
+                    )
                     time.sleep(sleep_time)
                     continue
                 return acc, False, "Timeout"
@@ -96,23 +98,24 @@ def download_gb_file(email, in_path, out_path, max_threads=10, batch_size=None):
                 error_msg = str(e)
                 if "429" in error_msg and attempt < retries - 1:
                     sleep_time = 5 * (attempt + 1)
-                    print(f"[Retry {attempt + 1}/{retries - 1}] {acc}: 429 Rate limit, waiting {sleep_time}s...")
+                    print(
+                        f"[Retry {attempt + 1}/{retries - 1}] {acc}: 429 Rate limit, waiting {sleep_time}s..."
+                    )
                     time.sleep(sleep_time)
                     continue
                 if attempt < retries - 1:
-                    sleep_time = min(60, 2 ** attempt)
-                    print(f"[Retry {attempt + 1}/{retries - 1}] {acc}: {error_msg[:50]}, waiting {sleep_time}s...")
+                    sleep_time = min(60, 2**attempt)
+                    print(
+                        f"[Retry {attempt + 1}/{retries - 1}] {acc}: {error_msg[:50]}, waiting {sleep_time}s..."
+                    )
                     time.sleep(sleep_time)
                     continue
                 return acc, False, error_msg[:100]
         return acc, False, "Unknown"
 
     with ThreadPoolExecutor(max_workers=max_threads) as executor:
-        futures = {
-            executor.submit(attempt_download, acc): acc 
-            for acc in to_download
-        }
-        
+        futures = {executor.submit(attempt_download, acc): acc for acc in to_download}
+
         for future in as_completed(futures):
             acc = futures[future]
             try:
@@ -129,7 +132,6 @@ def download_gb_file(email, in_path, out_path, max_threads=10, batch_size=None):
 
     print(f"All downloads completed. Success: {success}, Failed: {failed}")
 
-    
     file_sizes = [f.stat().st_size for f in out_path.glob("*.gb")]
     print(f"Total downloaded: {len(file_sizes)}")
     if not file_sizes:

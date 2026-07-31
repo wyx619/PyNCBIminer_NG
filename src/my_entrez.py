@@ -1,11 +1,6 @@
-# *-* coding:utf-8 *-*
-# @Time:2024/2/2 14:46
-# @Author:Ruijing Cheng
-# @File:my_entrez.py
-# @Software:PyCharm
-
+import socket
 import ssl
-from func_timeout import func_set_timeout
+
 from Bio import Entrez
 
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -48,9 +43,13 @@ def format_entrez_query(organisms, entrez_qualifier="", date_from="", date_to=""
     return entrez_query
 
 
-@func_set_timeout(60)
 def entrez_count(
-    entrez_email, organisms, entrez_qualifier="", date_from="", date_to="", callback=None
+    entrez_email,
+    organisms,
+    entrez_qualifier="",
+    date_from="",
+    date_to="",
+    callback=None,
 ):
     """
     send entrez query to NCBI and get the entrez search results count
@@ -59,6 +58,7 @@ def entrez_count(
     :param callback: optional callback function to receive the count
     :return: entrez search results count
     """
+    socket.setdefaulttimeout(60)
     if len(entrez_email) == 0:
         print("Warning: email address is not specified.")
         print(

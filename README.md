@@ -145,9 +145,7 @@ output_directory/
 - Python >= 3.12
 - PySide6 + PySide6-Fluent-Widgets
 - Biopython
-- pandas, numpy, scipy, scikit-learn
-- networkx, markov-clustering
-- func_timeout
+- pandas, numpy, scipy
 
 External tools (auto-installable from Settings page):
 

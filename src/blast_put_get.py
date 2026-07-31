@@ -1,22 +1,21 @@
 import re
+import socket
 import ssl
 import time
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-import func_timeout.exceptions
 import numpy as np
 import pandas as pd
 from Bio import SeqIO
-from func_timeout import func_set_timeout
 
 
-def _urlopen_with_retry(request, max_retries=3, delay=5):
+def _urlopen_with_retry(request, max_retries=3, delay=5, timeout=None):
     """urlopen with retry on transient SSL/network errors."""
     for attempt in range(max_retries):
         try:
-            return urlopen(request)
+            return urlopen(request, timeout=timeout)
         except (ssl.SSLError, ConnectionResetError, OSError) as e:
             if attempt < max_retries - 1:
                 print(
@@ -104,10 +103,9 @@ def _parse_qblast_ref_page(handle):
         ) from None
 
 
-@func_set_timeout(60)
 def put_blast_requests(url_base, message, header):
     request = Request(url_base, message, headers=header)
-    handle = _urlopen_with_retry(request)
+    handle = _urlopen_with_retry(request, timeout=60)
     print("Parsing BLAST ref page...")
     rid, rtoe = _parse_qblast_ref_page(handle)  # get rid and rtoe
     return rid, rtoe
@@ -215,7 +213,7 @@ def put_blast(
                     "Query %s submitted, RID = %s, RTOE = %s"
                     % (sum_table.loc[index, "ID"], rid, rtoe)
                 )
-            except func_timeout.exceptions.FunctionTimedOut:
+            except socket.timeout:
                 print(
                     "Time out, try submitting Query %s again..."
                     % sum_table.loc[index, "ID"]
@@ -226,10 +224,9 @@ def put_blast(
     print("All queries submitted!")
 
 
-@func_set_timeout(600)
 def get_blast_results(url_base, message, header):
     request = Request(url_base, message, headers=header)
-    handle = _urlopen_with_retry(request)  # time-consuming
+    handle = _urlopen_with_retry(request, timeout=600)  # time-consuming
     print("Decoding results...")
     results = (
         handle.read().decode()
@@ -396,7 +393,7 @@ def get_blast(
                         sum_table.loc[index, "Query"] = query
                         sum_table.to_csv(Path(wd) / Path(table), index=False, sep="\t")
 
-            except func_timeout.exceptions.FunctionTimedOut:
+            except socket.timeout:
                 print(
                     "Time out, try contacting the server to get results for %s again..."
                     % sum_table.loc[index, "RID"]

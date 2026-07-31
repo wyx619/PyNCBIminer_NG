@@ -27,7 +27,6 @@ dependencies = [
     "numpy>=1.18.0",
     "PySide6>=6.0.0",
     "biopython>=1.78",
-    "func_timeout>=4.3.5",
     "scipy",
     "PySide6-Fluent-Widgets"
 ]
