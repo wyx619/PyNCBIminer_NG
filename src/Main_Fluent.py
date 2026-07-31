@@ -117,9 +117,11 @@ class RetrievalInterface(QWidget):
 
         self.page_retrieval = self.create_retrieval_page()
         self.page_filter = self.create_filtering_page()
+        self.page_aggregate = self.create_aggregate_page()
 
         self.addSubInterface(self.page_retrieval, "retrieval", "Sequence Retrieval")
         self.addSubInterface(self.page_filter, "filter", "Sequence Filtering")
+        self.addSubInterface(self.page_aggregate, "aggregate", "Sequence Aggregate")
 
         self.vBoxLayout.addWidget(self.pivot)
         self.vBoxLayout.addWidget(self.stackedWidget)
@@ -549,6 +551,65 @@ class RetrievalInterface(QWidget):
 
         layout.addWidget(grp)
         layout.addWidget(self.btn_run_filter)
+        layout.addStretch(1)
+        return w
+
+    def create_aggregate_page(self):
+        w = QWidget()
+        layout = QVBoxLayout(w)
+        layout.setContentsMargins(5, 20, 5, 20)
+
+        grp = SettingCardGroup("Sequence Aggregate", w)
+        grp.titleLabel.setToolTip(
+            "Aggregate species-level selection results across multiple gene markers.\n"
+            "Input: parent directory containing marker working directories\n"
+            "(each with results/ and tmp_files/ subdirectories).\n"
+            "Output: combined_records.txt and filtered_seqs/ directory."
+        )
+        grp.titleLabel.installEventFilter(
+            ToolTipFilter(grp.titleLabel, showDelay=300, position=ToolTipPosition.BOTTOM_LEFT)
+        )
+
+        card = CardWidget()
+        card.setFixedHeight(140)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(15, 10, 15, 10)
+
+        h1 = QHBoxLayout()
+        self.agg_in = LineEdit()
+        self.agg_in.setPlaceholderText(
+            "Parent directory of multiple marker working directories"
+        )
+        btn_agg_in = PushButton("Browse")
+        btn_agg_in.setIcon(FIF.FOLDER)
+        btn_agg_in.clicked.connect(lambda: self.browse_dir(self.agg_in))
+        lbl_agg_in = BodyLabel("Input Directory:")
+        lbl_agg_in.setFixedWidth(150)
+        h1.addWidget(lbl_agg_in)
+        h1.addWidget(self.agg_in, 1)
+        h1.addWidget(btn_agg_in)
+        card_layout.addLayout(h1)
+
+        h2 = QHBoxLayout()
+        self.agg_out = LineEdit()
+        self.agg_out.setPlaceholderText("The same as input path by default")
+        btn_agg_out = PushButton("Browse")
+        btn_agg_out.setIcon(FIF.FOLDER)
+        btn_agg_out.clicked.connect(lambda: self.browse_dir(self.agg_out))
+        lbl_agg_out = BodyLabel("Output Directory:")
+        lbl_agg_out.setFixedWidth(150)
+        h2.addWidget(lbl_agg_out)
+        h2.addWidget(self.agg_out, 1)
+        h2.addWidget(btn_agg_out)
+        card_layout.addLayout(h2)
+
+        grp.addSettingCard(card)
+
+        self.btn_run_aggregate = PrimaryPushButton("Run Aggregate")
+        self.btn_run_aggregate.setIcon(FIF.PLAY)
+
+        layout.addWidget(grp)
+        layout.addWidget(self.btn_run_aggregate)
         layout.addStretch(1)
         return w
 
@@ -2229,6 +2290,7 @@ class MainWindow(FluentWindow):
         ri.chk_summary.stateChanged.connect(self.set_marker_summary)
 
         ri.btn_run_filter.clicked.connect(self.run_filtering)
+        ri.btn_run_aggregate.clicked.connect(self.run_aggregate)
 
         ci = self.construction_interface
         ci.combo_trim_method.currentIndexChanged.connect(self.select_tri_method)
@@ -2365,6 +2427,10 @@ class MainWindow(FluentWindow):
 
     def run_filtering(self):
         self.backend.run_filtering(self.retrieval_interface)
+
+    def run_aggregate(self):
+        self.backend.run_aggregate(self.retrieval_interface)
+
     def run_replacement(self):
         self.backend.run_replacement(self.construction_interface)
 

@@ -61,6 +61,7 @@ No programming experience is required.
 ### Prerequisites
 
 - Windows 10/11
+  - **Note**: If you are using Windows 10, ensure your version is **Windows 10 1809 (Build 17763)** or later. To check your Windows version, press `Win + R`, type `winver`, and press Enter.
 - [Microsoft Visual C++ Redistributable v14](https://aka.ms/vc14/vc_redist.x64.exe)
 
 ### Pre-built Setup Executable

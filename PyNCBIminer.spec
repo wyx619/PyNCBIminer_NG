@@ -27,7 +27,6 @@ a = Analysis(
         'pandas',
         'numpy',
         'scipy',
-        'sklearn',
         'mcl',
         'networkx',
         # BioPython
@@ -97,7 +96,6 @@ a = Analysis(
         'numpy.tests',
         'numpy.f2py',
         'scipy.tests',
-        'sklearn.tests',
         'networkx.tests',
         'Bio.tests',
     ],

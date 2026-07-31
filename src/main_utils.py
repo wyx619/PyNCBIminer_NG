@@ -757,6 +757,59 @@ class BackendController(QObject):
         thread.daemon = True
         thread.start()
 
+    def run_aggregate(self, retrieval_interface):
+        from combine_markers import combine_keep_records, put_filtered_seq_together
+
+        in_path = retrieval_interface.agg_in.text().strip()
+        out_path = retrieval_interface.agg_out.text().strip() or in_path
+
+        if not in_path:
+            self.emit_log("Please set input path", "WARNING")
+            return
+        if not Path(in_path).exists():
+            self.emit_log(f"Input path does not exist: {in_path}", "WARNING")
+            return
+
+        if not Path(out_path).exists():
+            Path(out_path).mkdir(parents=True, exist_ok=True)
+
+        # discover working directories (same logic as call_miner_filter)
+        dir_list = [
+            f.name for f in Path(in_path).iterdir() if (Path(in_path) / f.name).is_dir()
+        ]
+        wd_list = []
+        if "results" in dir_list and "tmp_files" in dir_list:
+            wd_list = [in_path]
+        else:
+            for directory in dir_list:
+                sub_dir_list = [f.name for f in (Path(in_path) / directory).iterdir()]
+                if "results" in sub_dir_list and "tmp_files" in sub_dir_list:
+                    wd_list.append(Path(in_path) / Path(directory))
+
+        if len(wd_list) == 0:
+            self.emit_log(
+                "No valid working directories found. "
+                "Input must be a marker working directory or a parent directory containing them.",
+                "WARNING",
+            )
+            return
+
+        wd_names = [Path(w).name for w in wd_list]
+        self.emit_log(f"Found {len(wd_list)} marker(s): {', '.join(wd_names)}")
+        self.emit_log("Running Sequence Aggregate...")
+
+        def run_aggregate_thread():
+            try:
+                combine_keep_records(wd_list, out_path)
+                put_filtered_seq_together(wd_list, out_path)
+                self.emit_log("Sequence Aggregate completed successfully!", "SUCCESS")
+            except Exception as e:
+                self.emit_log(f"Sequence Aggregate failed: {e}", "ERROR")
+
+        thread = threading.Thread(target=run_aggregate_thread)
+        thread.daemon = True
+        thread.start()
+
     def run_alignment(self, construction_interface):
         from call_mafft2 import mafft
 

@@ -29,7 +29,6 @@ dependencies = [
     "biopython>=1.78",
     "func_timeout>=4.3.5",
     "scipy",
-    "scikit-learn",
     "networkx",
     "PySide6-Fluent-Widgets"
 ]
