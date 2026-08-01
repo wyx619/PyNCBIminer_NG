@@ -426,6 +426,7 @@ class BackendController(QObject):
                 date_to,
                 email,
                 qualifier,
+                1,  # blast_round
                 self.stop_flag,
             ),
         )
@@ -1102,12 +1103,14 @@ class BackendController(QObject):
 
             QDesktopServices.openUrl(QUrl("https://github.com/wyx619/PyNCBIminer_NG"))
 
-    def search_chloroplast(self, email, taxa, date_from, date_to, out_path):
+    def search_chloroplast(self, email, taxa, date_from, date_to, out_path, api_key=""):
         from pathlib import Path
 
         from Bio import Entrez
 
         Entrez.email = email
+        if api_key:
+            Entrez.api_key = api_key
         out_path = Path(out_path)
         out_path.mkdir(parents=True, exist_ok=True)
 
@@ -1158,7 +1161,7 @@ class BackendController(QObject):
             f"Search completed: {written} records, saved to {index_file}", "SUCCESS"
         )
 
-    def download_chloroplast_genomes(self, email, in_path, out_path):
+    def download_chloroplast_genomes(self, email, in_path, out_path, api_key=""):
         from pathlib import Path
 
         from Chloroplast.download_gb_file import download_gb_file
@@ -1188,7 +1191,7 @@ class BackendController(QObject):
         if len(to_download) == 0:
             self.emit_log("All files already downloaded!", "SUCCESS")
             #self.emit_log("Running quality check...")
-            _, _, _, success, _failed = download_gb_file(email, in_path, out_path, 10)
+            _, _, _, success, _failed = download_gb_file(email, in_path, out_path, api_key=api_key)
             if success > 0:
                 self.emit_log(f"Quality check: Verified {success} files", "SUCCESS")
             return
@@ -1196,7 +1199,7 @@ class BackendController(QObject):
         self.emit_log("Starting download...")
 
         def run():
-            _, _, _, success, failed = download_gb_file(email, in_path, out_path, 10)
+            _, _, _, success, failed = download_gb_file(email, in_path, out_path, api_key=api_key)
             self.emit_log(f"Downloaded: {success}, Failed: {failed}")
             if failed == 0:
                 self.emit_log("All downloads completed successfully!", "SUCCESS")

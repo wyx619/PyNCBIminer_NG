@@ -1,14 +1,15 @@
 import socket
 import time
+import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from threading import Lock
 
 import pandas as pd
-from Bio import Entrez, SeqIO
+from Bio import BiopythonWarning, Entrez, SeqIO
 
 
-def download_single(email, accession, out_path, request_lock, last_request_time):
+def download_single(email, accession, out_path, request_lock, last_request_time, api_key=""):
     """下载单个基因组文件（带速率控制）"""
     socket.setdefaulttimeout(600)  # cover Entrez.efetch + SeqIO.read (network reads)
     with request_lock:
@@ -18,6 +19,8 @@ def download_single(email, accession, out_path, request_lock, last_request_time)
         last_request_time[0] = time.time()
 
     Entrez.email = email
+    if api_key:
+        Entrez.api_key = api_key
 
     with Entrez.efetch(db="nucleotide", rettype="gb", id=accession) as handle:
         record = SeqIO.read(handle, "gb")
@@ -25,23 +28,31 @@ def download_single(email, accession, out_path, request_lock, last_request_time)
     accession_clean = record.id.split(".")[0]
     out_file = Path(out_path) / f"{accession_clean}.gb"
     with open(out_file, "w") as f:
-        SeqIO.write(record, f, "gb")
+        # Suppress BiopythonWarning only for this write (e.g. over-long
+        # SRA annotations in GenBank headers); the record is still written
+        # correctly, and warnings elsewhere remain visible.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", BiopythonWarning)
+            SeqIO.write(record, f, "gb")
 
     return accession_clean
 
 
-def download_gb_file(email, in_path, out_path, max_threads=10, batch_size=None):
+def download_gb_file(email, in_path, out_path, max_threads=None, batch_size=None, api_key=""):
     """批量下载基因组文件
 
     Args:
         email: NCBI联系邮箱
         in_path: accession列表文件路径
         out_path: 输出目录路径
-        max_threads: 最大线程数
+        max_threads: 最大线程数（默认 None：有 API key 用 8，无 API key 用 3）
         batch_size: 批大小（此版本不再使用，兼容旧接口）
+        api_key: NCBI API key（可选，提升限流额度至 10 req/s）
     """
     in_path = Path(in_path)
     out_path = Path(out_path)
+    if max_threads is None:
+        max_threads = 8 if api_key else 3
 
     with open(in_path, "r") as fr:
         accession_list = fr.read().splitlines()
@@ -80,7 +91,7 @@ def download_gb_file(email, in_path, out_path, max_threads=10, batch_size=None):
             try:
                 return (
                     download_single(
-                        email, acc, out_path, request_lock, last_request_time
+                        email, acc, out_path, request_lock, last_request_time, api_key
                     ),
                     True,
                     None,

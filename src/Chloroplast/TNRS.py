@@ -15,6 +15,7 @@ import hashlib
 import json
 import socket
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -24,12 +25,16 @@ import pandas as pd
 
 
 def _check_internet(timeout: float = 5.0) -> bool:
+    # save the previous global default timeout to avoid a process-wide side effect
+    old_timeout = socket.getdefaulttimeout()
     try:
         socket.setdefaulttimeout(timeout)
         urllib.request.urlopen("https://tnrsapi.xyz", timeout=timeout)
         return True
     except Exception:
         return False
+    finally:
+        socket.setdefaulttimeout(old_timeout)
 
 
 def TNRS_core(
@@ -86,6 +91,9 @@ def TNRS_core(
 
     except urllib.error.URLError as e:
         print(f"There appears to be a problem reaching the API: {e}")
+        return None
+    except (socket.timeout, TimeoutError) as e:
+        print(f"Timeout while contacting the API: {e}")
         return None
     except json.JSONDecodeError as e:
         print(f"There seems to be a problem with the query, which returned: {e}")
@@ -169,11 +177,18 @@ def _call_with_retry(
     accuracy,
     max_attempts=_MAX_ATTEMPTS,
     timeout=_TIMEOUT_SECS,
+    retry_delay: float = 5,
 ):
-    """Call TNRS_base with retry logic. Returns DataFrame or None."""
+    """Call TNRS_base with retry logic. Returns DataFrame or None.
+
+    Each retry waits ``retry_delay * (attempt - 1)`` seconds before the
+    next attempt (5s, 10s, ...), matching the backoff used by
+    ``blast_put_get._urlopen_with_retry``.
+    """
     for attempt in range(1, max_attempts + 1):
         if attempt > 1:
             print(f"  Retry attempt {attempt} of {max_attempts}")
+            time.sleep(retry_delay * (attempt - 1))
         try:
             result = TNRS_base(
                 taxonomic_names=taxonomic_names,

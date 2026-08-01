@@ -1141,7 +1141,7 @@ class ChloroplastMinerInterface(QWidget):
         )
 
         card = CardWidget()
-        card.setFixedHeight(200)
+        card.setFixedHeight(220)
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(15, 10, 15, 10)
 
@@ -1202,6 +1202,15 @@ class ChloroplastMinerInterface(QWidget):
         row_email.addWidget(lbl_email)
         row_email.addWidget(self.chloro_email_edit, 1)
         right_col.addLayout(row_email)
+
+        lbl_key = BodyLabel("API Key:")
+        lbl_key.setFixedWidth(label_w)
+        row_key = QHBoxLayout()
+        self.chloro_api_key_edit = LineEdit(card)
+        self.chloro_api_key_edit.setPlaceholderText("NCBI API Key (optional, boosts rate limit to 10 req/s)")
+        row_key.addWidget(lbl_key)
+        row_key.addWidget(self.chloro_api_key_edit, 1)
+        right_col.addLayout(row_key)
 
         lbl_dl = BodyLabel("Download Dir:")
         lbl_dl.setFixedWidth(label_w)
@@ -1802,7 +1811,10 @@ class ChloroplastMinerInterface(QWidget):
         d_to = date_to_obj.toString("yyyy/MM/dd") if has_to else ""
 
         self.main_window.backend.emit_log("Search started...", "INFO")
-        self.main_window.backend.search_chloroplast(email, taxa, d_from, d_to, out_path)
+        api_key = self.chloro_api_key_edit.text().strip()
+        self.main_window.backend.search_chloroplast(
+            email, taxa, d_from, d_to, out_path, api_key
+        )
 
     def on_chloro_download(self):
         email = self.chloro_email_edit.text().strip()
@@ -1827,8 +1839,9 @@ class ChloroplastMinerInterface(QWidget):
             return
 
         self.main_window.backend.emit_log("Download started...", "INFO")
+        api_key = self.chloro_api_key_edit.text().strip()
         self.main_window.backend.download_chloroplast_genomes(
-            email, str(index_file), out_path
+            email, str(index_file), out_path, api_key
         )
 
     def on_chloro_prefilter(self):

@@ -2,7 +2,6 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
-from combine_markers import combine_keep_records, put_filtered_seq_together
 from miner_filter import Miner_filter
 
 
@@ -119,7 +118,6 @@ def call_miner_filter(
             )
             t1 = datetime.now()
             print("Running time: %s seconds" % (t1 - t0))
-        combine_keep_records(wd_list, out_path)
     elif action == 3:  # control extension, then reduce dataset
         for wd in wd_list:
             print("Control extension: %s" % wd)
@@ -167,5 +165,3 @@ def call_miner_filter(
             )
             t2 = datetime.now()
             print("Running time: %s seconds" % (t2 - t1))
-        combine_keep_records(wd_list, out_path)
-        put_filtered_seq_together(wd_list, out_path)
