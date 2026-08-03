@@ -5,7 +5,7 @@
 ;   2. iscc installer.iss
 
 #define MyAppName "PyNCBIminer-NG"
-#define MyAppVersion "3.1.0"
+#define MyAppVersion "3.1.2"
 #define MyAppPublisher "Sichuan University"
 #define MyAppURL "https://github.com/wyx619/PyNCBIminer_NG"
 #define MyAppExeName "PyNCBIminer-NG.exe"

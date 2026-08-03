@@ -28,6 +28,11 @@ a = Analysis(
         'numpy',
         'scipy',
         'mcl',
+        # stdlib required by numpy.testing / scipy at runtime (lazy imports)
+        'unittest',
+        'doctest',
+        'pydoc',
+        'pdb',
         # BioPython
         'Bio',
         'Bio.SeqIO',
@@ -80,11 +85,7 @@ a = Analysis(
         'tests',
         'setuptools',
         'pip',
-        'unittest',
-        'doctest',
-        'pdb',
         'lib2to3',
-        'pydoc',
         # PIL (dev-only)
         'PIL',
         'PIL.Image',
@@ -92,7 +93,6 @@ a = Analysis(
         # Test submodules
         'pandas.tests',
         'numpy.tests',
-        'numpy.f2py',
         'scipy.tests',
         'Bio.tests',
     ],
