@@ -147,9 +147,9 @@ When enabled, organism names are standardized via the TNRS API before selection:
 flowchart LR
     A["organism.csv"] --> B["TNRS_cached()<br/>batch 5000/request"]
     B --> C{"All batches<br/>succeed?"}
-    C -->|"Yes"| D["Accepted_name mapping<br/>score >= accuracy"]
+    C -->|"Yes"| D["Accepted_name mapping<br/>score >= accuracy<br/>& status Accepted/Synonym"]
     C -->|"No"| E["Abort; cache preserved<br/>re-run retries failed batches"]
-    D --> F["Unmatched → excluded"]
+    D --> F["Not resolved → excluded"]
     F --> G["keep_longest per species"]
 ```
 
@@ -157,6 +157,7 @@ flowchart LR
 | ---------------- | ------------------------------------------------------------------------------ |
 | Sources          | `wcvp` (Kew WCVP) and/or `wfo` (World Flora Online); at least one required |
 | Accuracy         | Minimum Overall_score threshold (default: 0.9)                                 |
+| Taxonomic status | Only `Accepted` or `Synonym` matches are kept; other statuses (e.g. `No opinion`, `Unresolved`) or missing status are excluded |
 | Batching         | 5000 names per API request; per-batch CSV cache in`tnrs_cache/`              |
 | Retry            | 3 attempts per batch (pass 1) + 3 attempts (pass 2); all-fail → abort         |
 | Cache validation | SHA-256 of (names + sources + accuracy); input change → auto-clear            |

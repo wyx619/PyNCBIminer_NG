@@ -129,6 +129,7 @@ def make_tab(
                 & (tnrs_result["Overall_score"] >= (tnrs_accuracy or 0))
                 & tnrs_result["Accepted_name"].notna()
                 & (tnrs_result["Accepted_name"] != "")
+                & tnrs_result["Taxonomic_status"].isin(["Accepted", "Synonym"])
             ].copy()
 
             rename_map = dict(

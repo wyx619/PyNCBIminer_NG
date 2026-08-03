@@ -193,7 +193,7 @@ def calculate_missing_length(wd, ref_msa_file):
             all_queries_info.loc[key, "Missing_left"] = min_left
             all_queries_info.loc[key, "Missing_right"] = len(seq) - max_right - 1
         else:
-            print(f"Warning: {key} not found in all_queries_info.txt, skipping...")
+            print(f"NOTE: {key} not found in all_queries_info.txt, skipping...")
     all_queries_info.to_csv(
         Path(wd) / Path("parameters") / Path("all_queries_info.txt"),
         sep="\t",

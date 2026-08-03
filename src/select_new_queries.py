@@ -87,7 +87,7 @@ def cluster_queries(wd, ref_list=None):
                 print("running time: %s Seconds" % (time1 - time0))
                 print("Generating network...", end="")
                 matrix = geometric_adjacency(
-                    group.shape[0], radius=0.1 * query_ref_len, pos=positions
+                    group.shape[0], radius=0.1 * query_ref_len, positions=positions
                 )  # get 56 clusters
                 time2 = datetime.now()
                 print("running time: %s Seconds" % (time2 - time1))
@@ -422,6 +422,21 @@ def select_new_queries(tmp_wd, blast_round, ref_number):
     return seq_clustered.shape[0]
 
 
+def _valid_table(wd, table):
+    """True if the table file exists and contains at least one data row.
+
+    A stale file that only contains the header (e.g. produced by a crashed
+    run) is treated as invalid so that the corresponding step is re-run.
+    """
+    path = Path(wd) / table
+    if not path.exists() or path.stat().st_size == 0:
+        return False
+    try:
+        return pd.read_table(path, sep="\t", engine="python").shape[0] > 0
+    except Exception:
+        return False
+
+
 def select_new_queries_main(
     wd,
     tmp_wd,
@@ -434,11 +449,8 @@ def select_new_queries_main(
     allowed_taxa,
     stop_flag=None,
 ):
-    file_list = [f.name for f in Path(tmp_wd).iterdir()]
-
-    if "hits_clustered.txt" not in file_list:
+    if not _valid_table(tmp_wd, "hits_clustered.txt"):
         print("Selecting new references...")
-        file_list = [f.name for f in (Path(wd) / "parameters").iterdir()]
 
         if (Path(wd) / "parameters" / "all_queries_info.txt").exists():
             all_queries = pd.read_table(
@@ -462,7 +474,7 @@ def select_new_queries_main(
         del qcluster_table
     # todo: hits_clustered.txt main contain repeated rows???
 
-    if "hits_clustered_filtered.txt" not in file_list:
+    if not _valid_table(tmp_wd, "hits_clustered_filtered.txt"):
         seq_check_download_main(
             wd=tmp_wd,
             acc_file=r"hits_clustered.txt",
@@ -493,7 +505,7 @@ def select_new_queries_main(
                 print("Cannot find more new reference, stop iteration. ")
                 return None
     # if hits_clustered.fasta only contain no more than 5 sequences, then no need to do MCL step2
-    if "sequences_clustered.txt" not in file_list:
+    if not _valid_table(tmp_wd, "sequences_clustered.txt"):
         scluster_table = cluster_sequences(wd=tmp_wd)
     else:
         scluster_table = pd.read_table(
@@ -524,7 +536,7 @@ def select_new_queries_main(
         return None
 
     blast_round += 1
-    if "new_queries_info.txt" not in file_list:
+    if not _valid_table(tmp_wd, "new_queries_info.txt"):
         new_quereis_num = select_new_queries(tmp_wd, blast_round, ref_number)
         # todo: new ref seqs need to be more than 2???
         if new_quereis_num < 1:

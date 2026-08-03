@@ -61,15 +61,43 @@ def normalize_allowed_taxa(allowed_taxa):
     return taxa
 
 
+_INFRASPECIFIC = {"var.", "subsp.", "ssp.", "f.", "fma.", "x"}
+
+
+def _species_core(name):
+    """Normalize a species name to its genus+species core.
+
+    'Medicago sativa subsp. falcata' -> 'medicago sativa'
+    """
+    tokens = name.lower().replace("×", "x").split()
+    core = []
+    for tok in tokens:
+        if tok in _INFRASPECIFIC:
+            break
+        core.append(tok)
+    return " ".join(core)
+
+
 def check_taxonomy(record, allowed_taxa):
-    """Check if record taxonomy matches allowed taxa (exact set intersection)."""
+    """Check if record taxonomy matches allowed taxa.
+
+    Lineage items are matched exactly (protects higher-level names such as
+    'Rosales'); the organism name is normalized to its genus+species core to
+    tolerate infraspecific suffixes (var./subsp./f.) and hybrid marks (x/×).
+    """
     taxa = normalize_allowed_taxa(allowed_taxa)
+    allowed = {x.lower() for x in taxa}
+
     lineage = {x.lower() for x in record.annotations.get("taxonomy", []) if x}
+    if lineage & allowed:
+        return True
+
     organism = record.annotations.get("organism", "")
     if organism:
-        lineage.add(organism.lower())
-    allowed = {x.lower() for x in taxa}
-    return bool(lineage & allowed)
+        org_key = _species_core(organism)
+        if org_key and org_key in {_species_core(a) for a in taxa}:
+            return True
+    return False
 
 
 def check_annotation(feature_list, key_annotations, exclude_sources):
@@ -430,6 +458,10 @@ def seq_check_download_main(
         df1 = df.loc[index_list][["s_start", "s_end", "s_strand"]].copy()
     else:
         df1 = df.loc[index_list][["s_extstart", "s_extend", "s_strand"]].copy()
+        # 未延伸到参考序列的记录（s_extstart/s_extend 为 NaN），
+        # 回退到原始 BLAST hit 区间，避免被 int(NaN) 丢弃
+        df1["s_extstart"] = df1["s_extstart"].fillna(df.loc[index_list]["s_start"])
+        df1["s_extend"] = df1["s_extend"].fillna(df.loc[index_list]["s_end"])
     df1.columns = ["start", "end", "strand"]
     df1["strand"] = df1["strand"].map({True: 1, False: 2}).astype(int)
 

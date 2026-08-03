@@ -205,13 +205,13 @@ def fas2phy(in_path, out_path="./"):
             alignments = list(alignments)
 
             if not alignments:
-                print(f"Warning: {in_file} is empty or invalid, skipping...")
+                print(f"NOTE: {in_file} is empty or invalid, skipping...")
                 continue
 
             for alignment in alignments:
                 seq_lengths = set(len(record.seq) for record in alignment)
                 if len(seq_lengths) > 1:
-                    print(f"Warning: {in_file} is not aligned, skipping...")
+                    print(f"NOTE: {in_file} is not aligned, skipping...")
                     continue
 
                 with open(out_file, "w") as f:

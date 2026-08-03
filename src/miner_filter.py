@@ -316,6 +316,7 @@ class Miner_filter:
             & (tnrs_result["Overall_score"] >= (tnrs_accuracy or 0))
             & tnrs_result["Accepted_name"].notna()
             & (tnrs_result["Accepted_name"] != "")
+            & tnrs_result["Taxonomic_status"].isin(["Accepted", "Synonym"])
         ]
         rename_map = dict(zip(resolved["Name_submitted"], resolved["Accepted_name"]))
 
@@ -328,9 +329,10 @@ class Miner_filter:
         df.to_csv(info_path, sep="\t", index=False)
 
         n_corrected = sum(1 for n in names if n in rename_map and rename_map[n] != n)
-        n_unmatched = len(names) - len(rename_map)
+        n_excluded = len(names) - len(rename_map)
         emit_log(
-            f"TNRS: {n_corrected}/{len(names)} names corrected, {n_unmatched} unmatched (will be excluded).",
+            f"TNRS: {n_corrected}/{len(names)} names corrected, "
+            f"{n_excluded} not resolved (will be excluded).",
             "INFO",
         )
 
@@ -506,10 +508,11 @@ class Miner_filter:
             self.remove_duplicate()
 
         create_folder(self.__out_path / "tmp_files/extension_control")
+        print("Step 1/3: splitting sequences by genus...")
         self.__split_by_genus()
-        self.__split_by_length()
-        self.__split_large_subset()
+        print("Step 2/3: aligning subsets with MAFFT...")
         self.__align_subset()
+        print("Step 3/3: checking gappyness and trimming extensions...")
         self.__remove_erroneous_extension(gappyness_threshold=gappyness_threshold)
 
     def get_consensus_dict(self):
@@ -1138,7 +1141,7 @@ class Miner_filter:
 
         # write log file
         msg = "Most qualified sequence for each taxon is saved to 'blast_results_filtered.fasta'"
-        print(f"INFO: {msg}")
+        print(f"{msg}")
 
     ## ===========================================================================================================
     ## ================================== for <func> control_extension ===========================================
@@ -1181,9 +1184,11 @@ class Miner_filter:
         taxonomy_dict = dict(zip(taxonomy_df["accession"], taxonomy_df["taxonomy"]))
         record_iter = SeqIO.parse(in_path, "fasta")
         genus_dict = {}
+        skipped = 0
         for record in record_iter:
             accession_number = record.description.split("|")[0].split(":")[0]
             if accession_number not in taxonomy_dict:
+                skipped += 1
                 continue
             genus = [
                 unit
@@ -1195,6 +1200,12 @@ class Miner_filter:
 
         for genus, species_list in genus_dict.items():
             SeqIO.write(species_list, out_path / f"{genus}.fasta", "fasta")
+
+        total = sum(len(v) for v in genus_dict.values())
+        print(
+            f"Split into {len(genus_dict)} genera, {total} sequences "
+            f"({skipped} skipped due to missing taxonomy)."
+        )
 
     def __split_by_length(self, length_ratio=0.6):
         """split the fastas (previously split by genus) according to relative length of the records
@@ -1304,6 +1315,7 @@ class Miner_filter:
             record_count = len(list(SeqIO.parse(file_abs_path, "fasta")))
 
             if record_count > add_threshold:
+                print(f"Aligning {file} ({record_count} seqs, --auto) ...")
                 temp_output_dir = out_path / f"temp_{Path(file).stem}"
                 temp_output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1325,6 +1337,7 @@ class Miner_filter:
                     shutil.move(str(out_file), str(file_out_path))
                 if temp_output_dir.exists():
                     shutil.rmtree(temp_output_dir)
+                #print(f"Aligned {file}.")
             else:
                 file_waiting_list.append(file)
 
@@ -1338,61 +1351,91 @@ class Miner_filter:
             set(list(map(lambda x: x[: x.rindex("|")], df_taxonomy["taxonomy"])))
         )
 
-        for file in file_waiting_list:
-            file_abs_path = in_path / file
-            file_out_path = out_path / f"{Path(file).stem}_MSA.fasta"
-            this_taxonomy = Path(file).stem.split("_")[0]
-            upper_unit = self.__get_upper_taxonomic_unit(
-                this_taxonomy, taxonomy_genus_and_above
+        def _aligned_path(file):
+            return out_path / f"{Path(file).stem}_MSA.fasta"
+
+        def _get_upper_unit(file):
+            return self.__get_upper_taxonomic_unit(
+                Path(file).stem.split("_")[0], taxonomy_genus_and_above
             )
 
-            reference = None
+        def _find_reference(file):
+            """find a ready-made alignment to --add onto: same family first, then any"""
+            upper_unit = _get_upper_unit(file)
             for ref_file in file_list:
-                if ref_file == file:
-                    continue
                 if (
-                    self.__get_upper_taxonomic_unit(
-                        Path(ref_file).stem.split("_")[0], taxonomy_genus_and_above
-                    )
-                    == upper_unit
+                    ref_file != file
+                    and _get_upper_unit(ref_file) == upper_unit
+                    and _aligned_path(ref_file).exists()
                 ):
-                    reference = ref_file
-                    break
+                    return ref_file
+            for ref_file in file_list:
+                if ref_file != file and _aligned_path(ref_file).exists():
+                    return ref_file
+            return None
 
-            if reference is None:
-                reference = file_list[0]
-                warning_msg = f"In file {file}: there may be error in extension check because no other genus from the same family can be used as reference."
-                print(f"WARNING: {warning_msg}")
+        # 轮次处理小属（--add）：同科参考尚未就绪时留到下一轮重试，
+        # 从而打破小属之间互为参考的循环依赖
+        pending = list(file_waiting_list)
+        while pending:
+            progressed = False
+            still_pending = []
+            for file in pending:
+                reference = _find_reference(file)
+                if reference is None:
+                    still_pending.append(file)
+                    continue
 
-            ref_aligned_path = out_path / f"{Path(reference).stem}_MSA.fasta"
+                if _get_upper_unit(reference) != _get_upper_unit(file):
+                    warning_msg = (
+                        f"In file {file}: there may be error in extension check "
+                        "because no other genus from the same family can be used "
+                        "as reference."
+                    )
+                    print(f"NOTE: {warning_msg}")
 
-            if not ref_aligned_path.exists():
-                print(f"WARNING: Reference alignment not found for {file}")
-                continue
+                print(
+                    f"Aligning {file} (--add onto {Path(reference).stem}) ..."
+                )
+                file_abs_path = in_path / file
+                file_out_path = _aligned_path(file)
+                ref_aligned_path = _aligned_path(reference)
 
-            temp_output_dir = out_path / f"temp_{Path(file).stem}"
-            temp_output_dir.mkdir(parents=True, exist_ok=True)
+                temp_output_dir = out_path / f"temp_{Path(file).stem}"
+                temp_output_dir.mkdir(parents=True, exist_ok=True)
 
-            in_file_str = file_abs_path.as_posix()
-            out_file = temp_output_dir / file
-            out_file_str = out_file.as_posix()
-            ref_aligned_str = ref_aligned_path.as_posix()
-            mafft_exe_str = Path(_get_mafft_exe()).as_posix()
+                in_file_str = file_abs_path.as_posix()
+                out_file = temp_output_dir / file
+                out_file_str = out_file.as_posix()
+                ref_aligned_str = ref_aligned_path.as_posix()
+                mafft_exe_str = Path(_get_mafft_exe()).as_posix()
 
-            commandstr = f'"{mafft_exe_str}" --quiet --auto --add "{ref_aligned_str}" --thread -1 --reorder "{in_file_str}" > "{out_file_str}"'
+                commandstr = f'"{mafft_exe_str}" --quiet --auto --add "{ref_aligned_str}" --thread -1 --reorder "{in_file_str}" > "{out_file_str}"'
 
-            result = subprocess.run(
-                commandstr, shell=True, capture_output=True, text=True
-            )
+                result = subprocess.run(
+                    commandstr, shell=True, capture_output=True, text=True
+                )
 
-            if result.returncode != 0:
-                raise RuntimeError(f"MAFFT --add failed: {result.stderr}")
+                if result.returncode != 0:
+                    raise RuntimeError(f"MAFFT --add failed: {result.stderr}")
 
-            if out_file.exists():
-                shutil.move(str(out_file), str(file_out_path))
-            if temp_output_dir.exists():
-                shutil.rmtree(temp_output_dir)
-        pass
+                if out_file.exists():
+                    shutil.move(str(out_file), str(file_out_path))
+                if temp_output_dir.exists():
+                    shutil.rmtree(temp_output_dir)
+                #print(f"Aligned {file}.")
+                progressed = True
+
+            pending = still_pending
+            if not progressed:
+                for file in pending:
+                    warning_msg = (
+                        f"In file {file}: no reference alignment is available for "
+                        "extension check (no other genus from the same family is "
+                        "present). Skipped."
+                    )
+                    print(f"NOTE: {warning_msg}")
+                break
 
     def __remove_erroneous_extension(self, gappyness_threshold=0.5):
         """remove extension if the extension part is too gappy in the MSA (so-called errorneous ones)
@@ -1401,7 +1444,7 @@ class Miner_filter:
         - gappyness_threshold - if extension with gappyness more than this number will be removed/trimmed"""
         from functional import create_folder
 
-        print("INFO: Into removal.")
+        print("Into removal.")
         record_ids = []
 
         in_path = self.__in_path / "tmp_files" / "extension_control" / "subset_MSA"
@@ -1426,7 +1469,7 @@ class Miner_filter:
         for file_path in in_path.iterdir():
             if not file_path.is_file():
                 continue
-            print(f"INFO: Performing removal on {file_path.name}.")
+            print(f"Performing removal on {file_path.name}.")
             record_iter = SeqIO.parse(file_path, "fasta")
 
             for record in record_iter:
@@ -1434,6 +1477,14 @@ class Miner_filter:
                 info_line = df_blast_result.loc[
                     df_blast_result["subject_acc.ver"] == accession_number
                 ]
+
+                if info_line.empty:
+                    print(
+                        f"[ERROR] Accession {accession_number} not found in "
+                        "blast_results.txt. Aborting extension control to avoid "
+                        "silently dropping records. Check blast_results.txt integrity."
+                    )
+                    return
 
                 s_start, s_end = info_line.iloc[0][["s_start", "s_end"]]
                 s_start, s_end = min([s_start, s_end]), max([s_start, s_end])

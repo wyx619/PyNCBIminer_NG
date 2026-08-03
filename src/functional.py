@@ -83,7 +83,7 @@ def get_file_handles(in_path):
         # if path is invalid, collect warning message
         if not check_inpath_validity(file_path):
             warning_message = f"{file_path} invalid, thus omitted."
-            print(f"WARNING: {warning_message}")
+            print(f"NOTE: {warning_message}")
             continue
 
         # substep 1 : if an element is a file, add the file to result
@@ -116,7 +116,7 @@ def get_file_handles(in_path):
         warning_message = (
             "Redundant input files detected, duplicates automatically removed"
         )
-        print(f"WARNING: {warning_message}")
+        print(f"NOTE: {warning_message}")
 
     # if there are no paths kept, show error message, else show warning message
     if len(file_handles) == 0:

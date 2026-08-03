@@ -1,4 +1,5 @@
 
+import re
 import sys
 from pathlib import Path
 
@@ -11,12 +12,13 @@ from PySide6.QtCore import (
     Signal,
     Slot,
 )
-from PySide6.QtGui import QIcon, QTextCursor
+from PySide6.QtGui import QColor, QIcon, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
     QHBoxLayout,
     QStackedWidget,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -37,6 +39,7 @@ from qfluentwidgets import (
     PrimaryPushButton,
     PushButton,
     RadioButton,
+    SearchLineEdit,
     SegmentedWidget,
     SettingCardGroup,
     SingleDirectionScrollArea,
@@ -82,25 +85,125 @@ class EmittingStr(QObject):
 
 
 class LogWidget(CardWidget):
+    """Console output panel with level coloring and search highlighting."""
+
+    LEVEL_COLORS = {
+        "INFO": "#42A5F5",      # blue
+        "WARNING": "#FFA726",   # orange
+        "ERROR": "#EF5350",     # red
+        "SUCCESS": "#66BB6A",   # green
+        "NOTE": "#CE93D8",      # light purple
+    }
+    SEARCH_BG = "#FFF176"  # yellow highlight
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.vBoxLayout = QVBoxLayout(self)
+        self._search_query = ""
+        self._matches = []
+        self._match_index = -1
+
+        header_row = QHBoxLayout()
         self.headerLabel = SubtitleLabel("Console Output", self)
+        self.search_edit = SearchLineEdit(self)
+        self.search_edit.setPlaceholderText("Search logs...")
+        self.search_edit.setFixedWidth(200)
+        self.search_edit.setClearButtonEnabled(True)
+        self.search_edit.textChanged.connect(self._on_search_changed)
+        self.search_edit.searchSignal.connect(self._goto_next_match)
+        self.btn_clear = PushButton("Clear", self)
+        self.btn_clear.setIcon(FIF.BROOM)
+        self.btn_clear.clicked.connect(self.clear_log)
+        self.btn_export = PushButton("Export", self)
+        self.btn_export.setIcon(FIF.SAVE)
+        self.btn_export.clicked.connect(self.export_log)
+        header_row.addWidget(self.headerLabel)
+        header_row.addStretch(1)
+        header_row.addWidget(self.search_edit)
+        header_row.addWidget(self.btn_clear)
+        header_row.addWidget(self.btn_export)
+
         self.textEdit = TextEdit(self)
         self.textEdit.setReadOnly(True)
         self.textEdit.setPlaceholderText(
             "Welcome to PyNCBIminer-NG! Output will appear here..."
         )
 
-        self.vBoxLayout.addWidget(self.headerLabel)
+        self.vBoxLayout.addLayout(header_row)
         self.vBoxLayout.addWidget(self.textEdit)
+
+    def clear_log(self):
+        self.textEdit.clear()
+        self._matches = []
+        self._match_index = -1
+
+    def export_log(self):
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Console Output",
+            "console_output.txt",
+            "Text Files (*.txt);;All Files (*)",
+        )
+        if path:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(self.textEdit.toPlainText())
 
     def append_text(self, text):
         cursor = self.textEdit.textCursor()
         cursor.movePosition(QTextCursor.End)
-        cursor.insertText(text)
+        self._insert_colored(cursor, text)
         self.textEdit.setTextCursor(cursor)
         self.textEdit.ensureCursorVisible()
+        if self._search_query:
+            self._highlight_matches(self._search_query)
+
+    def _insert_colored(self, cursor, text):
+        """Insert text, coloring each line by its leading level tag if present.
+
+        Supports both "[LEVEL] text" and "LEVEL: text" prefixes.
+        """
+        for line in text.splitlines(keepends=True):
+            m = re.match(r"^\[?(?P<level>[A-Z]+)\]?:?", line)
+            color = self.LEVEL_COLORS.get(m.group("level")) if m else None
+            fmt = QTextCharFormat()
+            if color:
+                fmt.setForeground(QColor(color))
+            cursor.insertText(line, fmt)
+
+    def _on_search_changed(self, text):
+        self._search_query = text.strip()
+        self._highlight_matches(self._search_query)
+
+    def _highlight_matches(self, query):
+        """Highlight every occurrence of query (if any) in the log."""
+        edit = self.textEdit
+        self._matches = []
+        self._match_index = -1
+        if not query:
+            edit.setExtraSelections([])
+            return
+        selections = []
+        cursor = edit.document().find(query, 0)
+        while not cursor.isNull():
+            sel = QTextEdit.ExtraSelection()
+            sel.format.setBackground(QColor(self.SEARCH_BG))
+            sel.cursor = cursor
+            selections.append(sel)
+            cursor = edit.document().find(query, cursor)
+        edit.setExtraSelections(selections)
+        self._matches = selections
+        self._match_index = -1
+
+    def _goto_next_match(self):
+        """Jump to the next search match (triggered by Enter in search box)."""
+        if not self._matches:
+            return
+        self._match_index = (self._match_index + 1) % len(self._matches)
+        cursor = self._matches[self._match_index].cursor
+        edit = self.textEdit
+        edit.setTextCursor(cursor)
+        edit.ensureCursorVisible()
+        edit.setFocus()
 
 
 class RetrievalInterface(QWidget):
