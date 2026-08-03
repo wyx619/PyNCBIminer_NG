@@ -37,6 +37,17 @@ class BackendController(QObject):
         self.log_signal.emit(f"[{level}] {message}\n")
         self.infobar_signal.emit(level, message)
 
+    def _check_mafft_installed(self):
+        """Check MAFFT availability before starting a workflow that depends on it."""
+        from call_mafft2 import get_mafft_path
+
+        try:
+            get_mafft_path()
+            return True
+        except FileNotFoundError as e:
+            self.emit_log(str(e), "ERROR")
+            return False
+
     def save_settings(self, retrieval_interface, parent_window):
         # Use new_region_edit if it has text, otherwise use combo box
         new_region = retrieval_interface.new_region_edit.text().strip()
@@ -227,6 +238,9 @@ class BackendController(QObject):
     def submit_new_blast(self, retrieval_interface, parent_window=None):
         from iterated_blast import iterated_blast_main
         from my_entrez import entrez_count
+
+        if not self._check_mafft_installed():
+            return
 
         print("=" * 50)
         self.emit_log("Submitting New BLAST...")
@@ -463,6 +477,9 @@ class BackendController(QObject):
             self.emit_log("Please input your working directory path.", "WARNING")
             return
 
+        if not self._check_mafft_installed():
+            return
+
         print("=" * 50)
         self.emit_log("Loading previous job...")
 
@@ -687,6 +704,9 @@ class BackendController(QObject):
     def run_filtering(self, retrieval_interface):
         from my_filter import call_miner_filter
 
+        if not self._check_mafft_installed():
+            return
+
         in_path = retrieval_interface.filter_in.text().strip()
         out_path = retrieval_interface.filter_out.text().strip() or in_path
 
@@ -843,10 +863,20 @@ class BackendController(QObject):
         self.emit_log("Running MAFFT...")
 
         def run_mafft_thread():
+            # 使用临时子目录作为输出：避免输出文件与输入文件同名时，
+            # cmd 的 ">" 重定向会先截断输入文件（in==out 时输入被清空，产出 0kb 文件），
+            # 同时避免误重命名输出目录下的其他文件。
+            tmp_out = Path(out_path) / ".msa_tmp"
             try:
+                tmp_out.mkdir(parents=True, exist_ok=True)
+                if not tmp_out.is_dir():
+                    self.emit_log(
+                        f"Failed to create temporary directory: {tmp_out}", "ERROR"
+                    )
+                    return
                 _, total_time = mafft(
                     in_path,
-                    str(out_path),
+                    str(tmp_out),
                     "",
                     "",
                     algo,
@@ -857,18 +887,29 @@ class BackendController(QObject):
                     "",
                     emit_callback,
                 )
-                if total_time is not None:
+                if total_time is None:
                     self.emit_log(
-                        f"MAFFT completed in {total_time:.2f} seconds", "SUCCESS"
+                        "MAFFT failed to produce alignment output", "ERROR"
                     )
+                    return
+                # 成功时：将本次生成的结果移动到输出目录，统一加 msa_ 前缀。
+                # 用 Path.replace（等价于 os.replace）以便覆盖之前运行留下的
+                # 同名结果文件（Path.rename 在 Windows 上目标已存在会抛 WinError 183）。
+                for f in tmp_out.iterdir():
+                    if f.is_file():
+                        f.replace(Path(out_path) / f"msa_{f.name}")
+                self.emit_log(
+                    f"MAFFT completed in {total_time:.2f} seconds", "SUCCESS"
+                )
             except FileNotFoundError as e:
                 self.emit_log(str(e), "WARNING")
             except Exception as e:
                 self.emit_log(f"MAFFT failed: {e}", "ERROR")
             finally:
-                for file in Path(out_path).glob("*"):
-                    if not file.name.startswith("msa"):
-                        file.rename(Path(out_path) / f"msa_{file.name}")
+                if tmp_out.exists():
+                    import shutil
+
+                    shutil.rmtree(tmp_out, ignore_errors=True)
 
         thread = threading.Thread(target=run_mafft_thread)
         thread.daemon = True

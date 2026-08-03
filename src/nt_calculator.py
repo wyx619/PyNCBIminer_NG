@@ -3,7 +3,6 @@ from Bio import SeqIO
 import numpy as np
 from pathlib import Path
 from sequence_indexer import Sequence_indexer
-from call_mafft2 import mafft
 
 
 class nt_Calculator:
@@ -560,68 +559,6 @@ class nt_Calculator:
             dominate_base = base_summary["".join(dominate_base_list)]
 
         return dominate_base
-
-    def calculate_distance_matrix(
-        self, in_path, out_path, method="alignment", len_kmer=None, fast=False
-    ):
-        """calculate pairwise distance of given records, by measuring different metric (only MSA available now)
-        ----------
-        Parameters
-        - in_path - the input fatsa file of records to calculate pairwise distance.
-        - out_path - destination folder of output, where log files and result will be written.
-        - method - only "aligment" is available now, using MSA to calculate pairwise identity as distance matrix.
-        - len_kmer - the length of kmer while using kmer filter to estimate the pairwise similarity, currently no use.
-        -------
-        Returns
-        - distance_matrix - the matrix that stores the pairwise distance (only pairwise identity now)
-        """
-        ## TODO protection: if methods=="kmer" and len_kmer is not a valid positive integer
-        ## TODO: if input is an alignment then just get distance matrix
-        ## TODO: parllelize
-
-        if method == "alignment":
-            try:
-                basename = Path(in_path).name
-                out_filename = str(Path(out_path) / ("distance_matrix_" + basename))
-                mafft_out_path = str(out_path)
-
-                mafft(
-                    in_path=str(in_path),
-                    out_path=mafft_out_path,
-                    algorithm="retree 1" if fast else "auto",
-                    reorder=True,
-                )
-
-                msa_output = Path(mafft_out_path) / basename
-                if msa_output.exists():
-                    if Path(out_filename).exists():
-                        Path(out_filename).unlink()
-                    msa_output.rename(out_filename)
-
-                records = list(SeqIO.parse(out_filename, "fasta"))
-            except Exception:
-                records = in_path
-        else:
-            records = list(SeqIO.parse(in_path, "fasta"))
-
-        ## STEP 2: identify ends for each sequence
-        all_ends = []  # [[seq1_five_end, seq1_three_end],[seq2_five_end, seq2_three_end]]
-        for record in records:
-            all_ends.append(self.identify_ends(record))
-
-        ## STEP 3: calculate distance
-        num_records = len(records)
-        identity_matrix = np.ones((num_records, num_records))
-        for i in range(num_records):
-            for j in range(i + 1, num_records):
-                pairwise_identity = self.calculate_PI(
-                    records[i], records[j], all_ends[i], all_ends[j]
-                )
-                identity_matrix[i, j] = pairwise_identity
-                identity_matrix[j, i] = pairwise_identity
-
-        distance_matrix = 1 - identity_matrix
-        return distance_matrix
 
     @staticmethod
     def remove_gaps_in_ends(seq_array):

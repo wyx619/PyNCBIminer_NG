@@ -1,36 +1,67 @@
+import shutil
+from datetime import datetime
+from pathlib import Path
+
+from Bio import SeqIO
+
 from format_wizard import (
     check_inpath_validity,
     check_outpath_validity,
     get_file_handles,
 )
-from pathlib import Path
-from Bio import SeqIO
-from datetime import datetime
 from functional import run_command
-import shutil
 
 
 def get_mafft_path():
-
     """Get path to mafft executable"""
-
 
     mafft_bat = Path.cwd() / "mafft" / "mafft-win" / "mafft.bat"
     if mafft_bat.exists():
+        # mafft-win 的 mafft.bat 依赖 usr/bin/bash.exe 等配套文件，
+        # 若只复制了 mafft.bat 而未复制整个 mafft-win 目录，运行时会报
+        # "系统找不到指定的路径"，这里提前给出明确提示。
+        if not (mafft_bat.parent / "usr" / "bin" / "bash.exe").exists():
+            raise FileNotFoundError(
+                "MAFFT installation is incomplete: usr/bin files are missing under "
+                f"{mafft_bat.parent}. Please reinstall MAFFT from Settings page."
+            )
         return str(mafft_bat)
-
 
     if shutil.which("mafft"):
         return "mafft"
 
     raise FileNotFoundError(
-        "mafft executable not found. Please go to Settings Page to install MAFFT first"
+        "mafft not found. Please go to Settings page to install MAFFT first"
     )
+
+
+def _resolve_same_path(p1, p2):
+    """比较两个路径是否指向同一文件（忽略大小写），避免 cmd 重定向截断输入"""
+    try:
+        return str(Path(p1).resolve()).casefold() == str(Path(p2).resolve()).casefold()
+    except Exception:
+        return False
 
 
 def mafft_add(in_path, in_file, out_path, cmd_str):
     print(f"Aligning {in_file}...")
-    
+
+    def _run_checked(command, out_file):
+        r = run_command(command)
+        if r.returncode != 0:
+            print(
+                f"[ERROR] MAFFT command failed (RC={r.returncode}): {command}",
+                flush=True,
+            )
+            return False
+        if not Path(out_file).exists() or Path(out_file).stat().st_size == 0:
+            print(
+                f"[ERROR] MAFFT produced an empty output: {out_file}",
+                flush=True,
+            )
+            return False
+        return True
+
     in_file_path = Path(in_path) / in_file
     records = list(SeqIO.parse(in_file_path, "fasta"))
     len_list = [(rec.description, len(rec.seq)) for rec in records]
@@ -60,24 +91,45 @@ def mafft_add(in_path, in_file, out_path, cmd_str):
         msa2 = Path(out_path) / f"step2_{in_file}"
         msa3 = Path(out_path) / f"step3_{in_file}"
 
-        run_command(f"{cmd_str[0]} --quiet {file1} > {msa1}")
-        run_command(f"{cmd_str[1]} --quiet --auto --addfragments {file2} {msa1} > {msa2}")
-        
-        if msa2.stat().st_size == 0:
-            run_command(f"{cmd_str[1]} --quiet --auto --add {file2} {msa1} > {msa2}")
-        
-        run_command(f"{cmd_str[2]} --quiet --auto --add {file3} {msa2} > {msa3}")
+        ok = _run_checked(f"{cmd_str[0]} --quiet {file1} > {msa1}", msa1)
+
+        # 中间分组可能为空（如没有短于 a/2 的片段）。MAFFT 对空输入会
+        # 静默产出空文件（RC=0），导致整个比对失败，因此分组为空时跳过对应步骤。
+        if ok and file2.stat().st_size > 0:
+            ok = _run_checked(
+                f"{cmd_str[1]} --quiet --auto --addfragments {file2} {msa1} > {msa2}",
+                msa2,
+            )
+            if not ok:  # 部分数据不适合 addfragments，改用 --add 重试
+                ok = _run_checked(
+                    f"{cmd_str[1]} --quiet --auto --add {file2} {msa1} > {msa2}", msa2
+                )
+            msa_base = msa2
+        else:
+            msa_base = msa1
+
+        if ok and file3.stat().st_size > 0:
+            ok = _run_checked(
+                f"{cmd_str[2]} --quiet --auto --add {file3} {msa_base} > {msa3}", msa3
+            )
+            final_msa = msa3
+        else:
+            final_msa = msa_base
 
         file1.unlink(missing_ok=True)
         file2.unlink(missing_ok=True)
         file3.unlink(missing_ok=True)
-        msa1.unlink(missing_ok=True)
-        msa2.unlink(missing_ok=True)
-        
-        shutil.move(str(msa3), str(Path(out_path) / in_file))
+        # 中间结果若本身就是最终结果（跳过 add 步骤时）则不能删除
+        for f in (msa1, msa2):
+            if f != final_msa:
+                f.unlink(missing_ok=True)
+
+        if final_msa.exists():
+            shutil.move(str(final_msa), str(Path(out_path) / in_file))
+        return ok
     else:
         out_file = Path(out_path) / in_file
-        run_command(f"{cmd_str[0]} --quiet {in_file_path} > {out_file}")
+        return _run_checked(f"{cmd_str[0]} --quiet {in_file_path} > {out_file}", out_file)
 
 
 def mafft(
@@ -159,33 +211,74 @@ def mafft(
         return [], None
 
     total_time = 0.0
+    failed = False
     if add_choice:
         for file in file_list:
             t0 = datetime.now()
             in_file = str(Path(in_path) / file)
-            out_file = str(Path(out_path) / file)
+            final_out = str(Path(out_path) / file)
+            # 输出与输入同路径时，cmd 的 ">" 会先截断输入文件，必须先写到临时文件
+            out_file = (
+                str(Path(out_path) / f".mafft_tmp_{file}")
+                if _resolve_same_path(in_file, final_out)
+                else final_out
+            )
             command = f"{mafft_exe} --quiet --{algorithm} --{add_choice} {add_path} --thread {thread} {'--reorder' * reorder} {additional_params} {in_file} > {out_file}"
             if message:
                 print(f"Aligning {file}...")
             if progress_callback:
                 progress_callback(f"Aligning {file}...")
-            run_command(command)
+            r = run_command(command)
+            if r.returncode != 0:
+                failed = True
+                if progress_callback:
+                    progress_callback(
+                        f"MAFFT command failed (RC={r.returncode}): {command}", "ERROR"
+                    )
+            if out_file != final_out and Path(out_file).exists():
+                shutil.move(out_file, final_out)
+            if not Path(final_out).exists() or Path(final_out).stat().st_size == 0:
+                failed = True
+                if progress_callback:
+                    progress_callback(
+                        f"MAFFT produced an empty output: {final_out}", "ERROR"
+                    )
             t1 = datetime.now()
             elapsed = (t1 - t0).total_seconds()
             total_time += elapsed
             if message:
                 print(f"MAFFT Used: {elapsed:.2f} seconds")
-    elif algorithm == "auto":
+    elif algorithm.startswith("auto"):
         for file in file_list:
             t0 = datetime.now()
             in_file = str(Path(in_path) / file)
-            out_file = str(Path(out_path) / file)
+            final_out = str(Path(out_path) / file)
+            # 输出与输入同路径时，cmd 的 ">" 会先截断输入文件，必须先写到临时文件
+            out_file = (
+                str(Path(out_path) / f".mafft_tmp_{file}")
+                if _resolve_same_path(in_file, final_out)
+                else final_out
+            )
             command = f"{mafft_exe} --quiet --auto --thread {thread} {'--reorder' * reorder} {additional_params} {in_file} > {out_file}"
             if message:
                 print(f"Aligning {file}...")
             if progress_callback:
                 progress_callback(f"Aligning {file}...")
-            run_command(command)
+            r = run_command(command)
+            if r.returncode != 0:
+                failed = True
+                if progress_callback:
+                    progress_callback(
+                        f"MAFFT command failed (RC={r.returncode}): {command}", "ERROR"
+                    )
+            if out_file != final_out and Path(out_file).exists():
+                shutil.move(out_file, final_out)
+            if not Path(final_out).exists() or Path(final_out).stat().st_size == 0:
+                failed = True
+                if progress_callback:
+                    progress_callback(
+                        f"MAFFT produced an empty output: {final_out}", "ERROR"
+                    )
             t1 = datetime.now()
             elapsed = (t1 - t0).total_seconds()
             total_time += elapsed
@@ -199,11 +292,12 @@ def mafft(
 
         for file in file_list:
             t0 = datetime.now()
-            mafft_add(in_path, file, out_path, cmd_str)
+            if not mafft_add(in_path, file, out_path, cmd_str):
+                failed = True
             t1 = datetime.now()
             elapsed = (t1 - t0).total_seconds()
             total_time += elapsed
             print(f"MAFFT Used: {elapsed:.2f} seconds")
 
-    return file_handles, total_time
-
+    # 任一命令失败即返回 None，避免上层误报 SUCCESS
+    return file_handles, (None if failed else total_time)

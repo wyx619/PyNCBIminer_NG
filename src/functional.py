@@ -265,22 +265,26 @@ def run_command(command, shell=True, capture_output=False):
         startupinfo.wShowWindow = subprocess.SW_HIDE
         creationflags = subprocess.CREATE_NO_WINDOW
 
-        stdout_setting = subprocess.PIPE if capture_output else None
-        stderr_setting = subprocess.PIPE if capture_output else None
-
+        # 必须始终用 PIPE 捕获输出（而不是传 None/NULL 句柄）：
+        # 打包后的程序是 GUI 子系统（无控制台），若 stdout/stderr 为 None，
+        # 子进程 cmd（如 mafft.bat -> bash）会因写入无效句柄立即失败
+        # （RC=1、0 字节输出）。开发环境有控制台所以无法复现。
         process = subprocess.Popen(
             command,
             shell=shell,
             startupinfo=startupinfo,
             creationflags=creationflags,
-            stdout=stdout_setting,
-            stderr=stderr_setting,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             stdin=subprocess.DEVNULL,
         )
         stdout, stderr = process.communicate()
 
-        if stderr:
-            print(f"{stderr.decode('utf-8', errors='ignore')}")
+        # 仅在失败时打印 stderr 便于定位原因；成功时静默
+        # （mafft.bat 每次都会向 stderr 输出环境提示，属正常噪音）
+        if stderr and process.returncode != 0:
+            err_text = stderr.decode("utf-8", errors="ignore")
+            print(err_text[:4000], flush=True)
 
         return subprocess.CompletedProcess(
             args=command, returncode=process.returncode, stdout=stdout, stderr=stderr
