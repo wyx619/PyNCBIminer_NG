@@ -141,13 +141,13 @@ Default: $\alpha = 0.5$, $\beta = 2.0$. Reference tables: `ANG_REF_LEN` (angiosp
 
 **TNRS Name Resolution** (optional):
 
-When enabled, organism names are standardized via the TNRS API before selection:
+When enabled, organism names are standardized via the TNRS API before selection. Matches resolved only to genus level (`Accepted_name_rank == "genus"`, e.g. "Vitis sp.") are excluded, as they cannot support species-level representative selection:
 
 ```mermaid
 flowchart LR
     A["organism.csv"] --> B["TNRS_cached()<br/>batch 5000/request"]
     B --> C{"All batches<br/>succeed?"}
-    C -->|"Yes"| D["Accepted_name mapping<br/>score >= accuracy<br/>& status Accepted/Synonym"]
+    C -->|"Yes"| D["Accepted_name mapping<br/>score >= accuracy<br/>& status Accepted/Synonym<br/>& rank != genus"]
     C -->|"No"| E["Abort; cache preserved<br/>re-run retries failed batches"]
     D --> F["Not resolved → excluded"]
     F --> G["keep_longest per species"]
@@ -158,6 +158,7 @@ flowchart LR
 | Sources          | `wcvp` (Kew WCVP) and/or `wfo` (World Flora Online); at least one required |
 | Accuracy         | Minimum Overall_score threshold (default: 0.9)                                 |
 | Taxonomic status | Only `Accepted` or `Synonym` matches are kept; other statuses (e.g. `No opinion`, `Unresolved`) or missing status are excluded |
+| Taxonomic rank   | Matches resolved only to genus level (`Accepted_name_rank == "genus"`) are excluded; species-level resolution required |
 | Batching         | 5000 names per API request; per-batch CSV cache in`tnrs_cache/`              |
 | Retry            | 3 attempts per batch (pass 1) + 3 attempts (pass 2); all-fail → abort         |
 | Cache validation | SHA-256 of (names + sources + accuracy); input change → auto-clear            |

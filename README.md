@@ -25,7 +25,7 @@ No programming experience is required.
 | Resume Capability            | Interrupted workflows can be resumed from the last checkpoint                                |
 | Extended Segments Refinement | Trims non-homologous regions introduced by sequence extension                                |
 | Species-level Selection      | Retains one representative sequence per species (Abnormality Index + multi-criteria ranking) |
-| TNRS Name Resolution         | Online taxonomic name standardization via TNRS API (wcvp/wfo sources, configurable accuracy, `Accepted`/`Synonym` status only) |
+| TNRS Name Resolution         | Online taxonomic name standardization via TNRS API (wcvp/wfo sources, configurable accuracy, `Accepted`/`Synonym` status only, genus-level matches excluded) |
 | Sequence Aggregate           | Merge species-level selection results across multiple gene markers into a unified record table (`combined_records.txt`) and a pooled sequence set (`filtered_seqs/`) for downstream supermatrix construction |
 
 ### Chloroplast Module
@@ -37,7 +37,7 @@ No programming experience is required.
 | Quality Control                | Flag genomes with low CDS count or high ambiguity ratio                                                            |
 | PGA-NG Re-annotation           | Re-annotate problematic genomes with clade-specific references                                                     |
 | Get & Filter CDS               | Extract 80 standard plastid genes and filter by reference length bounds                                            |
-| Species-level CDS Selection    | Select one representative genome per species (longest total CDS); optional TNRS name resolution (score ≥ accuracy, `Accepted`/`Synonym` status only) with batch caching |
+| Species-level CDS Selection    | Select one representative genome per species (longest total CDS); optional TNRS name resolution (score ≥ accuracy, `Accepted`/`Synonym` status only, genus-level matches excluded) with batch caching |
 
 ### Supermatrix Construction Module
 
