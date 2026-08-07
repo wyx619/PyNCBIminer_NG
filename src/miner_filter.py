@@ -285,7 +285,10 @@ class Miner_filter:
         df_records_info.to_csv(csv_out_path, sep="\t", index=False)
 
     def _tnrs_correct_names(self, tnrs_sources, tnrs_accuracy, emit_log):
-        """Correct organism names via TNRS API before species-level selection."""
+        """Correct organism names via TNRS API before species-level selection.
+
+        Returns False if TNRS fails (caller should abort), True otherwise.
+        """
         import shutil
 
         from Chloroplast.TNRS import TNRS_cached
@@ -296,7 +299,7 @@ class Miner_filter:
         names = [n.strip() for n in df["organism"].dropna().unique().tolist()]
         if not names:
             emit_log("No organism names found. Skipping TNRS.", "WARNING")
-            return
+            return True
 
         cache_dir = self.__in_path / "tnrs_cache"
 
@@ -309,7 +312,12 @@ class Miner_filter:
         )
 
         if tnrs_result is None:
-            raise RuntimeError("TNRS name resolution failed. Aborting reduce_dataset.")
+            emit_log(
+                "TNRS name resolution failed. Aborting reduce_dataset. "
+                "Re-run to retry failed batches.",
+                "WARNING",
+            )
+            return False
 
         resolved = tnrs_result[
             tnrs_result["Overall_score"].notna()
@@ -317,6 +325,7 @@ class Miner_filter:
             & tnrs_result["Accepted_name"].notna()
             & (tnrs_result["Accepted_name"] != "")
             & tnrs_result["Taxonomic_status"].isin(["Accepted", "Synonym"])
+            & (tnrs_result["Accepted_name_rank"] != "genus")
         ]
         rename_map = dict(zip(resolved["Name_submitted"], resolved["Accepted_name"]))
 
@@ -328,13 +337,15 @@ class Miner_filter:
         )
         df.to_csv(info_path, sep="\t", index=False)
 
+        n_resolved = len(rename_map)
         n_corrected = sum(1 for n in names if n in rename_map and rename_map[n] != n)
-        n_excluded = len(names) - len(rename_map)
+        n_excluded = len(names) - n_resolved
         emit_log(
-            f"TNRS: {n_corrected}/{len(names)} names corrected, "
-            f"{n_excluded} not resolved (will be excluded).",
+            f"TNRS: {n_resolved}/{len(names)} names resolved "
+            f"({n_corrected} corrected), {n_excluded} not resolved (will be excluded).",
             "INFO",
         )
+        return True
 
     def reduce_dataset(
         self,
@@ -375,7 +386,8 @@ class Miner_filter:
                 print(f"[{level}] {msg}")
 
         if enable_tnrs:
-            self._tnrs_correct_names(tnrs_sources, tnrs_accuracy, emit_log)
+            if not self._tnrs_correct_names(tnrs_sources, tnrs_accuracy, emit_log):
+                return
 
         df = pd.read_csv(self.__in_path / "results" / self.__get_info_csv(), sep="\t")
         for row_index, row in df.iterrows():

@@ -90,8 +90,8 @@ def make_tab(
     emit_log=None,
 ):
     if emit_log is None:
-        def emit_log(msg, level=None):
-            print(msg)
+        def emit_log(msg, level="INFO"):
+            print(f"[{level}] {msg}")
 
     df = pd.read_csv(Path(in_path) / "length.csv", sep=",")
 
@@ -121,7 +121,10 @@ def make_tab(
         )
 
         if tnrs_result is None:
-            emit_log("TNRS failed. Aborting selection. Re-run to retry failed batches.", "WARNING")
+            emit_log(
+                "TNRS name resolution failed. Aborting selection. Re-run to retry failed batches.",
+                "WARNING",
+            )
             return None
         else:
             resolved = tnrs_result[
@@ -130,6 +133,7 @@ def make_tab(
                 & tnrs_result["Accepted_name"].notna()
                 & (tnrs_result["Accepted_name"] != "")
                 & tnrs_result["Taxonomic_status"].isin(["Accepted", "Synonym"])
+                & (tnrs_result["Accepted_name_rank"] != "genus")
             ].copy()
 
             rename_map = dict(
@@ -140,7 +144,8 @@ def make_tab(
             if n_unmatched > 0:
                 unmatched = [n for n in names if n not in rename_map]
                 emit_log(
-                    f"TNRS: {len(rename_map)} resolved, {n_unmatched} excluded: {unmatched[:10]}",
+                    f"TNRS: {len(rename_map)}/{len(names)} names resolved, "
+                    f"{n_unmatched} not resolved (will be excluded): {unmatched[:10]}",
                     "WARNING",
                 )
 

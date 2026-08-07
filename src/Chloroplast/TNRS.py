@@ -229,8 +229,8 @@ def TNRS_cached(
     - On next run, cached batches are loaded directly (validated by hash).
     """
     if emit_log is None:
-        def emit_log(msg, level=None):
-            print(msg)
+        def emit_log(msg, level="INFO"):
+            print(f"[{level}] {msg}")
 
     if not _check_internet():
         emit_log("No internet connection. Cannot reach TNRS API.", "WARNING")

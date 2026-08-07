@@ -1,7 +1,9 @@
 from itertools import product
-from Bio import SeqIO
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+from Bio import SeqIO
+
 from sequence_indexer import Sequence_indexer
 
 
@@ -638,7 +640,6 @@ class nt_Calculator:
                 break
 
         return [five_end, three_end]
-
 
     def get_kmer_similarity_matrix(self, records, k):
         """using kmer_similarity to evaluate simiarlity matrix of a list of records
