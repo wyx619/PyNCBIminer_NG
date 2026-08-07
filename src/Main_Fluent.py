@@ -220,11 +220,9 @@ class RetrievalInterface(QWidget):
 
         self.page_retrieval = self.create_retrieval_page()
         self.page_filter = self.create_filtering_page()
-        self.page_aggregate = self.create_aggregate_page()
 
         self.addSubInterface(self.page_retrieval, "retrieval", "Sequence Retrieval")
         self.addSubInterface(self.page_filter, "filter", "Sequence Filtering")
-        self.addSubInterface(self.page_aggregate, "aggregate", "Sequence Aggregate")
 
         self.vBoxLayout.addWidget(self.pivot)
         self.vBoxLayout.addWidget(self.stackedWidget)
@@ -604,6 +602,18 @@ class RetrievalInterface(QWidget):
         row_tnrs.addWidget(self.filter_tnrs_wfo)
         row_tnrs.addWidget(self.filter_tnrs_wcvp)
         row_tnrs.addStretch(1)
+        lbl_tnrs_genus = BodyLabel("Remove genus rank:")
+        lbl_tnrs_genus.setToolTip(
+            "Exclude TNRS matches resolved only to genus rank\n"
+            "(e.g. 'Vitis sp.'), which cannot support species-level\n"
+            "representative selection. Default: on."
+        )
+        row_tnrs.addWidget(lbl_tnrs_genus)
+        self.filter_tnrs_remove_genus = SwitchButton(card_opts)
+        self.filter_tnrs_remove_genus.setChecked(True)
+        self.filter_tnrs_remove_genus.setEnabled(False)
+        row_tnrs.addWidget(self.filter_tnrs_remove_genus)
+        row_tnrs.addStretch(1)
 
         lbl_filter_tnrs_acc = BodyLabel("Accuracy:")
         lbl_filter_tnrs_acc.setToolTip(
@@ -657,65 +667,6 @@ class RetrievalInterface(QWidget):
         layout.addStretch(1)
         return w
 
-    def create_aggregate_page(self):
-        w = QWidget()
-        layout = QVBoxLayout(w)
-        layout.setContentsMargins(5, 20, 5, 20)
-
-        grp = SettingCardGroup("Sequence Aggregate", w)
-        grp.titleLabel.setToolTip(
-            "Aggregate species-level selection results across multiple gene markers.\n"
-            "Input: parent directory containing marker working directories\n"
-            "(each with results/ and tmp_files/ subdirectories).\n"
-            "Output: combined_records.txt and filtered_seqs/ directory."
-        )
-        grp.titleLabel.installEventFilter(
-            ToolTipFilter(grp.titleLabel, showDelay=300, position=ToolTipPosition.BOTTOM_LEFT)
-        )
-
-        card = CardWidget()
-        card.setFixedHeight(140)
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(15, 10, 15, 10)
-
-        h1 = QHBoxLayout()
-        self.agg_in = LineEdit()
-        self.agg_in.setPlaceholderText(
-            "Parent directory of multiple marker working directories"
-        )
-        btn_agg_in = PushButton("Browse")
-        btn_agg_in.setIcon(FIF.FOLDER)
-        btn_agg_in.clicked.connect(lambda: self.browse_dir(self.agg_in))
-        lbl_agg_in = BodyLabel("Input Directory:")
-        lbl_agg_in.setFixedWidth(150)
-        h1.addWidget(lbl_agg_in)
-        h1.addWidget(self.agg_in, 1)
-        h1.addWidget(btn_agg_in)
-        card_layout.addLayout(h1)
-
-        h2 = QHBoxLayout()
-        self.agg_out = LineEdit()
-        self.agg_out.setPlaceholderText("The same as input path by default")
-        btn_agg_out = PushButton("Browse")
-        btn_agg_out.setIcon(FIF.FOLDER)
-        btn_agg_out.clicked.connect(lambda: self.browse_dir(self.agg_out))
-        lbl_agg_out = BodyLabel("Output Directory:")
-        lbl_agg_out.setFixedWidth(150)
-        h2.addWidget(lbl_agg_out)
-        h2.addWidget(self.agg_out, 1)
-        h2.addWidget(btn_agg_out)
-        card_layout.addLayout(h2)
-
-        grp.addSettingCard(card)
-
-        self.btn_run_aggregate = PrimaryPushButton("Run Aggregate")
-        self.btn_run_aggregate.setIcon(FIF.PLAY)
-
-        layout.addWidget(grp)
-        layout.addWidget(self.btn_run_aggregate)
-        layout.addStretch(1)
-        return w
-
     def on_switch_reduce_changed(self, checked):
         self.len_thresh.setEnabled(checked)
         self.chk_consensus.setEnabled(checked)
@@ -725,11 +676,13 @@ class RetrievalInterface(QWidget):
             self.filter_tnrs_wfo.setEnabled(False)
             self.filter_tnrs_wcvp.setEnabled(False)
             self.filter_tnrs_accuracy.setEnabled(False)
+            self.filter_tnrs_remove_genus.setEnabled(False)
 
     def on_filter_tnrs_switch_changed(self, checked):
         self.filter_tnrs_wfo.setEnabled(checked)
         self.filter_tnrs_wcvp.setEnabled(checked)
         self.filter_tnrs_accuracy.setEnabled(checked)
+        self.filter_tnrs_remove_genus.setEnabled(checked)
 
     def browse_dir(self, line_edit):
         path = QFileDialog.getExistingDirectory(self, "Select Directory")
@@ -1812,6 +1765,18 @@ class ChloroplastMinerInterface(QWidget):
         h_select_tax.addWidget(self.cds_tnrs_wfo)
         h_select_tax.addWidget(self.cds_tnrs_wcvp)
         h_select_tax.addStretch(1)
+        lbl_tnrs_genus = BodyLabel("Remove genus rank:")
+        lbl_tnrs_genus.setToolTip(
+            "Exclude TNRS matches resolved only to genus rank\n"
+            "(e.g. 'Vitis sp.'), which cannot support species-level\n"
+            "representative selection. Default: on."
+        )
+        h_select_tax.addWidget(lbl_tnrs_genus)
+        self.cds_tnrs_remove_genus = SwitchButton()
+        self.cds_tnrs_remove_genus.setChecked(True)
+        self.cds_tnrs_remove_genus.setEnabled(False)
+        h_select_tax.addWidget(self.cds_tnrs_remove_genus)
+        h_select_tax.addStretch(1)
 
         lbl_tnrs_acc = BodyLabel("Accuracy:")
         lbl_tnrs_acc.setToolTip(
@@ -1831,6 +1796,7 @@ class ChloroplastMinerInterface(QWidget):
             self.cds_tnrs_wfo.setEnabled(checked)
             self.cds_tnrs_wcvp.setEnabled(checked)
             self.cds_tnrs_accuracy.setEnabled(checked)
+            self.cds_tnrs_remove_genus.setEnabled(checked)
 
         self.cds_select_tax_switch.checkedChanged.connect(_on_tax_switch)
 
@@ -2099,6 +2065,7 @@ class ChloroplastMinerInterface(QWidget):
         enable_tax_res = self.cds_select_tax_switch.isChecked()
         tnrs_sources = None
         tnrs_accuracy = None
+        remove_genus_rank = True
 
         if enable_tax_res:
             sources = []
@@ -2125,10 +2092,12 @@ class ChloroplastMinerInterface(QWidget):
                     "Invalid accuracy value", "WARNING"
                 )
                 return
+            remove_genus_rank = self.cds_tnrs_remove_genus.isChecked()
 
         self.main_window.backend.emit_log("CDS selection started...", "INFO")
         self.main_window.backend.run_select_cds(
-            in_folder, out_folder, enable_tax_res, tnrs_sources, tnrs_accuracy
+            in_folder, out_folder, enable_tax_res, tnrs_sources, tnrs_accuracy,
+            remove_genus_rank=remove_genus_rank,
         )
 
     def on_cds_gf_out_changed(self, text):
@@ -2406,7 +2375,6 @@ class MainWindow(FluentWindow):
         ri.chk_summary.stateChanged.connect(self.set_marker_summary)
 
         ri.btn_run_filter.clicked.connect(self.run_filtering)
-        ri.btn_run_aggregate.clicked.connect(self.run_aggregate)
 
         ci = self.construction_interface
         ci.combo_trim_method.currentIndexChanged.connect(self.select_tri_method)
@@ -2543,9 +2511,6 @@ class MainWindow(FluentWindow):
 
     def run_filtering(self):
         self.backend.run_filtering(self.retrieval_interface)
-
-    def run_aggregate(self):
-        self.backend.run_aggregate(self.retrieval_interface)
 
     def run_replacement(self):
         self.backend.run_replacement(self.construction_interface)

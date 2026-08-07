@@ -141,7 +141,7 @@ Default: $\alpha = 0.5$, $\beta = 2.0$. Reference tables: `ANG_REF_LEN` (angiosp
 
 **TNRS Name Resolution** (optional):
 
-When enabled, organism names are standardized via the TNRS API before selection. Matches resolved only to genus level (`Accepted_name_rank == "genus"`, e.g. "Vitis sp.") are excluded, as they cannot support species-level representative selection:
+When enabled, organism names are standardized via the TNRS API before selection. Matches resolved only to genus level (`Accepted_name_rank == "genus"`, e.g. "Vitis sp.") are excluded by default (toggleable via the "Remove genus rank" checkbox), as they cannot support species-level representative selection. Genus-level exclusion is governed solely by this switch (TNRS-enabled only); no other unconditional/hidden genus filtering is applied.
 
 ```mermaid
 flowchart LR
@@ -158,12 +158,12 @@ flowchart LR
 | Sources          | `wcvp` (Kew WCVP) and/or `wfo` (World Flora Online); at least one required |
 | Accuracy         | Minimum Overall_score threshold (default: 0.9)                                 |
 | Taxonomic status | Only `Accepted` or `Synonym` matches are kept; other statuses (e.g. `No opinion`, `Unresolved`) or missing status are excluded |
-| Taxonomic rank   | Matches resolved only to genus level (`Accepted_name_rank == "genus"`) are excluded; species-level resolution required |
+| Taxonomic rank | Exclude matches resolved only to genus rank (e.g. `Vitis sp.`); on by default, configurable via the "Remove genus rank" checkbox |
 | Batching         | 5000 names per API request; per-batch CSV cache in`tnrs_cache/`              |
 | Retry            | 3 attempts per batch (pass 1) + 3 attempts (pass 2); all-fail → abort         |
 | Cache validation | SHA-256 of (names + sources + accuracy); input change → auto-clear            |
 
-**Outputs**: Representative CDS FASTA files (header: `{accession}|{species_name}`), `organism.csv`
+**Outputs**: Representative CDS FASTA files (header: `{species_name}`), `organism.csv`, and `selected_sequences.csv` — one row per species with its representative accession (all genes come from the same accession) and a comma-separated list of missing genes (empty when the species has every gene).
 
 ---
 

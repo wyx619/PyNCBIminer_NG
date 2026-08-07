@@ -1,116 +1,92 @@
 """
 Multi-marker summarization utilities.
 
-Combines species-level selection results across multiple gene markers
-into unified records and sequence collections for downstream supermatrix construction.
+Aggregates species-level selection results across multiple gene markers
+into a unified directory of per-marker FASTA + CSV files
+for downstream supermatrix construction.
 """
 
 from pathlib import Path
 
-import pandas as pd
 from Bio import SeqIO
 
 
-def combine_keep_records(wd_list, out_path):
-    """Merge blast_result_kept.txt from multiple markers into one combined table.
+def _discover_working_dirs(in_path):
+    """Discover marker working directories (same logic as call_miner_filter).
 
-    Parameters
-    ----------
-    wd_list : list of str/Path
-        Working directories of each marker.
-    out_path : str/Path
-        Output directory for combined_records.txt.
+    Returns [in_path] when in_path itself is a working directory
+    (contains results/ and tmp_files/), otherwise the subdirectories
+    that qualify as working directories.
     """
-    combined_records = None
-    col_list = ["taxon_name"]
-    out_path = Path(out_path)
-
-    for wd in wd_list:
-        wd = Path(wd)
-        name = wd.name
-        col_list.append(name)
-
-        if out_path == wd:
-            kept_file = out_path / "results" / "blast_result_kept.txt"
-        else:
-            kept_file = out_path / name / "results" / "blast_result_kept.txt"
-
-        try:
-            df = pd.read_table(kept_file, sep="\t")
-            # keep only species-level taxa (name must contain at least one "_")
-            df = df[df["taxon_name"].astype(str).str.contains("_", na=False)]
-            if combined_records is None:
-                combined_records = df[["taxon_name", "subject_acc.ver"]]
-            else:
-                combined_records = pd.merge(
-                    combined_records,
-                    df[["taxon_name", "subject_acc.ver"]],
-                    how="outer",
-                    on="taxon_name",
-                )
-            combined_records.columns = col_list
-        except FileNotFoundError:
-            print(f"{name} has not been reduced.")
-
-    if combined_records is not None:
-        combined_records = combined_records.fillna("-")
-        combined_records.to_csv(
-            out_path / "combined_records.txt", index=False, sep="\t"
-        )
-        print(f"Combined records save in {out_path / 'combined_records.txt'}")
+    in_path = Path(in_path)
+    dir_list = [f.name for f in in_path.iterdir() if (in_path / f.name).is_dir()]
+    wd_list = []
+    if "results" in dir_list and "tmp_files" in dir_list:
+        wd_list = [in_path]
     else:
-        print("No records found to combine.")
+        for directory in dir_list:
+            sub_dir_list = [f.name for f in (in_path / directory).iterdir()]
+            if "results" in sub_dir_list and "tmp_files" in sub_dir_list:
+                wd_list.append(in_path / directory)
+    return wd_list
 
 
-def put_filtered_seq_together(wd_list, out_path):
-    """Copy filtered FASTA from multiple markers into a single directory.
+def aggregate_marker_outputs(in_path, emit_log=None):
+    """Aggregate species-level selection results into an aggregated/ directory.
 
-    Parameters
-    ----------
-    wd_list : list of str/Path
-        Working directories of each marker.
-    out_path : str/Path
-        Output directory; filtered_seqs/ will be created inside.
+    For each marker working directory, writes:
+        <container>/aggregated/<marker>.fasta   # clean headers (species only)
+        <container>/aggregated/<marker>.csv     # accession <-> species mapping
+
+    The container is the parent directory of a single-marker input, or the
+    input directory itself when multiple markers are supplied. The aggregated/
+    directory is created if missing; existing target files are overwritten.
     """
-    print("Copying filtered sequences into one directory...")
-    out_path = Path(out_path)
+    if emit_log is None:
+
+        def emit_log(msg, level="INFO"):
+            print(f"[{level}] {msg}")
+
+    in_path = Path(in_path)
+    wd_list = _discover_working_dirs(in_path)
+    if not wd_list:
+        emit_log("No valid working directories found for aggregation.", "WARNING")
+        return
+
+    if len(wd_list) == 1 and wd_list[0] == in_path:
+        agg_dir = in_path.parent / "aggregated"
+    else:
+        agg_dir = in_path / "aggregated"
+    agg_dir.mkdir(parents=True, exist_ok=True)
 
     for wd in wd_list:
-        wd = Path(wd)
-        name = wd.name
-        filtered_seqs_path = out_path / "filtered_seqs"
-        if not filtered_seqs_path.exists():
-            filtered_seqs_path.mkdir()
+        marker = wd.name
+        src = wd / "results" / "blast_results_filtered.fasta"
+        if not src.exists():
+            emit_log(
+                f"{marker}: blast_results_filtered.fasta not found, skipped.",
+                "WARNING",
+            )
+            continue
 
-        if out_path == wd:
-            filtered_file = out_path / "results" / "blast_results_filtered.fasta"
-        else:
-            filtered_file = out_path / name / "results" / "blast_results_filtered.fasta"
+        fasta_out = agg_dir / f"{marker}.fasta"
+        csv_out = agg_dir / f"{marker}.csv"
 
-        try:
-            skipped = 0
-            with open(filtered_seqs_path / (name + ".fasta"), "w") as fw:
-                for record in SeqIO.parse(filtered_file, "fasta"):
-                    parts = record.description.split("|")
-                    if len(parts) < 2:
-                        skipped += 1
-                        continue
-                    species = parts[1].strip()
-                    # drop genus-level records (name without any "_")
-                    if "_" not in species:
-                        skipped += 1
-                        continue
-                    fw.write(">" + species)
-                    fw.write("\n")
-                    fw.write(str(record.seq))
-                    fw.write("\n")
-            if skipped:
-                print(
-                    f"{name}: skipped {skipped} genus-level sequence(s) "
-                    f"(no species epithet in the name)."
-                )
+        n_seqs = 0
+        with open(fasta_out, "w") as fw, open(csv_out, "w") as fc:
+            fc.write("accession,species\n")
+            for record in SeqIO.parse(src, "fasta"):
+                parts = record.description.split("|")
+                if len(parts) < 2:
+                    continue
+                species = parts[1].strip()
+                fw.write(f">{species}\n{str(record.seq)}\n")
+                fc.write(f"{parts[0].strip()},{species}\n")
+                n_seqs += 1
 
-        except FileNotFoundError:
-            print(f"{name} has not been copied.")
+        emit_log(
+            f"{marker}: {n_seqs} sequences -> {fasta_out.name}, {csv_out.name}",
+            "INFO",
+        )
 
-    print("All filtered sequences are into 'filtered_seqs' folder")
+    emit_log(f"Aggregated outputs saved in {agg_dir}", "INFO")

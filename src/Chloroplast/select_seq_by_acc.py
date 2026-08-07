@@ -31,10 +31,14 @@ def process_file(file, in_path, out_path):
     selected_table = _selected_table.set_index("filename")
 
     records = []
+    accession_map = {}  # species (underscored) -> accession with version
     for index in selected_table.index:
         if index in seq_dict:
             record = seq_dict[index]
-            species_name = selected_table.loc[index]["organism"].strip().replace(" ", "_")
+            species_name = (
+                selected_table.loc[index]["organism"].strip().replace(" ", "_")
+            )
+            accession_map[species_name] = record.description.split("|")[0]
             record.id = species_name
             record.description = ""
             records.append(record)
@@ -44,7 +48,7 @@ def process_file(file, in_path, out_path):
 
 
 
-    return file, None, None
+    return file, accession_map, None
 
 
 def select_seq_by_acc(
@@ -75,10 +79,54 @@ def select_seq_by_acc(
             for arg in task_args
         }
 
+        per_gene = {}  # gene stem -> {species: accession with version}
         for future in as_completed(futures):
-            file, updates, error = future.result()
+            file, accession_map, error = future.result()
             if error:
                 print(f"Error processing {file}: {error}")
+                continue
+            if accession_map is None:  # non-FASTA file, skipped
+                continue
+            per_gene[Path(file).stem] = accession_map
+
+        _write_selected_table(per_gene, out_path)
+
+
+def _write_selected_table(per_gene, out_path):
+    """Write selected_sequences.csv: one row per species with its representative
+    accession and the comma-separated list of missing genes.
+
+    All genes of a species come from the same representative accession, so the
+    per-gene matrix is redundant; a single species-level table suffices.
+    """
+    if not per_gene:
+        print("No gene files produced selected sequences; no table written.")
+        return
+    genes = sorted(per_gene.keys())
+    species_map = {}  # species -> [accession, set of present genes]
+    for gene in genes:
+        for species, acc in per_gene[gene].items():
+            entry = species_map.setdefault(species, [acc, set()])
+            entry[1].add(gene)
+
+    if not species_map:
+        print("No selected species; no table written.")
+        return
+
+    rows = [
+        {
+            "species": species,
+            "accession": entry[0],
+            "missing_genes": ",".join(g for g in genes if g not in entry[1]),
+        }
+        for species, entry in sorted(species_map.items())
+    ]
+
+    out_csv = Path(out_path) / "selected_sequences.csv"
+    pd.DataFrame(rows, columns=["species", "accession", "missing_genes"]).to_csv(
+        out_csv, index=False
+    )
+    print(f"Selected-species table written to {out_csv} ({len(rows)} species).")
 
 
 def make_tab(
@@ -86,6 +134,7 @@ def make_tab(
     enable_tnrs=False,
     tnrs_sources=None,
     tnrs_accuracy=None,
+    remove_genus_rank=True,
     on_duplicates="keep_longest",
     emit_log=None,
 ):
@@ -127,14 +176,16 @@ def make_tab(
             )
             return None
         else:
-            resolved = tnrs_result[
+            resolved_mask = (
                 tnrs_result["Overall_score"].notna()
                 & (tnrs_result["Overall_score"] >= (tnrs_accuracy or 0))
                 & tnrs_result["Accepted_name"].notna()
                 & (tnrs_result["Accepted_name"] != "")
                 & tnrs_result["Taxonomic_status"].isin(["Accepted", "Synonym"])
-                & (tnrs_result["Accepted_name_rank"] != "genus")
-            ].copy()
+            )
+            if remove_genus_rank:
+                resolved_mask &= tnrs_result["Accepted_name_rank"] != "genus"
+            resolved = tnrs_result[resolved_mask].copy()
 
             rename_map = dict(
                 zip(resolved["Name_submitted"], resolved["Accepted_name"])
@@ -153,22 +204,17 @@ def make_tab(
             df1 = df1.dropna(subset=["organism"])
             emit_log(f"TNRS completed. {df1['organism'].nunique()} species retained.", "INFO")
 
-    # drop genus-level records (single-word names, without space or "_")
-    is_genus = ~df1["organism"].astype(str).str.strip().str.contains(
-        r"[ _]", regex=True, na=False
-    )
-    n_genus = int(is_genus.sum())
-    if n_genus:
-        emit_log(f"Excluded {n_genus} genus-level organism(s).", "INFO")
-    df1 = df1[~is_genus]
+    # NOTE: no string-based genus heuristic here. Genus-level exclusion is
+    # controlled exclusively by remove_genus_rank (TNRS rank filter above),
+    # so the UI switch governs all genus handling.
 
     duplicate_counts = df1["organism"].value_counts().loc[lambda x: x > 1]
     if len(duplicate_counts):
         if on_duplicates == "skip":
-            emit_log(f"Skipped {len(duplicate_counts)} duplicate organisms", "WARNING")
+            emit_log(f"Skipped {len(duplicate_counts)} duplicate species", "WARNING")
             return None
         elif on_duplicates == "keep_longest":
-            emit_log(f"Keeping longest for {len(duplicate_counts)} duplicate organisms", "INFO")
+            emit_log(f"Keeping longest for {len(duplicate_counts)} duplicate species", "INFO")
             return df1.loc[df1.groupby("organism")["length"].idxmax()]
         else:
             raise ValueError(f"Invalid on_duplicates: {on_duplicates}")

@@ -34,6 +34,7 @@ def call_miner_filter(
     enable_tnrs=False,
     tnrs_sources=None,
     tnrs_accuracy=None,
+    remove_genus_rank=True,
 ):
     """
     Call miner_filter, and modify input and output file names, using one thread.
@@ -114,6 +115,7 @@ def call_miner_filter(
                 enable_tnrs=enable_tnrs,
                 tnrs_sources=tnrs_sources,
                 tnrs_accuracy=tnrs_accuracy,
+                remove_genus_rank=remove_genus_rank,
                 emit_log=emit_log,
             )
             t1 = datetime.now()
@@ -161,6 +163,7 @@ def call_miner_filter(
                 enable_tnrs=enable_tnrs,
                 tnrs_sources=tnrs_sources,
                 tnrs_accuracy=tnrs_accuracy,
+                remove_genus_rank=remove_genus_rank,
                 emit_log=emit_log,
             )
             t2 = datetime.now()

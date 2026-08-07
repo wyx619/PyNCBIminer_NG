@@ -730,6 +730,7 @@ class BackendController(QObject):
         enable_tnrs = False
         tnrs_sources = None
         tnrs_accuracy = None
+        remove_genus_rank = True
         if retrieval_interface.switch_reduce.isChecked() and retrieval_interface.filter_tnrs_switch.isChecked():
             sources = []
             if retrieval_interface.filter_tnrs_wfo.isChecked():
@@ -749,6 +750,7 @@ class BackendController(QObject):
                 self.emit_log("Invalid TNRS accuracy value", "WARNING")
                 return
             enable_tnrs = True
+            remove_genus_rank = retrieval_interface.filter_tnrs_remove_genus.isChecked()
 
         action = 0
         if (
@@ -770,64 +772,30 @@ class BackendController(QObject):
         def emit_callback(message, level="INFO"):
             self.emit_log(message, level)
 
-        thread = threading.Thread(
-            target=call_miner_filter,
-            args=(in_path, out_path, action, cons, len_thr, emit_callback),
-            kwargs={"enable_tnrs": enable_tnrs, "tnrs_sources": tnrs_sources, "tnrs_accuracy": tnrs_accuracy},
-        )
-        thread.daemon = True
-        thread.start()
-
-    def run_aggregate(self, retrieval_interface):
-        from combine_markers import combine_keep_records, put_filtered_seq_together
-
-        in_path = retrieval_interface.agg_in.text().strip()
-        out_path = retrieval_interface.agg_out.text().strip() or in_path
-
-        if not in_path:
-            self.emit_log("Please set input path", "WARNING")
-            return
-        if not Path(in_path).exists():
-            self.emit_log(f"Input path does not exist: {in_path}", "WARNING")
-            return
-
-        if not Path(out_path).exists():
-            Path(out_path).mkdir(parents=True, exist_ok=True)
-
-        # discover working directories (same logic as call_miner_filter)
-        dir_list = [
-            f.name for f in Path(in_path).iterdir() if (Path(in_path) / f.name).is_dir()
-        ]
-        wd_list = []
-        if "results" in dir_list and "tmp_files" in dir_list:
-            wd_list = [in_path]
-        else:
-            for directory in dir_list:
-                sub_dir_list = [f.name for f in (Path(in_path) / directory).iterdir()]
-                if "results" in sub_dir_list and "tmp_files" in sub_dir_list:
-                    wd_list.append(Path(in_path) / Path(directory))
-
-        if len(wd_list) == 0:
-            self.emit_log(
-                "No valid working directories found. "
-                "Input must be a marker working directory or a parent directory containing them.",
-                "WARNING",
+        def run_filter_and_aggregate():
+            call_miner_filter(
+                in_path,
+                out_path,
+                action,
+                cons,
+                len_thr,
+                emit_callback,
+                enable_tnrs=enable_tnrs,
+                tnrs_sources=tnrs_sources,
+                tnrs_accuracy=tnrs_accuracy,
+                remove_genus_rank=remove_genus_rank,
             )
-            return
+            # aggregate silently after species-level selection (reduce)
+            if action in (2, 3):
+                from combine_markers import aggregate_marker_outputs
 
-        wd_names = [Path(w).name for w in wd_list]
-        self.emit_log(f"Found {len(wd_list)} marker(s): {', '.join(wd_names)}")
-        self.emit_log("Running Sequence Aggregate...")
+                try:
+                    aggregate_marker_outputs(in_path, emit_log=emit_callback)
+                    self.emit_log("Sequence aggregation completed.", "SUCCESS")
+                except Exception as e:
+                    self.emit_log(f"Sequence aggregation failed: {e}", "ERROR")
 
-        def run_aggregate_thread():
-            try:
-                combine_keep_records(wd_list, out_path)
-                put_filtered_seq_together(wd_list, out_path)
-                self.emit_log("Sequence Aggregate completed successfully!", "SUCCESS")
-            except Exception as e:
-                self.emit_log(f"Sequence Aggregate failed: {e}", "ERROR")
-
-        thread = threading.Thread(target=run_aggregate_thread)
+        thread = threading.Thread(target=run_filter_and_aggregate)
         thread.daemon = True
         thread.start()
 
@@ -1367,7 +1335,7 @@ class BackendController(QObject):
 
     def run_select_cds(
         self, in_folder, out_folder, enable_tax_res=False,
-        tnrs_sources=None, tnrs_accuracy=None, threads=3
+        tnrs_sources=None, tnrs_accuracy=None, remove_genus_rank=True, threads=3
     ):
         from pathlib import Path
 
@@ -1394,6 +1362,7 @@ class BackendController(QObject):
                     enable_tnrs=enable_tax_res,
                     tnrs_sources=tnrs_sources,
                     tnrs_accuracy=tnrs_accuracy,
+                    remove_genus_rank=remove_genus_rank,
                     emit_log=self.emit_log,
                 )
                 if df_organism is not None:

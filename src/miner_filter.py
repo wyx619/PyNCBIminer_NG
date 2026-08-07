@@ -284,9 +284,11 @@ class Miner_filter:
         )
         df_records_info.to_csv(csv_out_path, sep="\t", index=False)
 
-    def _tnrs_correct_names(self, tnrs_sources, tnrs_accuracy, emit_log):
+    def _tnrs_correct_names(self, tnrs_sources, tnrs_accuracy, emit_log, remove_genus_rank=True):
         """Correct organism names via TNRS API before species-level selection.
 
+        remove_genus_rank: if True, exclude matches resolved only to genus rank
+            (e.g. "Vitis sp."), which cannot support species-level selection.
         Returns False if TNRS fails (caller should abort), True otherwise.
         """
         import shutil
@@ -319,14 +321,16 @@ class Miner_filter:
             )
             return False
 
-        resolved = tnrs_result[
+        mask = (
             tnrs_result["Overall_score"].notna()
             & (tnrs_result["Overall_score"] >= (tnrs_accuracy or 0))
             & tnrs_result["Accepted_name"].notna()
             & (tnrs_result["Accepted_name"] != "")
             & tnrs_result["Taxonomic_status"].isin(["Accepted", "Synonym"])
-            & (tnrs_result["Accepted_name_rank"] != "genus")
-        ]
+        )
+        if remove_genus_rank:
+            mask &= tnrs_result["Accepted_name_rank"] != "genus"
+        resolved = tnrs_result[mask]
         rename_map = dict(zip(resolved["Name_submitted"], resolved["Accepted_name"]))
 
         backup_path = info_path.with_suffix(".txt.bak")
@@ -364,6 +368,7 @@ class Miner_filter:
         enable_tnrs=False,
         tnrs_sources=None,
         tnrs_accuracy=None,
+        remove_genus_rank=True,
         emit_log=None,
     ):
         """to reduce the dataset by select the best representative sequence for each taxon
@@ -378,6 +383,7 @@ class Miner_filter:
         - enable_tnrs - if True, correct organism names via TNRS API before selection
         - tnrs_sources - comma-separated TNRS sources (e.g. "wcvp,wfo")
         - tnrs_accuracy - minimum TNRS matching accuracy (0 < value <= 1)
+        - remove_genus_rank - exclude genus-rank TNRS matches (default True)
         - emit_log - optional callback(message, level) for GUI logging
         """
         if emit_log is None:
@@ -386,7 +392,12 @@ class Miner_filter:
                 print(f"[{level}] {msg}")
 
         if enable_tnrs:
-            if not self._tnrs_correct_names(tnrs_sources, tnrs_accuracy, emit_log):
+            if not self._tnrs_correct_names(
+                tnrs_sources,
+                tnrs_accuracy,
+                remove_genus_rank=remove_genus_rank,
+                emit_log=emit_log,
+            ):
                 return
 
         df = pd.read_csv(self.__in_path / "results" / self.__get_info_csv(), sep="\t")
