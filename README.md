@@ -12,31 +12,31 @@ PyNCBIminer-NG is a next-generation bioinformatics desktop application that stre
 
 No programming experience is required.
 
----
+***
 
 ## Key Features
 
 ### DNA Sequence Module
 
-| Feature                      | Description                                                                                  |
-| ---------------------------- | -------------------------------------------------------------------------------------------- |
-| Iterative BLAST              | Automatically performs iterative BLAST searches until saturation                             |
-| Smart Query Selection        | Selects optimal reference sequences at each iteration                                        |
-| Resume Capability            | Interrupted workflows can be resumed from the last checkpoint                                |
-| Extended Segments Refinement | Trims non-homologous regions introduced by sequence extension                                |
-| Species-level Selection      | Retains one representative sequence per species (Abnormality Index + multi-criteria ranking) |
-| TNRS Name Resolution         | Online taxonomic name standardization via TNRS API (wcvp/wfo sources, configurable accuracy, `Accepted`/`Synonym` status only, genus-level matches excluded) |
+| Feature                      | Description                                                                                                                                                                                                  |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Iterative BLAST              | Automatically performs iterative BLAST searches until saturation                                                                                                                                             |
+| Smart Query Selection        | Selects optimal reference sequences at each iteration                                                                                                                                                        |
+| Resume Capability            | Interrupted workflows can be resumed from the last checkpoint                                                                                                                                                |
+| Extended Segments Refinement | Trims non-homologous regions introduced by sequence extension                                                                                                                                                |
+| Species-level Selection      | Retains one representative sequence per species (Abnormality Index + multi-criteria ranking)                                                                                                                 |
+| TNRS Name Resolution         | Online taxonomic name standardization via TNRS API (wcvp/wfo sources, configurable accuracy, `Accepted`/`Synonym` status only, genus-level matches excluded)                                                 |
 | Sequence Aggregate           | Merge species-level selection results across multiple gene markers into a unified record table (`combined_records.txt`) and a pooled sequence set (`filtered_seqs/`) for downstream supermatrix construction |
 
 ### Chloroplast Module
 
-| Feature                        | Description                                                                                                        |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| Entrez Search & Batch Download | Taxon-based NCBI search with date filtering and threaded GenBank download                                          |
-| Pre-filtering                  | Remove UNVERIFIED/ambiguous/hybrid genomes; retain top-N per taxon                                                 |
-| Quality Control                | Flag genomes with low CDS count or high ambiguity ratio                                                            |
-| PGA-NG Re-annotation           | Re-annotate problematic genomes with clade-specific references                                                     |
-| Get & Filter CDS               | Extract 80 standard plastid genes and filter by reference length bounds                                            |
+| Feature                        | Description                                                                                                                                                                                           |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Entrez Search & Batch Download | Taxon-based NCBI search with date filtering and threaded GenBank download                                                                                                                             |
+| Pre-filtering                  | Remove UNVERIFIED/ambiguous/hybrid genomes; retain top-N per taxon                                                                                                                                    |
+| Quality Control                | Flag genomes with low CDS count or high ambiguity ratio                                                                                                                                               |
+| PGA-NG Re-annotation           | Re-annotate problematic genomes with clade-specific references                                                                                                                                        |
+| Get & Filter CDS               | Extract 80 standard plastid genes and filter by reference length bounds                                                                                                                               |
 | Species-level CDS Selection    | Select one representative genome per species (longest total CDS); optional TNRS name resolution (score ≥ accuracy, `Accepted`/`Synonym` status only, genus-level matches excluded) with batch caching |
 
 ### Supermatrix Construction Module
@@ -55,7 +55,7 @@ No programming experience is required.
 - Real-time console logging with level-tagged messages
 - Built-in installer for MAFFT, trimAl, and PGA-NG
 
----
+***
 
 ## Installation
 
@@ -79,18 +79,17 @@ uv sync
 uv run python src/Main_Fluent.py
 ```
 
----
+***
 
 ## Quick Start
 
-### Retrieval Workflow
+### DNAseqs Workflow
 
 1. **Set Working Directory** — choose an output folder
 2. **Configure Target** — select a gene marker (ITS, rbcL, matK, etc.) or enter a custom region
 3. **Submit BLAST** — iterative search runs automatically
 4. **Filter** — enable Extended Segments Refinement and/or Species-level Selection (with optional TNRS)
 5. **Aggregate** — combine per-marker selection results into unified records (`combined_records.txt`) and pooled sequences (`filtered_seqs/`)
-6. **Align → Trim → Concatenate** — build your supermatrix in the Construction module
 
 ### Chloroplast Workflow
 
@@ -101,9 +100,9 @@ uv run python src/Main_Fluent.py
 5. **Get & Filter CDS** — extract plastid genes and filter by reference length
 6. **Species-level Selection** — pick one representative genome per species (with optional TNRS)
 
----
+***
 
-## Supported Gene Markers
+## Supported DNAseqs Gene Markers
 
 | Category    | Genes                                                                                 |
 | ----------- | ------------------------------------------------------------------------------------- |
@@ -111,11 +110,11 @@ uv run python src/Main_Fluent.py
 | Chloroplast | rbcL, matK, ndhF, ndhD, ndhI, ndhJ-ndhK-ndhC, psbA-trnH, trnL-trnF, rpoB, rpoC1, atpB |
 | Custom      | User-defined regions                                                                  |
 
----
+***
 
 ## Output Structure
 
-### Retrieval Module
+### DNAseqs Module
 
 ```
 working_directory/
@@ -153,7 +152,7 @@ output_directory/
 └── tnrs_cache/           # TNRS batch cache (if name resolution enabled)
 ```
 
----
+***
 
 ## Dependencies
 
@@ -168,13 +167,13 @@ External tools (auto-installable from Settings page):
 - trimAl — alignment trimming
 - PGA-NG — chloroplast genome re-annotation
 
----
+***
 
 ## License
 
 MIT License
 
----
+***
 
 ## Authors
 

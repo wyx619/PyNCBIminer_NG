@@ -37,6 +37,8 @@ def combine_keep_records(wd_list, out_path):
 
         try:
             df = pd.read_table(kept_file, sep="\t")
+            # keep only species-level taxa (name must contain at least one "_")
+            df = df[df["taxon_name"].astype(str).str.contains("_", na=False)]
             if combined_records is None:
                 combined_records = df[["taxon_name", "subject_acc.ver"]]
             else:
@@ -48,7 +50,7 @@ def combine_keep_records(wd_list, out_path):
                 )
             combined_records.columns = col_list
         except FileNotFoundError:
-            print("%s has not been reduced." % name)
+            print(f"{name} has not been reduced.")
 
     if combined_records is not None:
         combined_records = combined_records.fillna("-")
@@ -86,14 +88,29 @@ def put_filtered_seq_together(wd_list, out_path):
             filtered_file = out_path / name / "results" / "blast_results_filtered.fasta"
 
         try:
+            skipped = 0
             with open(filtered_seqs_path / (name + ".fasta"), "w") as fw:
                 for record in SeqIO.parse(filtered_file, "fasta"):
-                    fw.write(">" + record.description.split("|")[1])
+                    parts = record.description.split("|")
+                    if len(parts) < 2:
+                        skipped += 1
+                        continue
+                    species = parts[1].strip()
+                    # drop genus-level records (name without any "_")
+                    if "_" not in species:
+                        skipped += 1
+                        continue
+                    fw.write(">" + species)
                     fw.write("\n")
                     fw.write(str(record.seq))
                     fw.write("\n")
+            if skipped:
+                print(
+                    f"{name}: skipped {skipped} genus-level sequence(s) "
+                    f"(no species epithet in the name)."
+                )
 
         except FileNotFoundError:
-            print("%s has not been copied." % name)
+            print(f"{name} has not been copied.")
 
     print("All filtered sequences are into 'filtered_seqs' folder")

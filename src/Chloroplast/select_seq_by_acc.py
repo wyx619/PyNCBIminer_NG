@@ -34,8 +34,8 @@ def process_file(file, in_path, out_path):
     for index in selected_table.index:
         if index in seq_dict:
             record = seq_dict[index]
-            species_name = selected_table.loc[index]["organism"].replace(" ", "_")
-            record.id = f"{index}|{species_name}"
+            species_name = selected_table.loc[index]["organism"].strip().replace(" ", "_")
+            record.id = species_name
             record.description = ""
             records.append(record)
 
@@ -152,6 +152,15 @@ def make_tab(
             df1["organism"] = df1["organism"].map(rename_map)
             df1 = df1.dropna(subset=["organism"])
             emit_log(f"TNRS completed. {df1['organism'].nunique()} species retained.", "INFO")
+
+    # drop genus-level records (single-word names, without space or "_")
+    is_genus = ~df1["organism"].astype(str).str.strip().str.contains(
+        r"[ _]", regex=True, na=False
+    )
+    n_genus = int(is_genus.sum())
+    if n_genus:
+        emit_log(f"Excluded {n_genus} genus-level organism(s).", "INFO")
+    df1 = df1[~is_genus]
 
     duplicate_counts = df1["organism"].value_counts().loc[lambda x: x > 1]
     if len(duplicate_counts):

@@ -1,8 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(3, 1, 4, 0),
-    prodvers=(3, 1, 4, 0),
+    filevers=(3, 1, 5, 0),
+    prodvers=(3, 1, 5, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -18,11 +18,11 @@ VSVersionInfo(
           [
             StringStruct(u'CompanyName', u'Sichuan University'),
             StringStruct(u'FileDescription', u'GenBank Data Toolkits'),
-            StringStruct(u'FileVersion', u'3.1.4'),
+            StringStruct(u'FileVersion', u'3.1.5'),
             StringStruct(u'InternalName', u'PyNCBIminer-NG'),
             StringStruct(u'OriginalFilename', u'PyNCBIminer-NG.exe'),
             StringStruct(u'ProductName', u'PyNCBIminer-NG'),
-            StringStruct(u'ProductVersion', u'3.1.4'),
+            StringStruct(u'ProductVersion', u'3.1.5'),
             StringStruct(u'LegalCopyright', u'Copyright (c) 2026 Sichuan University')
           ]
         )
